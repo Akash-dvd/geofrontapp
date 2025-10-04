@@ -1,13 +1,16 @@
 # FrontCalc
 
-A mathematical calculator package for parsing and evaluating expressions.
+A geometric algebra package implementing multivector operations for advanced mathematical computations.
 
 ## Features
 
-- Basic arithmetic operations (+, -, *, /)
-- Power operations
-- Simple expression parsing
-- Clean API for mathematical calculations
+- Complete Multivector implementation for geometric algebra
+- Geometric product, wedge product, and contraction operations
+- Dual, involution, reversion, and conjugation operations
+- Type checking methods (isScalar, isVector, isPoint, etc.)
+- Norm calculations with Option types
+- Reflection operations
+- Built with functional programming concepts using `dartz`
 
 ## Usage
 
@@ -15,29 +18,65 @@ A mathematical calculator package for parsing and evaluating expressions.
 import 'package:frontcalc/frontcalc.dart';
 
 void main() {
-  final calculator = Calculator();
-  final parser = ExpressionParser();
+  // Create multivectors
+  final mv1 = Multivector(s: 1.0, e1: 2.0, e2: 3.0);
+  final mv2 = Multivector(s: 2.0, e1: 1.0, O: 1.0);
   
   // Basic operations
-  print(calculator.add(2, 3)); // 5.0
-  print(calculator.multiply(4, 5)); // 20.0
+  final sum = mv1 + mv2;
+  final product = mv1 * mv2;  // Geometric product
+  final wedge = mv1 ^ mv2;    // Wedge product
   
-  // Expression parsing
-  print(parser.evaluate("10 + 5")); // 15.0
-  print(parser.evaluate("20 / 4")); // 5.0
+  // Dot product (returns scalar)
+  final dot = mv1 | mv2;
+  
+  // Geometric operations
+  final dual = mv1.dual();
+  final reversed = mv1.reversion();
+  final conjugate = mv1.conjugation();
+  
+  // Type checking
+  print(mv1.isScalar()); 
+  print(mv1.isVector());
+  
+  // Norm calculation
+  final norm = mv1.norm();
+  norm.fold(
+    () => print('Norm is not a scalar'),
+    (value) => print('Norm: $value')
+  );
 }
 ```
 
 ## API Reference
 
-### Calculator
+### Multivector
 
-- `add(double a, double b)` - Addition
-- `subtract(double a, double b)` - Subtraction  
-- `multiply(double a, double b)` - Multiplication
-- `divide(double a, double b)` - Division
-- `power(double base, double exponent)` - Power operation
+**Constructors:**
+- `Multivector({s, o, e1, e2, O, oe1, oe2, oO, e12, e1O, e2O, oe12, oe1O, oe2O, e12O, oe12O})` - Create with named parameters
+- `Multivector.zero()` - Create zero multivector
 
-### ExpressionParser
+**Operations:**
+- `+`, `-` - Addition and subtraction
+- `*` - Geometric product
+- `^` - Wedge product
+- `<`, `>` - Left and right contractions
+- `|` - Dot product (returns scalar)
 
-- `evaluate(String expression)` - Parse and evaluate mathematical expressions
+**Geometric Operations:**
+- `dual()` - Returns the dual
+- `involution()` - Returns the involution
+- `reversion()` - Returns the reversion
+- `conjugation()` - Returns the conjugation
+- `norm()` - Returns Option<double> norm
+
+**Type Checking:**
+- `isZero()` - Check if multivector is zero
+- `isScalar()` - Check if multivector is scalar
+- `isVector()` - Check if multivector is vector
+- `isPoint()` - Check if multivector represents a point
+- `isCircle()` - Check if multivector represents a circle
+
+**Utility:**
+- `scalarDivide(double)` - Divide by scalar
+- `reflection(Multivector)` - Compute reflection

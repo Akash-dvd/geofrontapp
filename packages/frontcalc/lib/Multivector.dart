@@ -5,18 +5,44 @@ import 'package:dartz/dartz.dart';
 part 'util.dart';
 part 'definitions.dart';
 
-
 /// Represents a Multivector for geometric algebra operations.
 class Multivector extends Equatable {
 	final Float64List components;
 
-	Multivector([List<double>? values])
-			: components = Float64List(16) {
-		if (values != null) {
-			for (int i = 0; i < 16 && i < values.length; i++) {
-				components[i] = values[i];
-			}
-		}
+	Multivector({
+		double s = 0.0,
+		double o = 0.0,
+		double e1 = 0.0,
+		double e2 = 0.0,
+		double O = 0.0,
+		double oe1 = 0.0,
+		double oe2 = 0.0,
+		double oO = 0.0,
+		double e12 = 0.0,
+		double e1O = 0.0,
+		double e2O = 0.0,
+		double oe12 = 0.0,
+		double oe1O = 0.0,
+		double oe2O = 0.0,
+		double e12O = 0.0,
+		double oe12O = 0.0,
+	}) : components = Float64List(16) {
+		components[0] = s;
+		components[1] = o;
+		components[2] = e1;
+		components[3] = e2;
+		components[4] = O;
+		components[5] = oe1;
+		components[6] = oe2;
+		components[7] = oO;
+		components[8] = e12;
+		components[9] = e1O;
+		components[10] = e2O;
+		components[11] = oe12;
+		components[12] = oe1O;
+		components[13] = oe2O;
+		components[14] = e12O;
+		components[15] = oe12O;
 	}
 
 	/// Creates a zero multivector (all components = 0)
@@ -147,20 +173,20 @@ class Multivector extends Equatable {
   /// Dot product (returns a double)
   double operator |(Multivector other) {
 		return Multivector(
-      s:- O * other.o - other.O * o - exO * other.oex - other.exO * oex + ex * other.ex + e12O * other.oe12 + other.e12O * oe12 - e12 * other.e12 - e2O * other.oe2 - other.e2O * oe2 + e2 * other.e2 + oO * other.oO + oexO * other.oexO - oe12O * other.oe12O + oe2O * other.oe2O,
-      o:- ex * other.oex + other.ex * oex - e12 * other.oe12 - other.e12 * oe12 - e2 * other.oe2 + other.e2 * oe2 - oO * other.o + other.oO * o - oexO * other.oex - other.oexO * oex + oe12O * other.oe12 - other.oe12O * oe12 - oe2O * other.oe2 - other.oe2O * oe2,
-      e1:- O * other.oex + other.O * oex - exO * other.o + other.exO * o - e12O * other.oe2 - other.e12O * oe2 + e12 * other.e2 - other.e12 * e2 + e2O * other.oe12 + other.e2O * oe12 - oO * other.oexO - other.oO * oexO - oe12O * other.oe2O + other.oe12O * oe2O,
-      e2:- O * other.oe2 + other.O * oe2 - exO * other.oe12 - other.exO * oe12 + ex * other.e12 - other.ex * e12 + e12O * other.oex + other.e12O * oex - e2O * other.o + other.e2O * o - oO * other.oe2O - other.oO * oe2O - oexO * other.oe12O + other.oexO * oe12O,
-      O:- O * other.oO + other.O * oO - exO * other.ex - exO * other.oexO + other.exO * ex - other.exO * oexO - e12O * other.e12 + e12O * other.oe12O - other.e12O * e12 - other.e12O * oe12O - e2O * other.e2 - e2O * other.oe2O + other.e2O * e2 - other.e2O * oe2O,
-      oe1: e2 * other.oe12 + other.e2 * oe12 - o * other.oexO - other.o * oexO - oe12O * other.oe2 - other.oe12O * oe2,
-      oe2:- ex * other.oe12 - other.ex * oe12 - o * other.oe2O - other.o * oe2O + oex * other.oe12O + other.oex * oe12O,
-      oO:- ex * other.oexO - other.ex * oexO - e12 * other.oe12O - other.e12 * oe12O - e2 * other.oe2O - other.e2 * oe2O,
+      s:- O * other.o - other.O * o - e1O * other.oe1 - other.e1O * oe1 + e1 * other.e1 + e12O * other.oe12 + other.e12O * oe12 - e12 * other.e12 - e2O * other.oe2 - other.e2O * oe2 + e2 * other.e2 + oO * other.oO + oe1O * other.oe1O - oe12O * other.oe12O + oe2O * other.oe2O,
+      o:- e1 * other.oe1 + other.e1 * oe1 - e12 * other.oe12 - other.e12 * oe12 - e2 * other.oe2 + other.e2 * oe2 - oO * other.o + other.oO * o - oe1O * other.oe1 - other.oe1O * oe1 + oe12O * other.oe12 - other.oe12O * oe12 - oe2O * other.oe2 - other.oe2O * oe2,
+      e1:- O * other.oe1 + other.O * oe1 - e1O * other.o + other.e1O * o - e12O * other.oe2 - other.e12O * oe2 + e12 * other.e2 - other.e12 * e2 + e2O * other.oe12 + other.e2O * oe12 - oO * other.oe1O - other.oO * oe1O - oe12O * other.oe2O + other.oe12O * oe2O,
+      e2:- O * other.oe2 + other.O * oe2 - e1O * other.oe12 - other.e1O * oe12 + e1 * other.e12 - other.e1 * e12 + e12O * other.oe1 + other.e12O * oe1 - e2O * other.o + other.e2O * o - oO * other.oe2O - other.oO * oe2O - oe1O * other.oe12O + other.oe1O * oe12O,
+      O:- O * other.oO + other.O * oO - e1O * other.e1 - e1O * other.oe1O + other.e1O * e1 - other.e1O * oe1O - e12O * other.e12 + e12O * other.oe12O - other.e12O * e12 - other.e12O * oe12O - e2O * other.e2 - e2O * other.oe2O + other.e2O * e2 - other.e2O * oe2O,
+      oe1: e2 * other.oe12 + other.e2 * oe12 - o * other.oe1O - other.o * oe1O - oe12O * other.oe2 - other.oe12O * oe2,
+      oe2:- e1 * other.oe12 - other.e1 * oe12 - o * other.oe2O - other.o * oe2O + oe1 * other.oe12O + other.oe1 * oe12O,
+      oO:- e1 * other.oe1O - other.e1 * oe1O - e12 * other.oe12O - other.e12 * oe12O - e2 * other.oe2O - other.e2 * oe2O,
       e12: - O * other.oe12 - other.O * oe12 - e12O * other.o - other.e12O * o + oO * other.oe12O + other.oO * oe12O,
-      e1O:- O * other.oexO - other.O * oexO - e12O * other.e2 - other.e12O * e2 + e2O * other.oe12O + other.e2O * oe12O,
-      e2O:- O * other.oexO - other.O * oexO - e12O * other.e2 - other.e12O * e2 + e2O * other.oe12O + other.e2O * oe12O,
+      e1O:- O * other.oe1O - other.O * oe1O - e12O * other.e2 - other.e12O * e2 + e2O * other.oe12O + other.e2O * oe12O,
+      e2O:- O * other.oe1O - other.O * oe1O - e12O * other.e2 - other.e12O * e2 + e2O * other.oe12O + other.e2O * oe12O,
       oe12:o * other.oe12O - other.o * oe12O,
       oe1O:e2 * other.oe12O - other.e2 * oe12O,
-      oe2O: - ex * other.oe12O + other.ex * oe12O,
+      oe2O: - e1 * other.oe12O + other.e1 * oe12O,
       e12O:- O * other.oe12O + other.O * oe12O,
       oe12O:0
     );
@@ -202,7 +228,7 @@ class Multivector extends Equatable {
       oe2:oe2,
       oe2:oe2,
       oO: oO,
-      e12:o12,
+      e12:e12,
       e1O:e1O,
       e2O: e2O,
       oe12: -oe12,

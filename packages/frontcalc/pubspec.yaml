@@ -6,7 +6,8 @@ environment:
   sdk: ^3.9.2
 
 dependencies:
-  # Add any dependencies your package needs here
+  equatable: ^2.0.5
+  dartz: ^0.10.1
   
 dev_dependencies:
   test: ^1.24.0
