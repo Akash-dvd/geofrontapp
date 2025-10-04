@@ -1,0 +1,14 @@
+name: frontcalc
+description: A mathematical calculator package for parsing and evaluating expressions.
+version: 1.0.0
+
+environment:
+  sdk: ^3.9.2
+
+dependencies:
+  # Add any dependencies your package needs here
+  
+dev_dependencies:
+  test: ^1.24.0
+
+# For packages, you don't need to specify flutter as a dependency unless you use Flutter-specific APIs
