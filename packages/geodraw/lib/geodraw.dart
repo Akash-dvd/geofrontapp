@@ -2,7 +2,7 @@
 /// 
 /// Provides a GeoGebra-like interface for creating, manipulating, and
 /// visualizing geometric constructions.
-library geodraw;
+library;
 
 // Core abstractions
 export 'models/canvas_object.dart';

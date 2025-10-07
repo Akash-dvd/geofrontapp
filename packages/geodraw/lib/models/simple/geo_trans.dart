@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:frontcalc/Multivector.dart';
 import '../geometry_object.dart';
 
 /// Abstract base class for geometric transformations
@@ -7,6 +8,7 @@ abstract class GeoTrans extends SimpleGeometryObject {
     required super.id,
     required super.label,
     required super.dependencies,
+    required super.multivector,
     super.color,
     super.visible,
   });
@@ -42,6 +44,7 @@ class GeoInverse extends GeoTrans {
     required super.id,
     required super.label,
     required super.dependencies,
+    required super.multivector,
     required this.centerPointId,
     required this.power,
     super.color,
@@ -53,6 +56,7 @@ class GeoInverse extends GeoTrans {
     String? id,
     String? label,
     List<String>? dependencies,
+    Multivector? multivector,
     String? centerPointId,
     double? power,
     Color? color,
@@ -62,6 +66,7 @@ class GeoInverse extends GeoTrans {
       id: id ?? this.id,
       label: label ?? this.label,
       dependencies: dependencies ?? this.dependencies,
+      multivector: multivector ?? this.multivector,
       centerPointId: centerPointId ?? this.centerPointId,
       power: power ?? this.power,
       color: color ?? this.color,
@@ -71,6 +76,36 @@ class GeoInverse extends GeoTrans {
 
   @override
   List<Object?> get props => [...super.props, centerPointId, power];
+  
+  @override
+  String get type => 'GeoInverse';
+  
+  @override
+  Map<String, dynamic> toJson() {
+    final json = super.toJson();
+    json['properties'] = {
+      'centerPointId': centerPointId,
+      'power': power,
+    };
+    return json;
+  }
+  
+  static GeoInverse fromJson(Map<String, dynamic> json) {
+    final props = json['properties'] as Map<String, dynamic>;
+    final colorHex = (json['color'] as String).replaceAll('#', '');
+    final deps = (json['dependencies'] as List).cast<String>();
+    
+    return GeoInverse(
+      id: json['id'] as String,
+      label: json['label'] as String,
+      dependencies: deps,
+      multivector: Multivector.zero(),
+      centerPointId: props['centerPointId'] as String,
+      power: (props['power'] as num).toDouble(),
+      color: Color(int.parse(colorHex, radix: 16)),
+      visible: json['visible'] as bool? ?? true,
+    );
+  }
 }
 
 /// Rotation transformation
@@ -85,6 +120,7 @@ class GeoRotate extends GeoTrans {
     required super.id,
     required super.label,
     required super.dependencies,
+    required super.multivector,
     required this.centerPointId,
     required this.angle,
     super.color,
@@ -96,6 +132,7 @@ class GeoRotate extends GeoTrans {
     String? id,
     String? label,
     List<String>? dependencies,
+    Multivector? multivector,
     String? centerPointId,
     double? angle,
     Color? color,
@@ -105,6 +142,7 @@ class GeoRotate extends GeoTrans {
       id: id ?? this.id,
       label: label ?? this.label,
       dependencies: dependencies ?? this.dependencies,
+      multivector: multivector ?? this.multivector,
       centerPointId: centerPointId ?? this.centerPointId,
       angle: angle ?? this.angle,
       color: color ?? this.color,
@@ -114,6 +152,36 @@ class GeoRotate extends GeoTrans {
 
   @override
   List<Object?> get props => [...super.props, centerPointId, angle];
+  
+  @override
+  String get type => 'GeoRotate';
+  
+  @override
+  Map<String, dynamic> toJson() {
+    final json = super.toJson();
+    json['properties'] = {
+      'centerPointId': centerPointId,
+      'angle': angle,
+    };
+    return json;
+  }
+  
+  static GeoRotate fromJson(Map<String, dynamic> json) {
+    final props = json['properties'] as Map<String, dynamic>;
+    final colorHex = (json['color'] as String).replaceAll('#', '');
+    final deps = (json['dependencies'] as List).cast<String>();
+    
+    return GeoRotate(
+      id: json['id'] as String,
+      label: json['label'] as String,
+      dependencies: deps,
+      multivector: Multivector.zero(),
+      centerPointId: props['centerPointId'] as String,
+      angle: (props['angle'] as num).toDouble(),
+      color: Color(int.parse(colorHex, radix: 16)),
+      visible: json['visible'] as bool? ?? true,
+    );
+  }
 }
 
 /// Dilation (scaling) transformation
@@ -128,6 +196,7 @@ class GeoDilate extends GeoTrans {
     required super.id,
     required super.label,
     required super.dependencies,
+    required super.multivector,
     required this.centerPointId,
     required this.factor,
     super.color,
@@ -139,6 +208,7 @@ class GeoDilate extends GeoTrans {
     String? id,
     String? label,
     List<String>? dependencies,
+    Multivector? multivector,
     String? centerPointId,
     double? factor,
     Color? color,
@@ -148,6 +218,7 @@ class GeoDilate extends GeoTrans {
       id: id ?? this.id,
       label: label ?? this.label,
       dependencies: dependencies ?? this.dependencies,
+      multivector: multivector ?? this.multivector,
       centerPointId: centerPointId ?? this.centerPointId,
       factor: factor ?? this.factor,
       color: color ?? this.color,
@@ -157,4 +228,34 @@ class GeoDilate extends GeoTrans {
 
   @override
   List<Object?> get props => [...super.props, centerPointId, factor];
+  
+  @override
+  String get type => 'GeoDilate';
+  
+  @override
+  Map<String, dynamic> toJson() {
+    final json = super.toJson();
+    json['properties'] = {
+      'centerPointId': centerPointId,
+      'factor': factor,
+    };
+    return json;
+  }
+  
+  static GeoDilate fromJson(Map<String, dynamic> json) {
+    final props = json['properties'] as Map<String, dynamic>;
+    final colorHex = (json['color'] as String).replaceAll('#', '');
+    final deps = (json['dependencies'] as List).cast<String>();
+    
+    return GeoDilate(
+      id: json['id'] as String,
+      label: json['label'] as String,
+      dependencies: deps,
+      multivector: Multivector.zero(),
+      centerPointId: props['centerPointId'] as String,
+      factor: (props['factor'] as num).toDouble(),
+      color: Color(int.parse(colorHex, radix: 16)),
+      visible: json['visible'] as bool? ?? true,
+    );
+  }
 }

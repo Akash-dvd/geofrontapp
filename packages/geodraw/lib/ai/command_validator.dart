@@ -2,7 +2,6 @@
 library;
 
 import '../cli/cli.dart';
-import '../cli/command_parser.dart';
 
 /// Result of command validation
 class ValidationResult {

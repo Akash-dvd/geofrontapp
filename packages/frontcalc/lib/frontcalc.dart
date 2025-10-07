@@ -1,3 +1,3 @@
-library frontcalc;
+library;
 
 export 'Multivector.dart';

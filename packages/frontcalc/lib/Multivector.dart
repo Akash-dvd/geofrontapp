@@ -171,7 +171,7 @@ class Multivector extends Equatable {
   }
 
   /// Dot product (returns a double)
-  double operator |(Multivector other) {
+  Multivector operator |(Multivector other) {
 		return Multivector(
       s:- O * other.o - other.O * o - e1O * other.oe1 - other.e1O * oe1 + e1 * other.e1 + e12O * other.oe12 + other.e12O * oe12 - e12 * other.e12 - e2O * other.oe2 - other.e2O * oe2 + e2 * other.e2 + oO * other.oO + oe1O * other.oe1O - oe12O * other.oe12O + oe2O * other.oe2O,
       o:- e1 * other.oe1 + other.e1 * oe1 - e12 * other.oe12 - other.e12 * oe12 - e2 * other.oe2 + other.e2 * oe2 - oO * other.o + other.oO * o - oe1O * other.oe1 - other.oe1O * oe1 + oe12O * other.oe12 - other.oe12O * oe12 - oe2O * other.oe2 - other.oe2O * oe2,

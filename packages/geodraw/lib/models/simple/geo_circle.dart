@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'dart:math' as math;
+import 'package:frontcalc/Multivector.dart';
 import '../geometry_object.dart';
 import 'geo_point.dart';
 
@@ -24,6 +25,7 @@ abstract class GeoCircle extends SimpleGeometryObject {
     required super.id,
     required super.label,
     required super.dependencies,
+    required super.multivector,
     required this.centerX,
     required this.centerY,
     required this.radius,
@@ -82,8 +84,10 @@ abstract class GeoCircle extends SimpleGeometryObject {
 
   @override
   double distanceTo(Offset point) {
-    final distToCenter = (point - center).distance;
-    return (distToCenter - radius).abs();
+    // Convert the offset to a Multivector point
+    final pointMv = constructFreePoint(point.dx, point.dy);
+    // Use Multivector-based distance calculation
+    return distancePointToCircle(pointMv, multivector);
   }
 
   @override
@@ -107,6 +111,7 @@ class GeoCircle2P extends GeoCircle {
     required super.id,
     required super.label,
     required super.dependencies, // Should have exactly 2 dependencies
+    required super.multivector,
     required super.centerX,
     required super.centerY,
     required super.radius,
@@ -129,12 +134,16 @@ class GeoCircle2P extends GeoCircle {
     Color color = Colors.green,
     bool visible = true,
   }) {
+    // Calculate multivector using definitions.dart placeholder
+    final mv = constructCircleFromCenterAndPoint(center.multivector, pointOnCircle.multivector);
+    
     final radius = (center.position - pointOnCircle.position).distance;
     
     return GeoCircle2P(
       id: id,
       label: label,
       dependencies: [center.id, pointOnCircle.id],
+      multivector: mv,
       centerX: center.x,
       centerY: center.y,
       radius: radius,
@@ -150,6 +159,7 @@ class GeoCircle2P extends GeoCircle {
     String? id,
     String? label,
     List<String>? dependencies,
+    Multivector? multivector,
     double? centerX,
     double? centerY,
     double? radius,
@@ -162,6 +172,7 @@ class GeoCircle2P extends GeoCircle {
       id: id ?? this.id,
       label: label ?? this.label,
       dependencies: dependencies ?? this.dependencies,
+      multivector: multivector ?? this.multivector,
       centerX: centerX ?? this.centerX,
       centerY: centerY ?? this.centerY,
       radius: radius ?? this.radius,
@@ -169,6 +180,42 @@ class GeoCircle2P extends GeoCircle {
       filled: filled ?? this.filled,
       color: color ?? this.color,
       visible: visible ?? this.visible,
+    );
+  }
+  
+  @override
+  String get type => 'GeoCircle2P';
+  
+  @override
+  Map<String, dynamic> toJson() {
+    final json = super.toJson();
+    json['properties'] = {
+      'centerX': centerX,
+      'centerY': centerY,
+      'radius': radius,
+      'thickness': thickness,
+      'filled': filled,
+    };
+    return json;
+  }
+  
+  static GeoCircle2P fromJson(Map<String, dynamic> json) {
+    final props = json['properties'] as Map<String, dynamic>;
+    final colorHex = (json['color'] as String).replaceAll('#', '');
+    final deps = (json['dependencies'] as List).cast<String>();
+    
+    return GeoCircle2P(
+      id: json['id'] as String,
+      label: json['label'] as String,
+      dependencies: deps,
+      multivector: Multivector.zero(),
+      centerX: (props['centerX'] as num).toDouble(),
+      centerY: (props['centerY'] as num).toDouble(),
+      radius: (props['radius'] as num).toDouble(),
+      thickness: (props['thickness'] as num?)?.toDouble() ?? 2.0,
+      filled: props['filled'] as bool? ?? false,
+      color: Color(int.parse(colorHex, radix: 16)),
+      visible: json['visible'] as bool? ?? true,
     );
   }
 }
@@ -179,6 +226,7 @@ class GeoCircle3P extends GeoCircle {
     required super.id,
     required super.label,
     required super.dependencies, // Should have exactly 3 dependencies
+    required super.multivector,
     required super.centerX,
     required super.centerY,
     required super.radius,
@@ -202,6 +250,9 @@ class GeoCircle3P extends GeoCircle {
     Color color = Colors.green,
     bool visible = true,
   }) {
+    // Calculate multivector using definitions.dart placeholder
+    final mv = constructCircleThrough3Points(p1.multivector, p2.multivector, p3.multivector);
+    
     // Calculate circumcircle using determinant method
     final d = 2 * (p1.x * (p2.y - p3.y) + p2.x * (p3.y - p1.y) + p3.x * (p1.y - p2.y));
     
@@ -223,6 +274,7 @@ class GeoCircle3P extends GeoCircle {
       id: id,
       label: label,
       dependencies: [p1.id, p2.id, p3.id],
+      multivector: mv,
       centerX: cx,
       centerY: cy,
       radius: radius,
@@ -238,6 +290,7 @@ class GeoCircle3P extends GeoCircle {
     String? id,
     String? label,
     List<String>? dependencies,
+    Multivector? multivector,
     double? centerX,
     double? centerY,
     double? radius,
@@ -250,6 +303,7 @@ class GeoCircle3P extends GeoCircle {
       id: id ?? this.id,
       label: label ?? this.label,
       dependencies: dependencies ?? this.dependencies,
+      multivector: multivector ?? this.multivector,
       centerX: centerX ?? this.centerX,
       centerY: centerY ?? this.centerY,
       radius: radius ?? this.radius,
@@ -257,6 +311,42 @@ class GeoCircle3P extends GeoCircle {
       filled: filled ?? this.filled,
       color: color ?? this.color,
       visible: visible ?? this.visible,
+    );
+  }
+  
+  @override
+  String get type => 'GeoCircle3P';
+  
+  @override
+  Map<String, dynamic> toJson() {
+    final json = super.toJson();
+    json['properties'] = {
+      'centerX': centerX,
+      'centerY': centerY,
+      'radius': radius,
+      'thickness': thickness,
+      'filled': filled,
+    };
+    return json;
+  }
+  
+  static GeoCircle3P fromJson(Map<String, dynamic> json) {
+    final props = json['properties'] as Map<String, dynamic>;
+    final colorHex = (json['color'] as String).replaceAll('#', '');
+    final deps = (json['dependencies'] as List).cast<String>();
+    
+    return GeoCircle3P(
+      id: json['id'] as String,
+      label: json['label'] as String,
+      dependencies: deps,
+      multivector: Multivector.zero(),
+      centerX: (props['centerX'] as num).toDouble(),
+      centerY: (props['centerY'] as num).toDouble(),
+      radius: (props['radius'] as num).toDouble(),
+      thickness: (props['thickness'] as num?)?.toDouble() ?? 2.0,
+      filled: props['filled'] as bool? ?? false,
+      color: Color(int.parse(colorHex, radix: 16)),
+      visible: json['visible'] as bool? ?? true,
     );
   }
 }
@@ -267,6 +357,7 @@ class GeoInvCircle extends GeoCircle {
     required super.id,
     required super.label,
     required super.dependencies,
+    required super.multivector,
     required super.centerX,
     required super.centerY,
     required super.radius,
@@ -281,6 +372,7 @@ class GeoInvCircle extends GeoCircle {
     String? id,
     String? label,
     List<String>? dependencies,
+    Multivector? multivector,
     double? centerX,
     double? centerY,
     double? radius,
@@ -293,6 +385,7 @@ class GeoInvCircle extends GeoCircle {
       id: id ?? this.id,
       label: label ?? this.label,
       dependencies: dependencies ?? this.dependencies,
+      multivector: multivector ?? this.multivector,
       centerX: centerX ?? this.centerX,
       centerY: centerY ?? this.centerY,
       radius: radius ?? this.radius,
@@ -300,6 +393,42 @@ class GeoInvCircle extends GeoCircle {
       filled: filled ?? this.filled,
       color: color ?? this.color,
       visible: visible ?? this.visible,
+    );
+  }
+  
+  @override
+  String get type => 'GeoInvCircle';
+  
+  @override
+  Map<String, dynamic> toJson() {
+    final json = super.toJson();
+    json['properties'] = {
+      'centerX': centerX,
+      'centerY': centerY,
+      'radius': radius,
+      'thickness': thickness,
+      'filled': filled,
+    };
+    return json;
+  }
+  
+  static GeoInvCircle fromJson(Map<String, dynamic> json) {
+    final props = json['properties'] as Map<String, dynamic>;
+    final colorHex = (json['color'] as String).replaceAll('#', '');
+    final deps = (json['dependencies'] as List).cast<String>();
+    
+    return GeoInvCircle(
+      id: json['id'] as String,
+      label: json['label'] as String,
+      dependencies: deps,
+      multivector: Multivector.zero(),
+      centerX: (props['centerX'] as num).toDouble(),
+      centerY: (props['centerY'] as num).toDouble(),
+      radius: (props['radius'] as num).toDouble(),
+      thickness: (props['thickness'] as num?)?.toDouble() ?? 2.0,
+      filled: props['filled'] as bool? ?? false,
+      color: Color(int.parse(colorHex, radix: 16)),
+      visible: json['visible'] as bool? ?? true,
     );
   }
 }

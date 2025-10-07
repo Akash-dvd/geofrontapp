@@ -5,12 +5,45 @@ import '../models/simple/geo_point.dart';
 import '../models/simple/geo_line.dart';
 import '../models/simple/geo_circle.dart';
 import '../models/simple/geo_trans.dart';
-import '../models/simple_lists/geo_intersection.dart';
-import '../models/complex/geo_shapes.dart';
 import '../dag/dag_manager.dart' as dag;
 
 /// Decodes JSON format back to geometry objects and DAG
+/// 
+/// Uses type registry pattern where each class has a fromJson factory.
+/// This eliminates the need for large switch statements and makes the
+/// decoder simple and maintainable.
 class GeoDrawDecoder {
+  /// Type registry mapping type strings to fromJson factory functions
+  static final Map<String, Function> _typeRegistry = {
+    // Points
+    'GeoPointer': GeoPointer.fromJson,
+    'GeoMidpoint': GeoMidpoint.fromJson,
+    'GeoInvPoint': GeoInvPoint.fromJson,
+    
+    // Lines
+    'GeoLine2P': GeoLine2P.fromJson,
+    'GeoPerpendicularBisector': GeoPerpendicularBisector.fromJson,
+    'GeoPerpendicularLine': GeoPerpendicularLine.fromJson,
+    'GeoParallelLine': GeoParallelLine.fromJson,
+    
+    // Circles
+    'GeoCircle2P': GeoCircle2P.fromJson,
+    'GeoCircle3P': GeoCircle3P.fromJson,
+    'GeoInvCircle': GeoInvCircle.fromJson,
+    
+    // Transformations
+    'GeoInverse': GeoInverse.fromJson,
+    'GeoRotate': GeoRotate.fromJson,
+    'GeoDilate': GeoDilate.fromJson,
+    
+    // TODO: Add complex objects as they are implemented
+    // 'GeoSegment': GeoSegment.fromJson,
+    // 'GeoTriangle': GeoTriangle.fromJson,
+    // 'GeoPolygon': GeoPolygon.fromJson,
+    // 'GeoIntersection': GeoIntersection.fromJson,
+    // 'GeoTangent': GeoTangent.fromJson,
+  };
+
   /// Decode JSON to DAG manager
   dag.DAGManager decode(Map<String, dynamic> json) {
     final dagManager = dag.DAGManager();
@@ -31,7 +64,15 @@ class GeoDrawDecoder {
 
     for (final objJson in sorted) {
       try {
-        final object = _decodeObject(objJson);
+        final type = objJson['type'] as String;
+        final factory = _typeRegistry[type];
+        
+        if (factory == null) {
+          throw UnsupportedError('Unknown type: $type');
+        }
+        
+        // Call the appropriate fromJson factory
+        final object = factory(objJson) as GeometryObject;
         final dependencies = (objJson['dependencies'] as List).cast<String>();
         dagManager.addObject(object, dependencies);
       } catch (e) {
@@ -70,218 +111,7 @@ class GeoDrawDecoder {
     return sorted;
   }
 
-  /// Decode a single object
-  GeometryObject _decodeObject(Map<String, dynamic> json) {
-    final type = json['type'] as String;
-    final id = json['id'] as String;
-    final label = json['label'] as String;
-    final props = json['properties'] as Map<String, dynamic>;
-    final deps = (json['dependencies'] as List).cast<String>();
 
-    final color = _decodeColor(props['color'] as String);
-    final visible = props['visible'] as bool? ?? true;
-
-    switch (type) {
-      case 'GeoPointer':
-        return GeoPointer(
-          id: id,
-          label: label,
-          x: (props['x'] as num).toDouble(),
-          y: (props['y'] as num).toDouble(),
-          size: (props['size'] as num?)?.toDouble() ?? 5.0,
-          color: color,
-          visible: visible,
-        );
-
-      case 'GeoMidpoint':
-        return GeoMidpoint(
-          id: id,
-          label: label,
-          dependencies: deps,
-          x: (props['x'] as num).toDouble(),
-          y: (props['y'] as num).toDouble(),
-          size: (props['size'] as num?)?.toDouble() ?? 5.0,
-          color: color,
-          visible: visible,
-        );
-
-      case 'GeoInvPoint':
-        return GeoInvPoint(
-          id: id,
-          label: label,
-          dependencies: deps,
-          x: (props['x'] as num).toDouble(),
-          y: (props['y'] as num).toDouble(),
-          size: (props['size'] as num?)?.toDouble() ?? 5.0,
-          color: color,
-          visible: visible,
-        );
-
-      case 'GeoLine2P':
-        return GeoLine2P(
-          id: id,
-          label: label,
-          dependencies: deps,
-          a: (props['a'] as num).toDouble(),
-          b: (props['b'] as num).toDouble(),
-          c: (props['c'] as num).toDouble(),
-          thickness: (props['thickness'] as num?)?.toDouble() ?? 2.0,
-          style: _decodeLineStyle(props['style'] as String?),
-          color: color,
-          visible: visible,
-        );
-
-      case 'GeoPerpendicularBisector':
-        return GeoPerpendicularBisector(
-          id: id,
-          label: label,
-          dependencies: deps,
-          a: (props['a'] as num).toDouble(),
-          b: (props['b'] as num).toDouble(),
-          c: (props['c'] as num).toDouble(),
-          thickness: (props['thickness'] as num?)?.toDouble() ?? 2.0,
-          style: _decodeLineStyle(props['style'] as String?),
-          color: color,
-          visible: visible,
-        );
-
-      case 'GeoPerpendicularLine':
-        return GeoPerpendicularLine(
-          id: id,
-          label: label,
-          dependencies: deps,
-          a: (props['a'] as num).toDouble(),
-          b: (props['b'] as num).toDouble(),
-          c: (props['c'] as num).toDouble(),
-          thickness: (props['thickness'] as num?)?.toDouble() ?? 2.0,
-          style: _decodeLineStyle(props['style'] as String?),
-          color: color,
-          visible: visible,
-        );
-
-      case 'GeoParallelLine':
-        return GeoParallelLine(
-          id: id,
-          label: label,
-          dependencies: deps,
-          a: (props['a'] as num).toDouble(),
-          b: (props['b'] as num).toDouble(),
-          c: (props['c'] as num).toDouble(),
-          thickness: (props['thickness'] as num?)?.toDouble() ?? 2.0,
-          style: _decodeLineStyle(props['style'] as String?),
-          color: color,
-          visible: visible,
-        );
-
-      case 'GeoCircle2P':
-        return GeoCircle2P(
-          id: id,
-          label: label,
-          dependencies: deps,
-          centerX: (props['centerX'] as num).toDouble(),
-          centerY: (props['centerY'] as num).toDouble(),
-          radius: (props['radius'] as num).toDouble(),
-          thickness: (props['thickness'] as num?)?.toDouble() ?? 2.0,
-          filled: props['filled'] as bool? ?? false,
-          color: color,
-          visible: visible,
-        );
-
-      case 'GeoCircle3P':
-        return GeoCircle3P(
-          id: id,
-          label: label,
-          dependencies: deps,
-          centerX: (props['centerX'] as num).toDouble(),
-          centerY: (props['centerY'] as num).toDouble(),
-          radius: (props['radius'] as num).toDouble(),
-          thickness: (props['thickness'] as num?)?.toDouble() ?? 2.0,
-          filled: props['filled'] as bool? ?? false,
-          color: color,
-          visible: visible,
-        );
-
-      case 'GeoInvCircle':
-        return GeoInvCircle(
-          id: id,
-          label: label,
-          dependencies: deps,
-          centerX: (props['centerX'] as num).toDouble(),
-          centerY: (props['centerY'] as num).toDouble(),
-          radius: (props['radius'] as num).toDouble(),
-          thickness: (props['thickness'] as num?)?.toDouble() ?? 2.0,
-          filled: props['filled'] as bool? ?? false,
-          color: color,
-          visible: visible,
-        );
-
-      case 'GeoInverse':
-        return GeoInverse(
-          id: id,
-          label: label,
-          dependencies: deps,
-          centerPointId: props['centerPointId'] as String,
-          power: (props['power'] as num).toDouble(),
-          color: color,
-          visible: visible,
-        );
-
-      case 'GeoRotate':
-        return GeoRotate(
-          id: id,
-          label: label,
-          dependencies: deps,
-          centerPointId: props['centerPointId'] as String,
-          angle: (props['angle'] as num).toDouble(),
-          color: color,
-          visible: visible,
-        );
-
-      case 'GeoDilate':
-        return GeoDilate(
-          id: id,
-          label: label,
-          dependencies: deps,
-          centerPointId: props['centerPointId'] as String,
-          factor: (props['factor'] as num).toDouble(),
-          color: color,
-          visible: visible,
-        );
-
-      case 'GeoSegment':
-        return GeoSegment(
-          id: id,
-          label: label,
-          dependencies: deps,
-          startPointId: props['startPointId'] as String,
-          endPointId: props['endPointId'] as String,
-          underlyingObjectId: props['underlyingObjectId'] as String,
-          color: color,
-          visible: visible,
-        );
-
-      default:
-        throw UnsupportedError('Unknown object type: $type');
-    }
-  }
-
-  /// Decode color from hex string
-  Color _decodeColor(String hex) {
-    final hexColor = hex.replaceAll('#', '');
-    return Color(int.parse(hexColor, radix: 16));
-  }
-
-  /// Decode line style from string
-  LineStyle _decodeLineStyle(String? style) {
-    switch (style) {
-      case 'dashed':
-        return LineStyle.dashed;
-      case 'dotted':
-        return LineStyle.dotted;
-      default:
-        return LineStyle.solid;
-    }
-  }
 
   /// Decode from JSON string
   dag.DAGManager decodeFromJson(String jsonString) {

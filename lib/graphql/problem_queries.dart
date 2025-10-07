@@ -1,5 +1,6 @@
 /// GraphQL queries and mutations for Problem CRUD operations
 /// Compatible with Strapi backend structure
+library;
 
 class ProblemQueries {
   /// Fetch all problems with pagination support

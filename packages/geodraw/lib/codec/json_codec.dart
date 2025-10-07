@@ -1,5 +1,5 @@
 /// JSON codec for encoding and decoding geometric constructions
-library codec;
+library;
 
 export 'encoder.dart';
 export 'decoder.dart';

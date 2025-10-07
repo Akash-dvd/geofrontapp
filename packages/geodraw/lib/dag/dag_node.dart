@@ -20,10 +20,10 @@ class DAGNode with EquatableMixin {
   final int depth;
   
   /// Whether this node needs recalculation
-  bool isDirty;
+  final bool isDirty;
   
   /// Last modification timestamp
-  DateTime lastModified;
+  final DateTime lastModified;
 
   DAGNode({
     required this.id,

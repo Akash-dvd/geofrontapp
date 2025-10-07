@@ -16,4 +16,13 @@ abstract class CanvasObject {
   
   /// Unique identifier for this object
   String get id;
+  
+  /// Serialize this object to JSON
+  /// Each concrete class must implement its own serialization logic
+  /// that captures all of its specific properties and intricacies.
+  Map<String, dynamic> toJson();
+  
+  /// Get the type identifier for this object class
+  /// Used during deserialization to determine which fromJson to call
+  String get type;
 }

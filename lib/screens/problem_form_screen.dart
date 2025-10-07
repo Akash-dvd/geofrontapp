@@ -150,7 +150,7 @@ class _ProblemFormScreenState extends State<ProblemFormScreen> {
 
                       // Difficulty dropdown
                       DropdownButtonFormField<ProblemDifficulty>(
-                        value: _selectedDifficulty,
+                        initialValue: _selectedDifficulty,
                         decoration: const InputDecoration(
                           labelText: 'Difficulty',
                           border: OutlineInputBorder(),
@@ -188,7 +188,7 @@ class _ProblemFormScreenState extends State<ProblemFormScreen> {
 
                       // Category dropdown
                       DropdownButtonFormField<ProblemCategory>(
-                        value: _selectedCategory,
+                        initialValue: _selectedCategory,
                         decoration: const InputDecoration(
                           labelText: 'Category',
                           border: OutlineInputBorder(),

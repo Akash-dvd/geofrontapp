@@ -1,5 +1,5 @@
 /// AI-powered natural language construction
-library ai;
+library;
 
 export 'ai_service.dart';
 export 'command_validator.dart';

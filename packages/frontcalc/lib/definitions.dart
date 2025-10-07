@@ -8,7 +8,7 @@ extension MultivectorUtils on Multivector {
     return norm().flatMap((normValue) {
       final absNormValue = normValue.abs();
       if (absNormValue < 1e-14) {
-        return this;
+        return Some(this);
       }
       final result = reversion() * object * this;
       return Some(result.scalarDivide(absNormValue));
@@ -240,6 +240,31 @@ double measurePolygonArea(List<Multivector> vertices) {
 double measureCircleRadius(Multivector circle) {
   // TODO: Implement using Multivector geometric algebra
   throw UnimplementedError('measureCircleRadius: Multivector implementation pending');
+}
+
+// ----------------------------------------------------------------------------
+// DISTANCE CALCULATIONS
+// ----------------------------------------------------------------------------
+
+/// Calculate distance from a point to another point
+/// Returns: double representing the distance
+double distancePointToPoint(Multivector point1, Multivector point2) {
+  // TODO: Implement using Multivector geometric algebra
+  throw UnimplementedError('distancePointToPoint: Multivector implementation pending');
+}
+
+/// Calculate distance from a point to a line
+/// Returns: double representing the perpendicular distance
+double distancePointToLine(Multivector point, Multivector line) {
+  // TODO: Implement using Multivector geometric algebra
+  throw UnimplementedError('distancePointToLine: Multivector implementation pending');
+}
+
+/// Calculate distance from a point to a circle
+/// Returns: double representing the distance to the circle's circumference
+double distancePointToCircle(Multivector point, Multivector circle) {
+  // TODO: Implement using Multivector geometric algebra
+  throw UnimplementedError('distancePointToCircle: Multivector implementation pending');
 }
 
 // ----------------------------------------------------------------------------

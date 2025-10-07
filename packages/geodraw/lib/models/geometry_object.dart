@@ -1,11 +1,13 @@
 import 'package:equatable/equatable.dart';
 import 'package:flutter/material.dart';
+import 'package:frontcalc/Multivector.dart';
 import 'canvas_object.dart';
 
 /// Abstract base class for all geometric objects
 /// Extends CanvasObject and adds geometric properties
 abstract class GeometryObject extends CanvasObject with EquatableMixin {
   /// Unique identifier
+  @override
   final String id;
   
   /// Display label for this object
@@ -18,6 +20,7 @@ abstract class GeometryObject extends CanvasObject with EquatableMixin {
   final Color color;
   
   /// Whether this object is visible on the canvas
+  @override
   final bool visible;
 
   GeometryObject({
@@ -42,20 +45,41 @@ abstract class GeometryObject extends CanvasObject with EquatableMixin {
 
   @override
   List<Object?> get props => [id, label, dependencies, color, visible];
+  
+  /// Base toJson implementation - includes common properties
+  /// Subclasses should override and call super.toJson() then add their properties
+  @override
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'type': type,
+      'label': label,
+      'dependencies': dependencies,
+      'color': '#${color.value.toRadixString(16).padLeft(8, '0')}',
+      'visible': visible,
+    };
+  }
 }
 
 /// Base class for objects defined by a single equation
 abstract class SimpleGeometryObject extends GeometryObject {
+  /// The Multivector representing this geometric object's equation
+  final Multivector multivector;
+
   SimpleGeometryObject({
     required super.id,
     required super.label,
     required super.dependencies,
+    required this.multivector,
     super.color,
     super.visible,
   });
 
   /// Check if this object intersects with another
   bool intersects(SimpleGeometryObject other);
+  
+  @override
+  List<Object?> get props => [...super.props, multivector];
 }
 
 /// Base class for lists of simple geometry objects

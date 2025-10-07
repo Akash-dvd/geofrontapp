@@ -246,8 +246,8 @@ class _GeoDrawWorkspaceState extends State<GeoDrawWorkspace> {
       ),
       floatingActionButton: FloatingActionButton(
         tooltip: 'Show Help',
-        child: const Icon(Icons.help_outline),
         onPressed: _showHelpDialog,
+        child: const Icon(Icons.help_outline),
       ),
     );
   }

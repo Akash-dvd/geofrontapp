@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'dart:math' as math;
+import 'package:frontcalc/Multivector.dart';
 import '../geometry_object.dart';
 import 'geo_point.dart';
 
@@ -20,6 +20,7 @@ abstract class GeoLine extends SimpleGeometryObject {
     required super.id,
     required super.label,
     required super.dependencies,
+    required super.multivector,
     required this.a,
     required this.b,
     required this.c,
@@ -146,10 +147,10 @@ abstract class GeoLine extends SimpleGeometryObject {
 
   @override
   double distanceTo(Offset point) {
-    // Perpendicular distance from point to line
-    final numerator = (a * point.dx + b * point.dy + c).abs();
-    final denominator = math.sqrt(a * a + b * b);
-    return numerator / denominator;
+    // Convert the offset to a Multivector point
+    final pointMv = constructFreePoint(point.dx, point.dy);
+    // Use Multivector-based distance calculation
+    return distancePointToLine(pointMv, multivector);
   }
 
   @override
@@ -178,6 +179,7 @@ class GeoLine2P extends GeoLine {
     required super.id,
     required super.label,
     required super.dependencies, // Should have exactly 2 dependencies
+    required super.multivector,
     required super.a,
     required super.b,
     required super.c,
@@ -198,6 +200,9 @@ class GeoLine2P extends GeoLine {
     Color color = Colors.blue,
     bool visible = true,
   }) {
+    // Calculate multivector using definitions.dart placeholder
+    final mv = constructLineFrom2Points(p1.multivector, p2.multivector);
+    
     // Line equation: (y2-y1)x - (x2-x1)y + (x2-x1)y1 - (y2-y1)x1 = 0
     final a = p2.y - p1.y;
     final b = -(p2.x - p1.x);
@@ -207,6 +212,7 @@ class GeoLine2P extends GeoLine {
       id: id,
       label: label,
       dependencies: [p1.id, p2.id],
+      multivector: mv,
       a: a,
       b: b,
       c: c,
@@ -222,6 +228,7 @@ class GeoLine2P extends GeoLine {
     String? id,
     String? label,
     List<String>? dependencies,
+    Multivector? multivector,
     double? a,
     double? b,
     double? c,
@@ -234,6 +241,7 @@ class GeoLine2P extends GeoLine {
       id: id ?? this.id,
       label: label ?? this.label,
       dependencies: dependencies ?? this.dependencies,
+      multivector: multivector ?? this.multivector,
       a: a ?? this.a,
       b: b ?? this.b,
       c: c ?? this.c,
@@ -243,6 +251,50 @@ class GeoLine2P extends GeoLine {
       visible: visible ?? this.visible,
     );
   }
+  
+  @override
+  String get type => 'GeoLine2P';
+  
+  @override
+  Map<String, dynamic> toJson() {
+    final json = super.toJson();
+    json['properties'] = {
+      'a': a,
+      'b': b,
+      'c': c,
+      'thickness': thickness,
+      'style': style.toString().split('.').last,
+    };
+    return json;
+  }
+  
+  static GeoLine2P fromJson(Map<String, dynamic> json) {
+    final props = json['properties'] as Map<String, dynamic>;
+    final colorHex = (json['color'] as String).replaceAll('#', '');
+    final deps = (json['dependencies'] as List).cast<String>();
+    
+    return GeoLine2P(
+      id: json['id'] as String,
+      label: json['label'] as String,
+      dependencies: deps,
+      multivector: Multivector.zero(),
+      a: (props['a'] as num).toDouble(),
+      b: (props['b'] as num).toDouble(),
+      c: (props['c'] as num).toDouble(),
+      thickness: (props['thickness'] as num?)?.toDouble() ?? 2.0,
+      style: _parseLineStyle(props['style'] as String?),
+      color: Color(int.parse(colorHex, radix: 16)),
+      visible: json['visible'] as bool? ?? true,
+    );
+  }
+  
+  static LineStyle _parseLineStyle(String? style) {
+    switch (style) {
+      case 'dashed': return LineStyle.dashed;
+      case 'dotted': return LineStyle.dotted;
+      default: return LineStyle.solid;
+    }
+  }
 }
 
 /// Perpendicular bisector of a segment
@@ -251,6 +303,7 @@ class GeoPerpendicularBisector extends GeoLine {
     required super.id,
     required super.label,
     required super.dependencies,
+    required super.multivector,
     required super.a,
     required super.b,
     required super.c,
@@ -270,6 +323,9 @@ class GeoPerpendicularBisector extends GeoLine {
     Color color = Colors.cyan,
     bool visible = true,
   }) {
+    // Calculate multivector using definitions.dart placeholder
+    final mv = constructPerpendicularBisector(p1.multivector, p2.multivector);
+    
     // Midpoint
     final mx = (p1.x + p2.x) / 2;
     final my = (p1.y + p2.y) / 2;
@@ -288,6 +344,7 @@ class GeoPerpendicularBisector extends GeoLine {
       id: id,
       label: label,
       dependencies: [p1.id, p2.id],
+      multivector: mv,
       a: a,
       b: b,
       c: c,
@@ -303,6 +360,7 @@ class GeoPerpendicularBisector extends GeoLine {
     String? id,
     String? label,
     List<String>? dependencies,
+    Multivector? multivector,
     double? a,
     double? b,
     double? c,
@@ -315,6 +373,7 @@ class GeoPerpendicularBisector extends GeoLine {
       id: id ?? this.id,
       label: label ?? this.label,
       dependencies: dependencies ?? this.dependencies,
+      multivector: multivector ?? this.multivector,
       a: a ?? this.a,
       b: b ?? this.b,
       c: c ?? this.c,
@@ -322,6 +381,42 @@ class GeoPerpendicularBisector extends GeoLine {
       style: style ?? this.style,
       color: color ?? this.color,
       visible: visible ?? this.visible,
+    );
+  }
+  
+  @override
+  String get type => 'GeoPerpendicularBisector';
+  
+  @override
+  Map<String, dynamic> toJson() {
+    final json = super.toJson();
+    json['properties'] = {
+      'a': a,
+      'b': b,
+      'c': c,
+      'thickness': thickness,
+      'style': style.toString().split('.').last,
+    };
+    return json;
+  }
+  
+  static GeoPerpendicularBisector fromJson(Map<String, dynamic> json) {
+    final props = json['properties'] as Map<String, dynamic>;
+    final colorHex = (json['color'] as String).replaceAll('#', '');
+    final deps = (json['dependencies'] as List).cast<String>();
+    
+    return GeoPerpendicularBisector(
+      id: json['id'] as String,
+      label: json['label'] as String,
+      dependencies: deps,
+      multivector: Multivector.zero(),
+      a: (props['a'] as num).toDouble(),
+      b: (props['b'] as num).toDouble(),
+      c: (props['c'] as num).toDouble(),
+      thickness: (props['thickness'] as num?)?.toDouble() ?? 2.0,
+      style: GeoLine2P._parseLineStyle(props['style'] as String?),
+      color: Color(int.parse(colorHex, radix: 16)),
+      visible: json['visible'] as bool? ?? true,
     );
   }
 }
@@ -332,6 +427,7 @@ class GeoPerpendicularLine extends GeoLine {
     required super.id,
     required super.label,
     required super.dependencies,
+    required super.multivector,
     required super.a,
     required super.b,
     required super.c,
@@ -346,6 +442,7 @@ class GeoPerpendicularLine extends GeoLine {
     String? id,
     String? label,
     List<String>? dependencies,
+    Multivector? multivector,
     double? a,
     double? b,
     double? c,
@@ -358,6 +455,7 @@ class GeoPerpendicularLine extends GeoLine {
       id: id ?? this.id,
       label: label ?? this.label,
       dependencies: dependencies ?? this.dependencies,
+      multivector: multivector ?? this.multivector,
       a: a ?? this.a,
       b: b ?? this.b,
       c: c ?? this.c,
@@ -365,6 +463,42 @@ class GeoPerpendicularLine extends GeoLine {
       style: style ?? this.style,
       color: color ?? this.color,
       visible: visible ?? this.visible,
+    );
+  }
+  
+  @override
+  String get type => 'GeoPerpendicularLine';
+  
+  @override
+  Map<String, dynamic> toJson() {
+    final json = super.toJson();
+    json['properties'] = {
+      'a': a,
+      'b': b,
+      'c': c,
+      'thickness': thickness,
+      'style': style.toString().split('.').last,
+    };
+    return json;
+  }
+  
+  static GeoPerpendicularLine fromJson(Map<String, dynamic> json) {
+    final props = json['properties'] as Map<String, dynamic>;
+    final colorHex = (json['color'] as String).replaceAll('#', '');
+    final deps = (json['dependencies'] as List).cast<String>();
+    
+    return GeoPerpendicularLine(
+      id: json['id'] as String,
+      label: json['label'] as String,
+      dependencies: deps,
+      multivector: Multivector.zero(),
+      a: (props['a'] as num).toDouble(),
+      b: (props['b'] as num).toDouble(),
+      c: (props['c'] as num).toDouble(),
+      thickness: (props['thickness'] as num?)?.toDouble() ?? 2.0,
+      style: GeoLine2P._parseLineStyle(props['style'] as String?),
+      color: Color(int.parse(colorHex, radix: 16)),
+      visible: json['visible'] as bool? ?? true,
     );
   }
 }
@@ -375,6 +509,7 @@ class GeoParallelLine extends GeoLine {
     required super.id,
     required super.label,
     required super.dependencies,
+    required super.multivector,
     required super.a,
     required super.b,
     required super.c,
@@ -389,6 +524,7 @@ class GeoParallelLine extends GeoLine {
     String? id,
     String? label,
     List<String>? dependencies,
+    Multivector? multivector,
     double? a,
     double? b,
     double? c,
@@ -401,6 +537,7 @@ class GeoParallelLine extends GeoLine {
       id: id ?? this.id,
       label: label ?? this.label,
       dependencies: dependencies ?? this.dependencies,
+      multivector: multivector ?? this.multivector,
       a: a ?? this.a,
       b: b ?? this.b,
       c: c ?? this.c,
@@ -408,6 +545,42 @@ class GeoParallelLine extends GeoLine {
       style: style ?? this.style,
       color: color ?? this.color,
       visible: visible ?? this.visible,
+    );
+  }
+  
+  @override
+  String get type => 'GeoParallelLine';
+  
+  @override
+  Map<String, dynamic> toJson() {
+    final json = super.toJson();
+    json['properties'] = {
+      'a': a,
+      'b': b,
+      'c': c,
+      'thickness': thickness,
+      'style': style.toString().split('.').last,
+    };
+    return json;
+  }
+  
+  static GeoParallelLine fromJson(Map<String, dynamic> json) {
+    final props = json['properties'] as Map<String, dynamic>;
+    final colorHex = (json['color'] as String).replaceAll('#', '');
+    final deps = (json['dependencies'] as List).cast<String>();
+    
+    return GeoParallelLine(
+      id: json['id'] as String,
+      label: json['label'] as String,
+      dependencies: deps,
+      multivector: Multivector.zero(),
+      a: (props['a'] as num).toDouble(),
+      b: (props['b'] as num).toDouble(),
+      c: (props['c'] as num).toDouble(),
+      thickness: (props['thickness'] as num?)?.toDouble() ?? 2.0,
+      style: GeoLine2P._parseLineStyle(props['style'] as String?),
+      color: Color(int.parse(colorHex, radix: 16)),
+      visible: json['visible'] as bool? ?? true,
     );
   }
 }

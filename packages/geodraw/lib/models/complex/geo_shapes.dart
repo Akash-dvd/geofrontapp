@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 import '../geometry_object.dart';
-import '../simple/geo_point.dart';
-import '../simple/geo_line.dart';
 
 /// Segment between two points
 class GeoSegment extends ComplexGeometryObject {

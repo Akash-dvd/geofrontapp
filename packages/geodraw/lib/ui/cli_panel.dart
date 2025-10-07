@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import '../cli/command_parser.dart';
 import '../cli/command_executor.dart';
-import '../cli/command_history.dart';
 import '../dag/dag_manager.dart';
 
 /// Panel for command-line interface interaction

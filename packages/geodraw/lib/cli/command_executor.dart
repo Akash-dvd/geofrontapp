@@ -3,7 +3,6 @@ import '../models/simple/geo_point.dart';
 import '../models/simple/geo_line.dart';
 import '../models/simple/geo_circle.dart';
 import 'cli.dart';
-import 'command_history.dart';
 
 /// Executes parsed commands
 class CommandExecutor {

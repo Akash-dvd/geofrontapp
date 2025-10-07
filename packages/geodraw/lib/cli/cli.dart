@@ -1,5 +1,5 @@
 /// Command-line interface for geometric construction
-library cli;
+library;
 
 export 'command_parser.dart';
 export 'command_executor.dart';

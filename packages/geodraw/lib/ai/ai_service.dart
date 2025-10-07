@@ -186,7 +186,7 @@ Return only the JSON array:
       } else if (response.containsKey('result')) {
         final result = response['result'];
         if (result is List) {
-          commands = (result as List<dynamic>).cast<String>();
+          commands = (result).cast<String>();
         } else if (result is String) {
           // Try to parse as JSON array
           commands = (jsonDecode(result) as List<dynamic>).cast<String>();
