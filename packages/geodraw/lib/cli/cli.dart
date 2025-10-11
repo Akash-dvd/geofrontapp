@@ -1,62 +1,29 @@
 /// Command-line interface for geometric construction
 library;
 
-export 'command_parser.dart';
-export 'command_executor.dart';
-export 'command_history.dart';
+import '../tools/tool.dart';
+import '../command/simple_executor.dart' show ExecutionResult;
 
-/// Represents a parsed command
+export '../command/simple_executor.dart' show ExecutionResult;
+export 'command_history.dart';
+export 'cli_adapter.dart';
+
+/// Represents a parsed CLI command
 class Command {
-  final String name;
+  final ToolType? toolType; // Direct ToolType for validation
+  final String name; // Keep original name for error messages
   final List<dynamic> arguments;
   final String originalInput;
 
   Command({
+    this.toolType,
     required this.name,
     required this.arguments,
     required this.originalInput,
   });
 
   @override
-  String toString() => 'Command($name, args: $arguments)';
-}
-
-/// Result of command execution
-class ExecutionResult {
-  final bool success;
-  final String? objectId;
-  final String message;
-  final dynamic data;
-
-  ExecutionResult({
-    required this.success,
-    this.objectId,
-    required this.message,
-    this.data,
-  });
-
-  factory ExecutionResult.successful({
-    String? objectId,
-    required String message,
-    dynamic data,
-  }) {
-    return ExecutionResult(
-      success: true,
-      objectId: objectId,
-      message: message,
-      data: data,
-    );
-  }
-
-  factory ExecutionResult.error(String message) {
-    return ExecutionResult(
-      success: false,
-      message: message,
-    );
-  }
-
-  @override
-  String toString() => success ? 'Success: $message' : 'Error: $message';
+  String toString() => 'Command($name, toolType: $toolType, args: $arguments)';
 }
 
 /// Record of a command execution

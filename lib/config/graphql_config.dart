@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:graphql_flutter/graphql_flutter.dart';
 
-/// GraphQL client configuration for Strapi backend
+/// GraphQL client configuration for Directus backend
 /// Follows constitutional requirement for API communication
 class GraphQLConfig {
-  static const String _strapiEndpoint = 'http://localhost:1337/graphql';
+  static const String _graphqlEndpoint = 'http://192.168.1.3:8055/graphql';
 
   /// Create and configure GraphQL client
   static GraphQLClient createClient() {
-    final HttpLink httpLink = HttpLink(_strapiEndpoint);
+    final HttpLink httpLink = HttpLink(_graphqlEndpoint);
 
     // Add authentication link if needed
     final AuthLink authLink = AuthLink(
@@ -30,10 +30,7 @@ class GraphQLConfig {
           fetch: FetchPolicy.cacheAndNetwork,
           error: ErrorPolicy.all,
         ),
-        query: Policies(
-          fetch: FetchPolicy.networkOnly,
-          error: ErrorPolicy.all,
-        ),
+        query: Policies(fetch: FetchPolicy.networkOnly, error: ErrorPolicy.all),
         mutate: Policies(
           fetch: FetchPolicy.networkOnly,
           error: ErrorPolicy.all,
@@ -43,12 +40,7 @@ class GraphQLConfig {
   }
 
   /// Create GraphQL provider widget
-  static GraphQLProvider createProvider({
-    required Widget child,
-  }) {
-    return GraphQLProvider(
-      client: ValueNotifier(createClient()),
-      child: child,
-    );
+  static GraphQLProvider createProvider({required Widget child}) {
+    return GraphQLProvider(client: ValueNotifier(createClient()), child: child);
   }
 }

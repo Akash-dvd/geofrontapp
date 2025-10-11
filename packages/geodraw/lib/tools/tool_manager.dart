@@ -1,17 +1,17 @@
 import 'package:flutter/material.dart';
 import 'tool.dart';
-import 'point_tool.dart';
-import 'line_tool.dart';
-import 'circle_tool.dart';
+import 'unified_tool.dart';
 import '../dag/dag_manager.dart';
+import '../models/geometry_object.dart';
+import '../models/simple/geo_point.dart';
 
 /// Manages the active tool and tool state
 class ToolManager {
   final DAGManager dagManager;
-  
+
   ToolType _activeToolType = ToolType.select;
   Tool? _activeTool;
-  
+
   final OnObjectCreated? onObjectCreated;
   final OnObjectSelected? onObjectSelected;
   final OnToolStateChanged? onToolStateChanged;
@@ -33,11 +33,13 @@ class ToolManager {
   void selectTool(ToolType type) {
     // Reset current tool before switching
     _activeTool?.reset();
-    
+
     _activeToolType = type;
     _activeTool = _createTool(type);
-    
-    onToolStateChanged?.call(_activeTool?.stateDescription ?? 'No tool selected');
+
+    onToolStateChanged?.call(
+      _activeTool?.stateDescription ?? 'No tool selected',
+    );
   }
 
   /// Handle pointer input
@@ -50,37 +52,38 @@ class ToolManager {
     _activeTool?.reset();
   }
 
-  /// Create a tool instance by type
+  /// Create a tool instance by type (inline implementation)
   Tool? _createTool(ToolType type) {
     switch (type) {
       case ToolType.point:
-        return PointTool(
+        return _PointTool(
+          dagManager: dagManager,
           onObjectCreated: onObjectCreated,
           onObjectSelected: onObjectSelected,
           onToolStateChanged: onToolStateChanged,
         );
-        
+
       case ToolType.line:
-        return LineTool(
+        return _LineTool(
           dagManager: dagManager,
           onObjectCreated: onObjectCreated,
           onObjectSelected: onObjectSelected,
           onToolStateChanged: onToolStateChanged,
         );
-        
+
       case ToolType.circle:
-        return CircleTool(
+        return _CircleTool(
           dagManager: dagManager,
           onObjectCreated: onObjectCreated,
           onObjectSelected: onObjectSelected,
           onToolStateChanged: onToolStateChanged,
         );
-        
+
       case ToolType.select:
       case ToolType.pan:
         // These tools don't create geometry
         return null;
-        
+
       default:
         // Other tools not yet implemented
         return null;
@@ -155,4 +158,181 @@ class ToolMetadata {
     required this.icon,
     required this.tooltip,
   });
+}
+
+// ============================================================================
+// Inline Tool Implementations (merged from unified_*_tool.dart files)
+// ============================================================================
+
+/// Point tool - creates points immediately on click
+class _PointTool extends UnifiedTool {
+  _PointTool({
+    required super.dagManager,
+    super.onObjectCreated,
+    super.onObjectSelected,
+    super.onToolStateChanged,
+  });
+
+  @override
+  ToolType get type => ToolType.point;
+
+  @override
+  String get name => 'Point';
+
+  @override
+  IconData get icon => Icons.circle;
+
+  @override
+  String get tooltip => 'Create a free point';
+
+  @override
+  void handleInput(PointerEvent event) {
+    if (event is PointerDownEvent) {
+      _createPointAt(event.position);
+    }
+  }
+
+  Future<void> _createPointAt(Offset position) async {
+    try {
+      final result = await executor.execute(
+        type: ToolType.point,
+        arguments: [position.dx, position.dy],
+      );
+
+      if (result.success && result.object != null) {
+        onObjectCreated?.call(result.object!, []);
+        notifyStateChanged(result.message);
+      } else {
+        notifyStateChanged('Error: ${result.message}');
+      }
+    } catch (e) {
+      notifyStateChanged('Error: $e');
+    }
+  }
+
+  @override
+  GeometryObject? createObjectAtPosition(Offset position) => null;
+
+  @override
+  void reset() {
+    notifyStateChanged('Click to create a point');
+  }
+
+  @override
+  bool get isComplete => true;
+
+  @override
+  String get stateDescription => 'Click to create a point';
+}
+
+/// Line tool - creates lines through two points
+class _LineTool extends UnifiedTool {
+  int _labelCounter = 0;
+
+  _LineTool({
+    required super.dagManager,
+    super.onObjectCreated,
+    super.onObjectSelected,
+    super.onToolStateChanged,
+  });
+
+  @override
+  ToolType get type => ToolType.line;
+
+  @override
+  String get name => 'Line';
+
+  @override
+  IconData get icon => Icons.horizontal_rule;
+
+  @override
+  String get tooltip => 'Create a line through two points';
+
+  @override
+  GeometryObject? createObjectAtPosition(Offset position) {
+    final nextType = verifier.schema.getNextArgumentType(verifier.arguments);
+    if (nextType != null && nextType.accepts(GeoPointer)) {
+      final point = GeoPointer(
+        id: 'point_${DateTime.now().millisecondsSinceEpoch}',
+        label: _generatePointLabel(),
+        x: position.dx,
+        y: position.dy,
+      );
+
+      dagManager.addObject(point, []);
+      onObjectCreated?.call(point, []);
+      return point;
+    }
+    return null;
+  }
+
+  String _generatePointLabel() {
+    const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    if (_labelCounter < 26) {
+      return letters[_labelCounter++];
+    }
+    return 'P${_labelCounter++}';
+  }
+
+  @override
+  void reset() {
+    super.reset();
+    notifyStateChanged('Click first point for line');
+  }
+}
+
+/// Circle tool - creates circles with center and point
+class _CircleTool extends UnifiedTool {
+  int _labelCounter = 0;
+
+  _CircleTool({
+    required super.dagManager,
+    super.onObjectCreated,
+    super.onObjectSelected,
+    super.onToolStateChanged,
+  });
+
+  @override
+  ToolType get type => ToolType.circle;
+
+  @override
+  String get name => 'Circle';
+
+  @override
+  IconData get icon => Icons.circle_outlined;
+
+  @override
+  String get tooltip => 'Create a circle with center and point';
+
+  @override
+  GeometryObject? createObjectAtPosition(Offset position) {
+    final nextType = verifier.schema.getNextArgumentType(verifier.arguments);
+    if (nextType != null && nextType.accepts(GeoPointer)) {
+      final point = GeoPointer(
+        id: 'point_${DateTime.now().millisecondsSinceEpoch}',
+        label: _generatePointLabel(),
+        x: position.dx,
+        y: position.dy,
+      );
+
+      dagManager.addObject(point, []);
+      onObjectCreated?.call(point, []);
+      return point;
+    }
+    return null;
+  }
+
+  String _generatePointLabel() {
+    const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    if (_labelCounter < 26) {
+      return letters[_labelCounter++];
+    }
+    return 'P${_labelCounter++}';
+  }
+
+  @override
+  void reset() {
+    super.reset();
+    notifyStateChanged('Click center point for circle');
+  }
 }

@@ -1,18 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:geodraw/geodraw.dart';
 
 import '../bloc/problem_bloc.dart';
 import '../bloc/problem_event.dart';
 import '../bloc/problem_state.dart';
 import '../models/problem.dart';
 import '../services/geodraw_navigation_service.dart';
+import '../services/directus_file_service.dart';
+import '../utils/canvas_capture.dart';
 
 /// Screen for creating and editing problems
 class ProblemFormScreen extends StatefulWidget {
-  const ProblemFormScreen({
-    super.key,
-    this.problem,
-  });
+  const ProblemFormScreen({super.key, this.problem});
 
   final Problem? problem;
 
@@ -233,7 +233,9 @@ class _ProblemFormScreenState extends State<ProblemFormScreen> {
                         children: [
                           Expanded(
                             child: OutlinedButton(
-                              onPressed: isLoading ? null : () => Navigator.of(context).pop(),
+                              onPressed: isLoading
+                                  ? null
+                                  : () => Navigator.of(context).pop(),
                               child: const Text('CANCEL'),
                             ),
                           ),
@@ -241,7 +243,9 @@ class _ProblemFormScreenState extends State<ProblemFormScreen> {
                           Expanded(
                             child: ElevatedButton(
                               onPressed: isLoading ? null : _saveProblem,
-                              child: Text(widget.isEditing ? 'UPDATE' : 'CREATE'),
+                              child: Text(
+                                widget.isEditing ? 'UPDATE' : 'CREATE',
+                              ),
                             ),
                           ),
                         ],
@@ -253,9 +257,7 @@ class _ProblemFormScreenState extends State<ProblemFormScreen> {
               if (isLoading)
                 Container(
                   color: Colors.black.withOpacity(0.3),
-                  child: const Center(
-                    child: CircularProgressIndicator(),
-                  ),
+                  child: const Center(child: CircularProgressIndicator()),
                 ),
             ],
           );
@@ -297,7 +299,9 @@ class _ProblemFormScreenState extends State<ProblemFormScreen> {
                 : 'No geometry data. Use GeoDraw to create geometric constructions.',
             style: TextStyle(
               color: _geometryData != null ? Colors.black : Colors.grey[600],
-              fontStyle: _geometryData != null ? FontStyle.normal : FontStyle.italic,
+              fontStyle: _geometryData != null
+                  ? FontStyle.normal
+                  : FontStyle.italic,
             ),
           ),
         ),
@@ -320,7 +324,7 @@ class _ProblemFormScreenState extends State<ProblemFormScreen> {
 
   void _openGeoDraw() async {
     Map<String, dynamic>? geometryData;
-    
+
     if (widget.isEditing && widget.problem!.geometryData != null) {
       // Edit existing geometry
       geometryData = await GeoDrawNavigationService.navigateToEdit(
@@ -339,40 +343,141 @@ class _ProblemFormScreenState extends State<ProblemFormScreen> {
     }
   }
 
-  void _saveProblem() {
+  /// Capture canvas thumbnail and upload to Directus
+  Future<String?> _captureThumbnail(Map<String, dynamic> geometryData) async {
+    try {
+      // Decode geometry data to DAGManager
+      final decoder = GeoDrawDecoder();
+      final dagManager = decoder.decode(geometryData);
+
+      // Log canvas state
+      final sortedNodes = dagManager.topologicalSort();
+      print('DEBUG: Found ${sortedNodes.length} objects in DAG');
+
+      final hasVisibleObjects = sortedNodes.any((node) => node.object.visible);
+      print('DEBUG: Has visible objects: $hasVisibleObjects');
+
+      // Capture canvas as PNG even if empty (800x600 thumbnail)
+      print('DEBUG: Starting canvas capture...');
+      final imageBytes = await CanvasCapture.captureAsPng(
+        dagManager: dagManager,
+        width: 800,
+        height: 600,
+        backgroundColor: Colors.white,
+        showGrid: false, // Clean thumbnail without grid
+      );
+
+      if (imageBytes == null) {
+        print('ERROR: Failed to capture canvas image - imageBytes is null');
+        return null;
+      }
+
+      print('DEBUG: Canvas captured successfully, ${imageBytes.length} bytes');
+
+      // Upload to Directus
+      print('DEBUG: Uploading to Directus...');
+      final fileService = DirectusFileService(
+        baseUrl: 'http://192.168.1.3:8055',
+      );
+
+      final fileId = await fileService.uploadImage(
+        imageBytes: imageBytes,
+        filename: 'thumbnail_${DateTime.now().millisecondsSinceEpoch}.png',
+        title: 'Problem Thumbnail',
+      );
+
+      if (fileId == null) {
+        print('ERROR: Directus upload failed - fileId is null');
+        return null;
+      }
+
+      print('DEBUG: Upload successful, fileId: $fileId');
+      return fileId;
+    } catch (e) {
+      print('Error capturing thumbnail: $e');
+      return null;
+    }
+  }
+
+  void _saveProblem() async {
+    print('DEBUG: _saveProblem called');
     if (!_formKey.currentState!.validate()) {
+      print('DEBUG: Form validation failed');
       return;
     }
 
     final title = _titleController.text.trim();
     final description = _descriptionController.text.trim();
-    final solution = _solutionController.text.trim().isNotEmpty 
-        ? _solutionController.text.trim() 
+    final solution = _solutionController.text.trim().isNotEmpty
+        ? _solutionController.text.trim()
         : null;
 
+    print('DEBUG: Title: $title, Description: $description');
+    print('DEBUG: Geometry data exists: ${_geometryData != null}');
+
+    // Capture thumbnail if geometry data exists
+    String? thumbnailId;
+    if (_geometryData != null) {
+      print('DEBUG: Capturing thumbnail for geometry data');
+      // Show loading indicator
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const Center(child: CircularProgressIndicator()),
+      );
+
+      thumbnailId = await _captureThumbnail(_geometryData!);
+      print('DEBUG: Thumbnail capture complete, ID: $thumbnailId');
+
+      // Hide loading indicator
+      if (mounted) Navigator.of(context).pop();
+
+      if (thumbnailId == null) {
+        // Show error but continue without thumbnail
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Failed to capture thumbnail, saving without image',
+              ),
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
+      }
+    }
+
     if (widget.isEditing) {
+      print(
+        'DEBUG: Dispatching UpdateProblem event with thumbnailId: $thumbnailId',
+      );
       context.read<ProblemBloc>().add(
-            UpdateProblem(
-              id: widget.problem!.id,
-              title: title,
-              description: description,
-              difficulty: _selectedDifficulty,
-              category: _selectedCategory,
-              geometryData: _geometryData,
-              solution: solution,
-            ),
-          );
+        UpdateProblem(
+          id: widget.problem!.id,
+          title: title,
+          description: description,
+          difficulty: _selectedDifficulty,
+          category: _selectedCategory,
+          geometryData: _geometryData,
+          solution: solution,
+          thumbnailId: thumbnailId,
+        ),
+      );
     } else {
+      print(
+        'DEBUG: Dispatching CreateProblem event with thumbnailId: $thumbnailId',
+      );
       context.read<ProblemBloc>().add(
-            CreateProblem(
-              title: title,
-              description: description,
-              difficulty: _selectedDifficulty,
-              category: _selectedCategory,
-              geometryData: _geometryData,
-              solution: solution,
-            ),
-          );
+        CreateProblem(
+          title: title,
+          description: description,
+          difficulty: _selectedDifficulty,
+          category: _selectedCategory,
+          geometryData: _geometryData,
+          solution: solution,
+          thumbnailId: thumbnailId,
+        ),
+      );
     }
   }
 }

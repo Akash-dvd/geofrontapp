@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:geodraw/geodraw.dart';
 
 import '../models/problem.dart';
 
@@ -10,9 +11,7 @@ class GeoDrawNavigationService {
     BuildContext context,
   ) async {
     return await Navigator.of(context).push<Map<String, dynamic>>(
-      MaterialPageRoute(
-        builder: (context) => const GeoDrawCreateScreen(),
-      ),
+      MaterialPageRoute(builder: (context) => const GeoDrawCreateScreen()),
     );
   }
 
@@ -41,10 +40,46 @@ class GeoDrawNavigationService {
   }
 }
 
-/// Placeholder screen for GeoDraw creation functionality
-/// This would be replaced with actual geodraw package integration
-class GeoDrawCreateScreen extends StatelessWidget {
+/// Screen for GeoDraw creation functionality
+class GeoDrawCreateScreen extends StatefulWidget {
   const GeoDrawCreateScreen({super.key});
+
+  @override
+  State<GeoDrawCreateScreen> createState() => _GeoDrawCreateScreenState();
+}
+
+class _GeoDrawCreateScreenState extends State<GeoDrawCreateScreen> {
+  late DAGManager _dagManager;
+  late ToolManager _toolManager;
+  late UnifiedCLIExecutor _commandExecutor;
+  late AIService _aiService;
+  final Set<String> _selectedIds = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _dagManager = DAGManager();
+    _toolManager = ToolManager(
+      dagManager: _dagManager,
+      onObjectCreated: (object, deps) {
+        // Trigger rebuild when tool creates object
+        setState(() {});
+      },
+      onToolStateChanged: (state) {
+        // Could update UI with tool state
+        setState(() {});
+      },
+    );
+    _commandExecutor = UnifiedCLIExecutor(dagManager: _dagManager);
+    _aiService = AIService(config: AIServiceConfig.development());
+  }
+
+  void _handleSave() {
+    // Export construction to JSON using GeoDrawEncoder
+    final encoder = GeoDrawEncoder();
+    final geometryData = encoder.encode(_dagManager);
+    Navigator.of(context).pop(geometryData);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -55,244 +90,274 @@ class GeoDrawCreateScreen extends StatelessWidget {
         actions: [
           IconButton(
             icon: const Icon(Icons.save),
-            onPressed: () {
-              // Mock geometry data - this would come from actual GeoDraw
-              final mockGeometryData = {
-                'type': 'construction',
-                'objects': [
-                  {
-                    'id': 'point1',
-                    'type': 'point',
-                    'coordinates': {'x': 100, 'y': 100},
-                    'label': 'A',
-                  },
-                  {
-                    'id': 'point2',
-                    'type': 'point',
-                    'coordinates': {'x': 200, 'y': 100},
-                    'label': 'B',
-                  },
-                  {
-                    'id': 'line1',
-                    'type': 'line',
-                    'points': ['point1', 'point2'],
-                    'label': 'AB',
-                  },
-                ],
-                'constraints': [],
-                'created_at': DateTime.now().toIso8601String(),
-              };
-              Navigator.of(context).pop(mockGeometryData);
-            },
+            tooltip: 'Save construction',
+            onPressed: _handleSave,
           ),
         ],
       ),
-      body: const Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.draw,
-              size: 64,
-              color: Colors.blue,
+      body: Row(
+        children: [
+          // Tool Palette
+          ToolPalette(
+            toolManager: _toolManager,
+            onToolSelected: (toolType) {
+              setState(() {
+                _toolManager.selectTool(toolType);
+              });
+            },
+          ),
+          // Main content area (Canvas only)
+          Expanded(
+            child: GeoDrawCanvas(
+              dagManager: _dagManager,
+              toolManager: _toolManager,
+              selectedIds: _selectedIds,
+              onSelectionChanged: (newSelection) {
+                setState(() {
+                  _selectedIds.clear();
+                  _selectedIds.addAll(newSelection);
+                });
+              },
+              showGrid: true,
             ),
-            SizedBox(height: 16),
-            Text(
-              'GeoDraw Create Mode',
-              style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-            ),
-            SizedBox(height: 8),
-            Text(
-              'This is a placeholder for the geodraw package integration.\nUse the save button to return mock geometry data.',
-              textAlign: TextAlign.center,
-            ),
-            SizedBox(height: 24),
-            Card(
-              margin: EdgeInsets.all(16),
-              child: Padding(
-                padding: EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Mock Features:',
-                      style: TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                    SizedBox(height: 8),
-                    Text('• Point creation and manipulation'),
-                    Text('• Line and shape drawing'),
-                    Text('• Geometric constraints'),
-                    Text('• Construction export'),
-                  ],
+          ),
+          // Right sidebar: Object Browser + Unified Prompt (like chat)
+          SizedBox(
+            width: 300,
+            child: Column(
+              children: [
+                // Object Browser - DAG elements list (history at top)
+                Expanded(
+                  child: ObjectBrowser(
+                    dagManager: _dagManager,
+                    selectedIds: _selectedIds,
+                    onSelectionChanged: (newSelection) {
+                      setState(() {
+                        _selectedIds.clear();
+                        _selectedIds.addAll(newSelection);
+                      });
+                    },
+                  ),
                 ),
-              ),
+                // Unified Prompt Panel - CLI/AI input (prompt at bottom)
+                UnifiedPromptPanel(
+                  dagManager: _dagManager,
+                  cliExecutor: _commandExecutor,
+                  aiService: _aiService,
+                  aiAdapter: AIAdapter(dagManager: _dagManager),
+                  height: 250,
+                ),
+              ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
 }
 
-/// Placeholder screen for GeoDraw editing functionality
-class GeoDrawEditScreen extends StatelessWidget {
-  const GeoDrawEditScreen({
-    super.key,
-    required this.problem,
-  });
+/// Screen for GeoDraw editing functionality
+class GeoDrawEditScreen extends StatefulWidget {
+  const GeoDrawEditScreen({super.key, required this.problem});
 
   final Problem problem;
+
+  @override
+  State<GeoDrawEditScreen> createState() => _GeoDrawEditScreenState();
+}
+
+class _GeoDrawEditScreenState extends State<GeoDrawEditScreen> {
+  late DAGManager _dagManager;
+  late ToolManager _toolManager;
+  late UnifiedCLIExecutor _commandExecutor;
+  late AIService _aiService;
+  final Set<String> _selectedIds = {};
+
+  @override
+  void initState() {
+    super.initState();
+
+    // Load existing geometry data if available
+    if (widget.problem.geometryData != null) {
+      try {
+        final decoder = GeoDrawDecoder();
+        _dagManager = decoder.decode(widget.problem.geometryData!);
+      } catch (e) {
+        // If decoding fails, start with empty canvas
+        debugPrint('Failed to load geometry data: $e');
+        _dagManager = DAGManager();
+      }
+    } else {
+      _dagManager = DAGManager();
+    }
+
+    _toolManager = ToolManager(
+      dagManager: _dagManager,
+      onObjectCreated: (object, deps) {
+        setState(() {});
+      },
+      onToolStateChanged: (state) {
+        setState(() {});
+      },
+    );
+    _commandExecutor = UnifiedCLIExecutor(dagManager: _dagManager);
+    _aiService = AIService(config: AIServiceConfig.development());
+  }
+
+  void _handleSave() {
+    // Export construction to JSON
+    final encoder = GeoDrawEncoder();
+    final geometryData = encoder.encode(_dagManager);
+    Navigator.of(context).pop(geometryData);
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('GeoDraw - Edit'),
+        title: Text('Edit: ${widget.problem.title}'),
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
         actions: [
           IconButton(
             icon: const Icon(Icons.save),
-            onPressed: () {
-              // Mock updated geometry data
-              final updatedGeometryData = {
-                ...?problem.geometryData,
-                'modified_at': DateTime.now().toIso8601String(),
-                'version': (problem.geometryData?['version'] ?? 0) + 1,
-              };
-              Navigator.of(context).pop(updatedGeometryData);
-            },
+            tooltip: 'Save changes',
+            onPressed: _handleSave,
           ),
         ],
       ),
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(
-              Icons.edit,
-              size: 64,
-              color: Colors.orange,
+      body: Row(
+        children: [
+          // Tool Palette
+          ToolPalette(
+            toolManager: _toolManager,
+            onToolSelected: (toolType) {
+              setState(() {
+                _toolManager.selectTool(toolType);
+              });
+            },
+          ),
+          // Main content area (Canvas only)
+          Expanded(
+            child: GeoDrawCanvas(
+              dagManager: _dagManager,
+              toolManager: _toolManager,
+              selectedIds: _selectedIds,
+              onSelectionChanged: (newSelection) {
+                setState(() {
+                  _selectedIds.clear();
+                  _selectedIds.addAll(newSelection);
+                });
+              },
+              showGrid: true,
             ),
-            const SizedBox(height: 16),
-            const Text(
-              'GeoDraw Edit Mode',
-              style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Editing: ${problem.title}',
-              style: const TextStyle(fontSize: 16),
-            ),
-            const SizedBox(height: 24),
-            Card(
-              margin: const EdgeInsets.all(16),
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Current Geometry Data:',
-                      style: TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      problem.geometryData != null
-                          ? 'Objects: ${problem.geometryData!.keys.length} properties'
-                          : 'No geometry data available',
-                    ),
-                  ],
+          ),
+          // Right sidebar: Object Browser + Unified Prompt (like chat)
+          SizedBox(
+            width: 300,
+            child: Column(
+              children: [
+                // Object Browser - DAG elements list (history at top)
+                Expanded(
+                  child: ObjectBrowser(
+                    dagManager: _dagManager,
+                    selectedIds: _selectedIds,
+                    onSelectionChanged: (newSelection) {
+                      setState(() {
+                        _selectedIds.clear();
+                        _selectedIds.addAll(newSelection);
+                      });
+                    },
+                  ),
                 ),
-              ),
+                // Unified Prompt Panel - CLI/AI input (prompt at bottom)
+                UnifiedPromptPanel(
+                  dagManager: _dagManager,
+                  cliExecutor: _commandExecutor,
+                  aiService: _aiService,
+                  aiAdapter: AIAdapter(dagManager: _dagManager),
+                  height: 250,
+                ),
+              ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
 }
 
-/// Placeholder screen for GeoDraw viewing functionality
-class GeoDrawViewScreen extends StatelessWidget {
-  const GeoDrawViewScreen({
-    super.key,
-    required this.problem,
-  });
+/// Screen for GeoDraw viewing functionality (read-only)
+class GeoDrawViewScreen extends StatefulWidget {
+  const GeoDrawViewScreen({super.key, required this.problem});
 
   final Problem problem;
+
+  @override
+  State<GeoDrawViewScreen> createState() => _GeoDrawViewScreenState();
+}
+
+class _GeoDrawViewScreenState extends State<GeoDrawViewScreen> {
+  late DAGManager _dagManager;
+  late ToolManager _toolManager;
+
+  @override
+  void initState() {
+    super.initState();
+
+    // Load existing geometry data if available
+    if (widget.problem.geometryData != null) {
+      try {
+        final decoder = GeoDrawDecoder();
+        _dagManager = decoder.decode(widget.problem.geometryData!);
+      } catch (e) {
+        debugPrint('Failed to load geometry data: $e');
+        _dagManager = DAGManager();
+      }
+    } else {
+      _dagManager = DAGManager();
+    }
+
+    // Create tool manager but don't allow tool selection in view mode
+    _toolManager = ToolManager(
+      dagManager: _dagManager,
+      onObjectCreated: (object, deps) {
+        setState(() {});
+      },
+      onToolStateChanged: (state) {
+        setState(() {});
+      },
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('GeoDraw - View'),
+        title: Text('View: ${widget.problem.title}'),
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
       ),
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(
-              Icons.visibility,
-              size: 64,
-              color: Colors.green,
+      body: Row(
+        children: [
+          // Main content area (Canvas only, no prompts in view mode)
+          Expanded(
+            child: GeoDrawCanvas(
+              dagManager: _dagManager,
+              toolManager: _toolManager,
+              selectedIds: const {},
+              onSelectionChanged: null, // Read-only mode
+              showGrid: true,
             ),
-            const SizedBox(height: 16),
-            const Text(
-              'GeoDraw View Mode',
-              style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+          ),
+          // Object Browser (read-only)
+          SizedBox(
+            width: 250,
+            child: ObjectBrowser(
+              dagManager: _dagManager,
+              selectedIds: const {},
+              onSelectionChanged: null, // Read-only mode
             ),
-            const SizedBox(height: 8),
-            Text(
-              'Viewing: ${problem.title}',
-              style: const TextStyle(fontSize: 16),
-            ),
-            const SizedBox(height: 24),
-            Card(
-              margin: const EdgeInsets.all(16),
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text(
-                          'Problem Details:',
-                          style: TextStyle(fontWeight: FontWeight.bold),
-                        ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 4,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.green[100],
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: const Text(
-                            'Read-Only',
-                            style: TextStyle(fontSize: 12),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    Text('Difficulty: ${problem.difficulty.displayName}'),
-                    Text('Category: ${problem.category.displayName}'),
-                    const SizedBox(height: 8),
-                    Text(
-                      problem.geometryData != null
-                          ? 'Geometry: ${problem.geometryData!.keys.length} properties'
-                          : 'No geometry data available',
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

@@ -2,4 +2,4 @@
 library;
 
 export 'ai_service.dart';
-export 'command_validator.dart';
+export 'ai_adapter.dart';

@@ -12,11 +12,7 @@ abstract class ProblemEvent extends Equatable {
 
 /// Event to fetch problems list with optional pagination
 class FetchProblems extends ProblemEvent {
-  const FetchProblems({
-    this.start = 0,
-    this.limit = 20,
-    this.refresh = false,
-  });
+  const FetchProblems({this.start = 0, this.limit = 20, this.refresh = false});
 
   final int start;
   final int limit;
@@ -35,6 +31,7 @@ class CreateProblem extends ProblemEvent {
     required this.category,
     this.geometryData,
     this.solution,
+    this.thumbnailId,
   });
 
   final String title;
@@ -43,16 +40,18 @@ class CreateProblem extends ProblemEvent {
   final ProblemCategory category;
   final Map<String, dynamic>? geometryData;
   final String? solution;
+  final String? thumbnailId;
 
   @override
   List<Object?> get props => [
-        title,
-        description,
-        difficulty,
-        category,
-        geometryData,
-        solution,
-      ];
+    title,
+    description,
+    difficulty,
+    category,
+    geometryData,
+    solution,
+    thumbnailId,
+  ];
 }
 
 /// Event to update an existing problem
@@ -65,6 +64,7 @@ class UpdateProblem extends ProblemEvent {
     required this.category,
     this.geometryData,
     this.solution,
+    this.thumbnailId,
   });
 
   final String id;
@@ -74,17 +74,19 @@ class UpdateProblem extends ProblemEvent {
   final ProblemCategory category;
   final Map<String, dynamic>? geometryData;
   final String? solution;
+  final String? thumbnailId;
 
   @override
   List<Object?> get props => [
-        id,
-        title,
-        description,
-        difficulty,
-        category,
-        geometryData,
-        solution,
-      ];
+    id,
+    title,
+    description,
+    difficulty,
+    category,
+    geometryData,
+    solution,
+    thumbnailId,
+  ];
 }
 
 /// Event to delete a problem

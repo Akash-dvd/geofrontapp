@@ -24,12 +24,10 @@ class ObjectBrowser extends StatelessWidget {
     final sortedNodes = dagManager.topologicalSort();
 
     return Container(
-      width: width,
+      // width controlled by parent, not internally
       decoration: BoxDecoration(
         color: Colors.grey[100],
-        border: Border(
-          left: BorderSide(color: Colors.grey[300]!, width: 1),
-        ),
+        border: Border(left: BorderSide(color: Colors.grey[300]!, width: 1)),
       ),
       child: Column(
         children: [
@@ -83,39 +81,6 @@ class ObjectBrowser extends StatelessWidget {
                     },
                   ),
           ),
-
-          // Footer with stats
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              border: Border(
-                top: BorderSide(color: Colors.grey[300]!, width: 1),
-              ),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _StatRow(
-                  label: 'Free objects',
-                  value: sortedNodes.where((n) => n.isFree).length.toString(),
-                ),
-                _StatRow(
-                  label: 'Dependent objects',
-                  value: sortedNodes.where((n) => !n.isFree).length.toString(),
-                ),
-                _StatRow(
-                  label: 'Max depth',
-                  value: sortedNodes.isEmpty
-                      ? '0'
-                      : sortedNodes
-                          .map((n) => n.depth)
-                          .reduce((a, b) => a > b ? a : b)
-                          .toString(),
-                ),
-              ],
-            ),
-          ),
         ],
       ),
     );
@@ -142,9 +107,7 @@ class _ObjectListTile extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: isSelected ? Colors.blue[50] : null,
-        border: Border(
-          bottom: BorderSide(color: Colors.grey[300]!, width: 1),
-        ),
+        border: Border(bottom: BorderSide(color: Colors.grey[300]!, width: 1)),
       ),
       child: ListTile(
         dense: true,
@@ -174,7 +137,11 @@ class _ObjectListTile extends StatelessWidget {
             if (node.isFree)
               Tooltip(
                 message: 'Free object',
-                child: Icon(Icons.lock_open, size: 14, color: Colors.green[700]),
+                child: Icon(
+                  Icons.lock_open,
+                  size: 14,
+                  color: Colors.green[700],
+                ),
               )
             else
               Tooltip(
@@ -191,39 +158,6 @@ class _ObjectListTile extends StatelessWidget {
           ],
         ),
         onTap: onTap,
-      ),
-    );
-  }
-}
-
-class _StatRow extends StatelessWidget {
-  final String label;
-  final String value;
-
-  const _StatRow({
-    required this.label,
-    required this.value,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 4),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(
-            label,
-            style: TextStyle(fontSize: 12, color: Colors.grey[700]),
-          ),
-          Text(
-            value,
-            style: const TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-        ],
       ),
     );
   }

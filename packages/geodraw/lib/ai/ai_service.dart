@@ -46,9 +46,10 @@ class AIServiceConfig {
   });
 
   /// Default configuration for local development
+  /// Points to Python solver server running on network
   factory AIServiceConfig.development() {
     return const AIServiceConfig(
-      apiEndpoint: 'http://localhost:3000/api/ai/generate-commands',
+      apiEndpoint: 'http://192.168.1.3:5000/graphql',
     );
   }
 
@@ -57,6 +58,13 @@ class AIServiceConfig {
     return AIServiceConfig(
       apiEndpoint: apiEndpoint,
       apiKey: apiKey,
+    );
+  }
+  
+  /// Network configuration (for cross-device access)
+  factory AIServiceConfig.network({String host = '192.168.1.3', int port = 5000}) {
+    return AIServiceConfig(
+      apiEndpoint: 'http://$host:$port/graphql',
     );
   }
 }

@@ -8,8 +8,7 @@ import 'package:geodraw/src/models/geo_point.dart';
 import 'package:geodraw/src/models/geo_line.dart';
 import 'package:geodraw/src/models/geo_circle.dart';
 import 'package:geodraw/src/codec/json_codec.dart';
-import 'package:geodraw/src/cli/command_parser.dart';
-import 'package:geodraw/src/cli/command_executor.dart';
+import 'package:geodraw/src/command/command_parser.dart';
 
 void main() async {
   print('=== GeoDraw Package Demo ===\n');
@@ -37,7 +36,7 @@ void main() async {
 /// Demonstrate CLI system
 Future<void> cliDemo() async {
   final dag = DAGManager();
-  final executor = CommandExecutor(dagManager: dag);
+  final parser = CommandParser(dag);
   final parser = CommandParser();
 
   print('Creating construction via CLI commands...\n');
@@ -110,7 +109,9 @@ void codecDemo() {
   final jsonString = codec.encodeToJson(dag, pretty: true);
 
   print('JSON Output (first 500 chars):');
-  print(jsonString.substring(0, jsonString.length > 500 ? 500 : jsonString.length));
+  print(
+    jsonString.substring(0, jsonString.length > 500 ? 500 : jsonString.length),
+  );
   print('...\n');
 
   // Decode back
@@ -154,14 +155,20 @@ Future<void> completeDemo() async {
   print('Statistics:');
   print('  Total objects: ${dag.nodeCount}');
   print('  Free objects: ${dag.nodes.values.where((n) => n.isFree).length}');
-  print('  Dependent objects: ${dag.nodes.values.where((n) => !n.isFree).length}');
-  print('  Max depth: ${dag.nodes.values.map((n) => n.depth).reduce((a, b) => a > b ? a : b)}');
+  print(
+    '  Dependent objects: ${dag.nodes.values.where((n) => !n.isFree).length}',
+  );
+  print(
+    '  Max depth: ${dag.nodes.values.map((n) => n.depth).reduce((a, b) => a > b ? a : b)}',
+  );
 
   print('\nObject tree:');
   final sorted = dag.topologicalSort();
   for (final node in sorted) {
     final indent = '  ' * node.depth;
-    final deps = node.parentIds.isEmpty ? '' : ' (depends on: ${node.parentIds.join(", ")})';
+    final deps = node.parentIds.isEmpty
+        ? ''
+        : ' (depends on: ${node.parentIds.join(", ")})';
     print('$indent${node.object.label} [${node.object.runtimeType}]$deps');
   }
 

@@ -7,53 +7,97 @@ extension MultivectorDefinitions on Multivector {
   /// Example function - replace with your actual implementation
   bool isZero() {
     // A multivector is a zero if all components are zero
-    return 
-    s.abs() < tolerance &&
-    o.abs() < tolerance && e1.abs() < tolerance && e2.abs() < tolerance && O.abs() < tolerance 
-    && oe1.abs() < tolerance && oe2.abs() < tolerance && oO.abs() < tolerance 
-    && e12.abs() < tolerance && e1O.abs() < tolerance && e2O.abs() < tolerance 
-    && oe12.abs() < tolerance && oe1O.abs() < tolerance && oe2O.abs() < tolerance
-    && e12O.abs() < tolerance && oe12O.abs() < tolerance;
+    return s.abs() < tolerance &&
+        o.abs() < tolerance &&
+        e1.abs() < tolerance &&
+        e2.abs() < tolerance &&
+        O.abs() < tolerance &&
+        oe1.abs() < tolerance &&
+        oe2.abs() < tolerance &&
+        oO.abs() < tolerance &&
+        e12.abs() < tolerance &&
+        e1O.abs() < tolerance &&
+        e2O.abs() < tolerance &&
+        oe12.abs() < tolerance &&
+        oe1O.abs() < tolerance &&
+        oe2O.abs() < tolerance &&
+        e12O.abs() < tolerance &&
+        oe12O.abs() < tolerance;
   }
+
   /// Example function - replace with your actual implementation
   bool isScalar() {
     // A multivector is a scalar if all components except the scalar part are zero
-    return 
-    o.abs() < tolerance && e1.abs() < tolerance && e2.abs() < tolerance && O.abs() < tolerance 
-    && oe1.abs() < tolerance && oe2.abs() < tolerance && oO.abs() < tolerance 
-    && e12.abs() < tolerance && e1O.abs() < tolerance && e2O.abs() < tolerance 
-    && oe12.abs() < tolerance && oe1O.abs() < tolerance && oe2O.abs() < tolerance
-    && e12O.abs() < tolerance && oe12O.abs() < tolerance;
+    return o.abs() < tolerance &&
+        e1.abs() < tolerance &&
+        e2.abs() < tolerance &&
+        O.abs() < tolerance &&
+        oe1.abs() < tolerance &&
+        oe2.abs() < tolerance &&
+        oO.abs() < tolerance &&
+        e12.abs() < tolerance &&
+        e1O.abs() < tolerance &&
+        e2O.abs() < tolerance &&
+        oe12.abs() < tolerance &&
+        oe1O.abs() < tolerance &&
+        oe2O.abs() < tolerance &&
+        e12O.abs() < tolerance &&
+        oe12O.abs() < tolerance;
   }
 
   bool isVector() {
     // A multivector is a vector if only the vector components are non-zero
-    return 
-    s.abs() < tolerance 
-    && oe1.abs() < tolerance && oe2.abs() < tolerance && oO.abs() < tolerance 
-    && e12.abs() < tolerance && e1O.abs() < tolerance && e2O.abs() < tolerance 
-    && oe12.abs() < tolerance && oe1O.abs() < tolerance && oe2O.abs() < tolerance
-    && e12O.abs() < tolerance && oe12O.abs() < tolerance;
+    return s.abs() < tolerance &&
+        oe1.abs() < tolerance &&
+        oe2.abs() < tolerance &&
+        oO.abs() < tolerance &&
+        e12.abs() < tolerance &&
+        e1O.abs() < tolerance &&
+        e2O.abs() < tolerance &&
+        oe12.abs() < tolerance &&
+        oe1O.abs() < tolerance &&
+        oe2O.abs() < tolerance &&
+        e12O.abs() < tolerance &&
+        oe12O.abs() < tolerance;
   }
 
-  bool isline() {
+  bool isLine() {
     // A multivector is a line if only the line components are non-zero
-    return 
-    s.abs() < tolerance && o.abs() < tolerance
-    && oe1.abs() < tolerance && oe2.abs() < tolerance && oO.abs() < tolerance 
-    && e12.abs() < tolerance && e1O.abs() < tolerance && e2O.abs() < tolerance 
-    && oe12.abs() < tolerance && oe1O.abs() < tolerance && oe2O.abs() < tolerance
-    && e12O.abs() < tolerance && oe12O.abs() < tolerance;
+    return s.abs() < tolerance &&
+        o.abs() < tolerance &&
+        oe1.abs() < tolerance &&
+        oe2.abs() < tolerance &&
+        oO.abs() < tolerance &&
+        e12.abs() < tolerance &&
+        e1O.abs() < tolerance &&
+        e2O.abs() < tolerance &&
+        oe12.abs() < tolerance &&
+        oe1O.abs() < tolerance &&
+        oe2O.abs() < tolerance &&
+        e12O.abs() < tolerance &&
+        oe12O.abs() < tolerance;
   }
 
   bool isCircle() {
     // A multivector is a circle if only the circle components are non-zero
-    return isVector();
+    return s.abs() < tolerance &&
+        o.abs() > tolerance &&
+        oe1.abs() < tolerance &&
+        oe2.abs() < tolerance &&
+        oO.abs() < tolerance &&
+        e12.abs() < tolerance &&
+        e1O.abs() < tolerance &&
+        e2O.abs() < tolerance &&
+        oe12.abs() < tolerance &&
+        oe1O.abs() < tolerance &&
+        oe2O.abs() < tolerance &&
+        e12O.abs() < tolerance &&
+        oe12O.abs() < tolerance;
   }
 
   bool isPoint() {
     // A multivector is a point if only the point components are non-zero
-    return isVector && (this|this).isZero();
+    return isCircle() && (this | this).isZero();
   }
 
   Multivector scalarDivide(double scalar) {

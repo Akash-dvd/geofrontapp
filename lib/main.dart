@@ -8,10 +8,10 @@ import 'screens/problem_management_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
+
   // Initialize GraphQL cache
   await initHiveForFlutter();
-  
+
   runApp(const GeoFrontApp());
 }
 
@@ -22,14 +22,13 @@ class GeoFrontApp extends StatelessWidget {
   Widget build(BuildContext context) {
     // Create GraphQL client once
     final graphQLClient = GraphQLConfig.createClient();
-    
+
     return GraphQLConfig.createProvider(
       child: BlocProvider(
-        create: (context) => ProblemBloc(
-          graphQLClient: graphQLClient,
-        ),
+        create: (context) => ProblemBloc(graphQLClient: graphQLClient),
         child: MaterialApp(
           title: 'GeoFront App',
+          debugShowCheckedModeBanner: false,
           theme: ThemeData(
             colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
             useMaterial3: true,
@@ -40,5 +39,3 @@ class GeoFrontApp extends StatelessWidget {
     );
   }
 }
-
-

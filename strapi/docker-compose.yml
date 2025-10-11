@@ -1,0 +1,47 @@
+version: "3.8"
+
+services:
+  postgres:
+    image: postgres:14-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: geofrontapp
+      POSTGRES_USER: geofrontapp_user
+      POSTGRES_PASSWORD: geofrontapp_password_2025
+    volumes:
+      - geofrontapp_postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"   # optional, exposes DB to host
+
+  strapi:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: geofrontapp_strapi:latest
+    restart: unless-stopped
+    depends_on:
+      - postgres
+    env_file:
+      - .env
+    environment:
+      # ensure Strapi reads the DB service name when running inside docker-compose
+      DATABASE_HOST: postgres
+      DATABASE_CLIENT: postgres
+      DATABASE_PORT: 5432
+      # these will be read from .env if present, but defined here as fallback
+      DATABASE_NAME: geofrontapp
+      DATABASE_USERNAME: geofrontapp_user
+      DATABASE_PASSWORD: geofrontapp_password_2025
+      NODE_ENV: production
+    ports:
+      - "1337:1337"
+    volumes:
+      - ./uploads:/srv/app/uploads      # persist uploaded files
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:1337/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+
+volumes:
+  geofrontapp_postgres_data:

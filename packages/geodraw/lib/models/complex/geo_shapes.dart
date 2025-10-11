@@ -15,6 +15,9 @@ class GeoSegment extends ComplexGeometryObject {
   });
 
   @override
+  String get type => 'segment';
+
+  @override
   void draw(Canvas canvas, Paint paint) {
     // Drawing will be handled by retrieving actual points from DAG
     // This is a simplified implementation
@@ -78,6 +81,9 @@ class GeoTriangle extends ComplexGeometryObjectList<GeoSegment> {
   }) : assert(elements.length == 3, 'Triangle requires exactly 3 segments');
 
   @override
+  String get type => 'triangle';
+
+  @override
   int get vertexCount => 3;
 
   @override
@@ -122,6 +128,9 @@ class GeoPolygon extends ComplexGeometryObjectList<GeoSegment> {
     super.color = Colors.brown,
     super.visible,
   });
+
+  @override
+  String get type => 'polygon';
 
   @override
   int get vertexCount => elements.length;

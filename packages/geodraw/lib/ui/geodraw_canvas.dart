@@ -3,6 +3,7 @@ import 'package:flutter/gestures.dart';
 import '../dag/dag_manager.dart' hide Viewport;
 import '../dag/dag_manager.dart' as dag show Viewport;
 import '../models/geometry_object.dart';
+import '../models/simple/geo_point.dart';
 import '../tools/tool_manager.dart';
 import '../tools/tool.dart';
 
@@ -39,7 +40,8 @@ class _GeoDrawCanvasState extends State<GeoDrawCanvas> {
   @override
   void initState() {
     super.initState();
-    _viewport = widget.dagManager.viewport ??
+    _viewport =
+        widget.dagManager.viewport ??
         dag.Viewport(
           center: Offset.zero,
           zoom: 1.0,
@@ -53,8 +55,11 @@ class _GeoDrawCanvasState extends State<GeoDrawCanvas> {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        _viewport?.canvasSize = Size(constraints.maxWidth, constraints.maxHeight);
-        
+        _viewport?.canvasSize = Size(
+          constraints.maxWidth,
+          constraints.maxHeight,
+        );
+
         return GestureDetector(
           onTapDown: _handleTapDown,
           onPanStart: _handlePanStart,
@@ -81,18 +86,22 @@ class _GeoDrawCanvasState extends State<GeoDrawCanvas> {
 
   void _handleTapDown(TapDownDetails details) {
     final worldPos = _viewport!.screenToWorld(details.localPosition);
-    
+
     // Check if we're clicking on an existing object
     final nearby = widget.dagManager.proximitySearch(worldPos, threshold: 10);
-    
-    if (nearby.isNotEmpty && widget.toolManager.activeToolType == ToolType.select) {
+
+    if (nearby.isNotEmpty &&
+        widget.toolManager.activeToolType == ToolType.select) {
       // Select object
       final newSelection = {nearby.first.id};
       widget.onSelectionChanged?.call(newSelection);
       setState(() {});
     } else {
-      // Use current tool
-      // Tool action handled (tools don't need explicit handlePointerDown)
+      // Forward event to active tool with world coordinates
+      final pointerEvent = PointerDownEvent(
+        position: worldPos, // Use world coordinates for tool
+      );
+      widget.toolManager.handleInput(pointerEvent);
       widget.onSelectionChanged?.call({});
       setState(() {});
     }
@@ -100,7 +109,7 @@ class _GeoDrawCanvasState extends State<GeoDrawCanvas> {
 
   void _handlePanStart(DragStartDetails details) {
     final worldPos = _viewport!.screenToWorld(details.localPosition);
-    
+
     if (widget.toolManager.activeToolType == ToolType.pan) {
       _lastPanPosition = details.localPosition;
     } else if (widget.toolManager.activeToolType == ToolType.select) {
@@ -113,7 +122,8 @@ class _GeoDrawCanvasState extends State<GeoDrawCanvas> {
   }
 
   void _handlePanUpdate(DragUpdateDetails details) {
-    if (widget.toolManager.activeToolType == ToolType.pan && _lastPanPosition != null) {
+    if (widget.toolManager.activeToolType == ToolType.pan &&
+        _lastPanPosition != null) {
       // Pan the viewport
       final delta = details.localPosition - _lastPanPosition!;
       _viewport!.pan(-delta);
@@ -122,9 +132,18 @@ class _GeoDrawCanvasState extends State<GeoDrawCanvas> {
     } else if (_draggedObjectId != null) {
       // Drag object (only free points can be dragged)
       final node = widget.dagManager.getNode(_draggedObjectId!);
-      if (node != null && node.isFree) {
+      if (node != null && node.isFree && node.object is GeoPointer) {
+        // Convert screen position to world coordinates
         final worldPos = _viewport!.screenToWorld(details.localPosition);
-        // Dragging handled (need to implement point movement)
+
+        // Update the point position
+        final point = node.object as GeoPointer;
+        final updatedPoint = point.copyWith(x: worldPos.dx, y: worldPos.dy);
+        widget.dagManager.updateObject(_draggedObjectId!, updatedPoint);
+
+        // Propagate updates to dependent objects (lines, circles, etc.)
+        widget.dagManager.propagateUpdates();
+
         setState(() {});
       }
     }
@@ -211,43 +230,27 @@ class GeoDrawCanvasPainter extends CustomPainter {
     final offsetY = (viewport.center.dy * viewport.zoom) % spacing;
 
     // Draw vertical lines
-    for (double x = size.width / 2 + offsetX % spacing;
-        x < size.width;
-        x += spacing) {
-      canvas.drawLine(
-        Offset(x, 0),
-        Offset(x, size.height),
-        gridPaint,
-      );
+    for (
+      double x = size.width / 2 + offsetX % spacing;
+      x < size.width;
+      x += spacing
+    ) {
+      canvas.drawLine(Offset(x, 0), Offset(x, size.height), gridPaint);
     }
-    for (double x = size.width / 2 + offsetX % spacing;
-        x > 0;
-        x -= spacing) {
-      canvas.drawLine(
-        Offset(x, 0),
-        Offset(x, size.height),
-        gridPaint,
-      );
+    for (double x = size.width / 2 + offsetX % spacing; x > 0; x -= spacing) {
+      canvas.drawLine(Offset(x, 0), Offset(x, size.height), gridPaint);
     }
 
     // Draw horizontal lines
-    for (double y = size.height / 2 + offsetY % spacing;
-        y < size.height;
-        y += spacing) {
-      canvas.drawLine(
-        Offset(0, y),
-        Offset(size.width, y),
-        gridPaint,
-      );
+    for (
+      double y = size.height / 2 + offsetY % spacing;
+      y < size.height;
+      y += spacing
+    ) {
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), gridPaint);
     }
-    for (double y = size.height / 2 + offsetY % spacing;
-        y > 0;
-        y -= spacing) {
-      canvas.drawLine(
-        Offset(0, y),
-        Offset(size.width, y),
-        gridPaint,
-      );
+    for (double y = size.height / 2 + offsetY % spacing; y > 0; y -= spacing) {
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), gridPaint);
     }
 
     // Draw axes
@@ -266,11 +269,7 @@ class GeoDrawCanvasPainter extends CustomPainter {
     );
 
     // X-axis
-    canvas.drawLine(
-      Offset(0, centerY),
-      Offset(size.width, centerY),
-      axisPaint,
-    );
+    canvas.drawLine(Offset(0, centerY), Offset(size.width, centerY), axisPaint);
   }
 
   void _applyViewportTransform(Canvas canvas, Size size) {
@@ -296,7 +295,7 @@ class GeoDrawCanvasPainter extends CustomPainter {
       final bottomRight = viewport.worldToScreen(bounds.bottomRight);
 
       final selectionRect = Rect.fromPoints(topLeft, bottomRight);
-      
+
       final paint = Paint()
         ..color = Colors.orange.withOpacity(0.3)
         ..style = PaintingStyle.stroke

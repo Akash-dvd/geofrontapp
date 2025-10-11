@@ -5,6 +5,7 @@ import '../bloc/problem_bloc.dart';
 import '../bloc/problem_event.dart';
 import '../bloc/problem_state.dart';
 import '../models/problem.dart';
+import '../services/directus_file_service.dart';
 import 'problem_details_screen.dart';
 import 'problem_form_screen.dart';
 
@@ -14,7 +15,8 @@ class ProblemManagementScreen extends StatefulWidget {
   const ProblemManagementScreen({super.key});
 
   @override
-  State<ProblemManagementScreen> createState() => _ProblemManagementScreenState();
+  State<ProblemManagementScreen> createState() =>
+      _ProblemManagementScreenState();
 }
 
 class _ProblemManagementScreenState extends State<ProblemManagementScreen> {
@@ -57,7 +59,9 @@ class _ProblemManagementScreenState extends State<ProblemManagementScreen> {
           IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: () {
-              context.read<ProblemBloc>().add(const FetchProblems(refresh: true));
+              context.read<ProblemBloc>().add(
+                const FetchProblems(refresh: true),
+              );
             },
           ),
         ],
@@ -90,11 +94,7 @@ class _ProblemManagementScreenState extends State<ProblemManagementScreen> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(
-                    Icons.error_outline,
-                    size: 64,
-                    color: Colors.red[300],
-                  ),
+                  Icon(Icons.error_outline, size: 64, color: Colors.red[300]),
                   const SizedBox(height: 16),
                   Text(
                     'Error loading problems',
@@ -109,7 +109,9 @@ class _ProblemManagementScreenState extends State<ProblemManagementScreen> {
                   const SizedBox(height: 16),
                   ElevatedButton(
                     onPressed: () {
-                      context.read<ProblemBloc>().add(const FetchProblems(refresh: true));
+                      context.read<ProblemBloc>().add(
+                        const FetchProblems(refresh: true),
+                      );
                     },
                     child: const Text('Retry'),
                   ),
@@ -127,11 +129,7 @@ class _ProblemManagementScreenState extends State<ProblemManagementScreen> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(
-                    Icons.quiz_outlined,
-                    size: 64,
-                    color: Colors.grey[400],
-                  ),
+                  Icon(Icons.quiz_outlined, size: 64, color: Colors.grey[400]),
                   const SizedBox(height: 16),
                   Text(
                     'No problems found',
@@ -149,7 +147,9 @@ class _ProblemManagementScreenState extends State<ProblemManagementScreen> {
 
           return RefreshIndicator(
             onRefresh: () async {
-              context.read<ProblemBloc>().add(const FetchProblems(refresh: true));
+              context.read<ProblemBloc>().add(
+                const FetchProblems(refresh: true),
+              );
             },
             child: ListView.builder(
               controller: _scrollController,
@@ -210,11 +210,9 @@ class _ProblemManagementScreenState extends State<ProblemManagementScreen> {
   }
 
   void _navigateToCreate(BuildContext context) {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (context) => const ProblemFormScreen(),
-      ),
-    );
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (context) => const ProblemFormScreen()));
   }
 
   void _navigateToEdit(BuildContext context, Problem problem) {
@@ -252,7 +250,7 @@ class _ProblemManagementScreenState extends State<ProblemManagementScreen> {
   }
 }
 
-/// Individual problem list item widget
+/// Individual problem list item widget with thumbnail
 class ProblemListItem extends StatelessWidget {
   const ProblemListItem({
     super.key,
@@ -269,89 +267,162 @@ class ProblemListItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final fileService = DirectusFileService(baseUrl: 'http://192.168.1.3:8055');
+
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      child: ListTile(
-        title: Text(
-          problem.title,
-          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
-        ),
-        subtitle: Column(
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const SizedBox(height: 4),
-            Text(
-              problem.description,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-            ),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                _buildChip(
-                  problem.difficulty.displayName,
-                  _getDifficultyColor(problem.difficulty),
+            // Thumbnail image
+            if (problem.thumbnailId != null)
+              Image.network(
+                fileService.getFileUrl(
+                  problem.thumbnailId!,
+                  width: 800,
+                  height: 400,
+                  fit: 'cover',
+                  quality: 80,
                 ),
-                const SizedBox(width: 8),
-                _buildChip(
-                  problem.category.displayName,
-                  Colors.blue[100]!,
+                height: 200,
+                width: double.infinity,
+                fit: BoxFit.cover,
+                errorBuilder: (context, error, stackTrace) {
+                  return Container(
+                    height: 200,
+                    color: Colors.grey[300],
+                    child: const Center(
+                      child: Icon(
+                        Icons.image_not_supported,
+                        size: 48,
+                        color: Colors.grey,
+                      ),
+                    ),
+                  );
+                },
+                loadingBuilder: (context, child, loadingProgress) {
+                  if (loadingProgress == null) return child;
+                  return Container(
+                    height: 200,
+                    color: Colors.grey[200],
+                    child: Center(
+                      child: CircularProgressIndicator(
+                        value: loadingProgress.expectedTotalBytes != null
+                            ? loadingProgress.cumulativeBytesLoaded /
+                                  loadingProgress.expectedTotalBytes!
+                            : null,
+                      ),
+                    ),
+                  );
+                },
+              )
+            else
+              Container(
+                height: 200,
+                color: Colors.grey[300],
+                child: const Center(
+                  child: Icon(Icons.image, size: 48, color: Colors.grey),
                 ),
-              ],
-            ),
-          ],
-        ),
-        trailing: PopupMenuButton<String>(
-          onSelected: (value) {
-            switch (value) {
-              case 'edit':
-                onEdit();
-                break;
-              case 'delete':
-                onDelete();
-                break;
-            }
-          },
-          itemBuilder: (context) => [
-            const PopupMenuItem(
-              value: 'edit',
-              child: Row(
+              ),
+
+            // Problem details
+            Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(Icons.edit, size: 20),
-                  SizedBox(width: 8),
-                  Text('Edit'),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          problem.title,
+                          style: Theme.of(context).textTheme.titleLarge
+                              ?.copyWith(fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                      PopupMenuButton<String>(
+                        onSelected: (value) {
+                          switch (value) {
+                            case 'edit':
+                              onEdit();
+                              break;
+                            case 'delete':
+                              onDelete();
+                              break;
+                          }
+                        },
+                        itemBuilder: (context) => [
+                          const PopupMenuItem(
+                            value: 'edit',
+                            child: Row(
+                              children: [
+                                Icon(Icons.edit, size: 20),
+                                SizedBox(width: 8),
+                                Text('Edit'),
+                              ],
+                            ),
+                          ),
+                          const PopupMenuItem(
+                            value: 'delete',
+                            child: Row(
+                              children: [
+                                Icon(Icons.delete, size: 20, color: Colors.red),
+                                SizedBox(width: 8),
+                                Text(
+                                  'Delete',
+                                  style: TextStyle(color: Colors.red),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    problem.description,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(color: Colors.grey[600], fontSize: 14),
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      _buildChip(
+                        problem.difficulty.displayName,
+                        _getDifficultyColor(problem.difficulty),
+                      ),
+                      const SizedBox(width: 8),
+                      _buildChip(
+                        problem.category.displayName,
+                        Colors.blue[100]!,
+                      ),
+                    ],
+                  ),
                 ],
               ),
             ),
-            const PopupMenuItem(
-              value: 'delete',
-              child: Row(
-                children: [
-                  Icon(Icons.delete, size: 20, color: Colors.red),
-                  SizedBox(width: 8),
-                  Text('Delete', style: TextStyle(color: Colors.red)),
-                ],
-              ),
-            ),
           ],
         ),
-        onTap: onTap,
       ),
     );
   }
 
   Widget _buildChip(String label, Color color) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
         color: color,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(16),
       ),
       child: Text(
         label,
-        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
+        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
       ),
     );
   }

@@ -4,12 +4,6 @@ import '../geometry_object.dart';
 
 /// Abstract base class for all point types
 abstract class GeoPoint extends SimpleGeometryObject {
-  /// X coordinate in world space
-  final double x;
-  
-  /// Y coordinate in world space
-  final double y;
-  
   /// Rendering size in pixels
   final double size;
 
@@ -18,25 +12,29 @@ abstract class GeoPoint extends SimpleGeometryObject {
     required super.label,
     required super.dependencies,
     required super.multivector,
-    required this.x,
-    required this.y,
     this.size = 5.0,
     super.color = Colors.red,
     super.visible,
   });
+
+  /// X coordinate derived from multivector
+  double get x => multivector.e1;
+
+  /// Y coordinate derived from multivector
+  double get y => multivector.e2;
 
   Offset get position => Offset(x, y);
 
   @override
   void draw(Canvas canvas, Paint paint) {
     if (!visible) return;
-    
+
     final pointPaint = Paint()
       ..color = color
       ..style = PaintingStyle.fill;
-    
+
     canvas.drawCircle(position, size, pointPaint);
-    
+
     // Draw label
     if (label.isNotEmpty) {
       final textPainter = TextPainter(
@@ -85,7 +83,7 @@ abstract class GeoPoint extends SimpleGeometryObject {
   }
 
   @override
-  List<Object?> get props => [...super.props, x, y, size];
+  List<Object?> get props => [...super.props, size];
 }
 
 /// Free point that can be moved by the user
@@ -101,8 +99,6 @@ class GeoPointer extends GeoPoint {
   }) : super(
          dependencies: [], // Free points have no dependencies
          multivector: constructFreePoint(x, y),
-         x: x,
-         y: y,
        );
 
   @override
@@ -117,36 +113,34 @@ class GeoPointer extends GeoPoint {
     Color? color,
     bool? visible,
   }) {
-    // Note: multivector parameter is ignored for GeoPointer since it's recalculated from x, y
+    // Recalculate multivector from x, y if provided
+    final newX = x ?? this.x;
+    final newY = y ?? this.y;
     return GeoPointer(
       id: id ?? this.id,
       label: label ?? this.label,
-      x: x ?? this.x,
-      y: y ?? this.y,
+      x: newX,
+      y: newY,
       size: size ?? this.size,
       color: color ?? this.color,
       visible: visible ?? this.visible,
     );
   }
-  
+
   @override
   String get type => 'GeoPointer';
-  
+
   @override
   Map<String, dynamic> toJson() {
     final json = super.toJson();
-    json['properties'] = {
-      'x': x,
-      'y': y,
-      'size': size,
-    };
+    json['properties'] = {'x': x, 'y': y, 'size': size};
     return json;
   }
-  
+
   static GeoPointer fromJson(Map<String, dynamic> json) {
     final props = json['properties'] as Map<String, dynamic>;
     final colorHex = (json['color'] as String).replaceAll('#', '');
-    
+
     return GeoPointer(
       id: json['id'] as String,
       label: json['label'] as String,
@@ -166,8 +160,6 @@ class GeoMidpoint extends GeoPoint {
     required super.label,
     required super.dependencies, // Should have exactly 2 dependencies
     required super.multivector,
-    required super.x,
-    required super.y,
     super.size,
     super.color = Colors.green,
     super.visible,
@@ -183,17 +175,13 @@ class GeoMidpoint extends GeoPoint {
     Color color = Colors.green,
     bool visible = true,
   }) {
-    final midX = (p1.x + p2.x) / 2;
-    final midY = (p1.y + p2.y) / 2;
     final mv = constructMidpoint(p1.multivector, p2.multivector);
-    
+
     return GeoMidpoint(
       id: id,
       label: label,
       dependencies: [p1.id, p2.id],
       multivector: mv,
-      x: midX,
-      y: midY,
       size: size,
       color: color,
       visible: visible,
@@ -217,40 +205,33 @@ class GeoMidpoint extends GeoPoint {
       label: label ?? this.label,
       dependencies: dependencies ?? this.dependencies,
       multivector: multivector ?? this.multivector,
-      x: x ?? this.x,
-      y: y ?? this.y,
       size: size ?? this.size,
       color: color ?? this.color,
       visible: visible ?? this.visible,
     );
   }
-  
+
   @override
   String get type => 'GeoMidpoint';
-  
+
   @override
   Map<String, dynamic> toJson() {
     final json = super.toJson();
-    json['properties'] = {
-      'x': x,
-      'y': y,
-      'size': size,
-    };
+    json['properties'] = {'x': x, 'y': y, 'size': size};
     return json;
   }
-  
+
   static GeoMidpoint fromJson(Map<String, dynamic> json) {
     final props = json['properties'] as Map<String, dynamic>;
     final colorHex = (json['color'] as String).replaceAll('#', '');
     final deps = (json['dependencies'] as List).cast<String>();
-    
+
     return GeoMidpoint(
       id: json['id'] as String,
       label: json['label'] as String,
       dependencies: deps,
-      multivector: Multivector.zero(), // Will be recalculated during DAG reconstruction
-      x: (props['x'] as num).toDouble(),
-      y: (props['y'] as num).toDouble(),
+      multivector:
+          Multivector.zero(), // Will be recalculated during DAG reconstruction
       size: (props['size'] as num?)?.toDouble() ?? 5.0,
       color: Color(int.parse(colorHex, radix: 16)),
       visible: json['visible'] as bool? ?? true,
@@ -265,8 +246,6 @@ class GeoInvPoint extends GeoPoint {
     required super.label,
     required super.dependencies,
     required super.multivector,
-    required super.x,
-    required super.y,
     super.size,
     super.color = Colors.purple,
     super.visible,
@@ -289,40 +268,33 @@ class GeoInvPoint extends GeoPoint {
       label: label ?? this.label,
       dependencies: dependencies ?? this.dependencies,
       multivector: multivector ?? this.multivector,
-      x: x ?? this.x,
-      y: y ?? this.y,
       size: size ?? this.size,
       color: color ?? this.color,
       visible: visible ?? this.visible,
     );
   }
-  
+
   @override
   String get type => 'GeoInvPoint';
-  
+
   @override
   Map<String, dynamic> toJson() {
     final json = super.toJson();
-    json['properties'] = {
-      'x': x,
-      'y': y,
-      'size': size,
-    };
+    json['properties'] = {'x': x, 'y': y, 'size': size};
     return json;
   }
-  
+
   static GeoInvPoint fromJson(Map<String, dynamic> json) {
     final props = json['properties'] as Map<String, dynamic>;
     final colorHex = (json['color'] as String).replaceAll('#', '');
     final deps = (json['dependencies'] as List).cast<String>();
-    
+
     return GeoInvPoint(
       id: json['id'] as String,
       label: json['label'] as String,
       dependencies: deps,
-      multivector: Multivector.zero(), // Will be recalculated during DAG reconstruction
-      x: (props['x'] as num).toDouble(),
-      y: (props['y'] as num).toDouble(),
+      multivector:
+          Multivector.zero(), // Will be recalculated during DAG reconstruction
       size: (props['size'] as num?)?.toDouble() ?? 5.0,
       color: Color(int.parse(colorHex, radix: 16)),
       visible: json['visible'] as bool? ?? true,

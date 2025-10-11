@@ -1,6 +1,9 @@
 import 'dart:collection';
 import 'package:flutter/material.dart';
 import '../models/geometry_object.dart';
+import '../models/simple/geo_point.dart';
+import '../models/simple/geo_line.dart';
+import '../models/simple/geo_circle.dart';
 import 'dag_node.dart';
 
 /// Manages the Directed Acyclic Graph (DAG) of geometry objects
@@ -8,16 +11,16 @@ import 'dag_node.dart';
 class DAGManager {
   /// Map of node IDs to nodes
   final Map<String, DAGNode> _nodes = {};
-  
+
   /// Counter for generating unique IDs
   int _idCounter = 0;
-  
+
   /// Viewport settings (can be managed externally)
   Viewport? viewport;
-  
+
   /// Constraints (reserved for future use)
   List<dynamic> constraints = [];
-  
+
   /// Metadata
   Map<String, dynamic> metadata = {};
 
@@ -48,7 +51,10 @@ class DAGManager {
     // Calculate depth
     final depth = dependencies.isEmpty
         ? 0
-        : dependencies.map((id) => _nodes[id]!.depth).reduce((a, b) => a > b ? a : b) + 1;
+        : dependencies
+                  .map((id) => _nodes[id]!.depth)
+                  .reduce((a, b) => a > b ? a : b) +
+              1;
 
     // Create node
     final node = DAGNode(
@@ -176,25 +182,106 @@ class DAGManager {
     final dirtyNodes = _nodes.values.where((node) => node.isDirty).toList();
     if (dirtyNodes.isEmpty) return;
 
-    // Topologically sort dirty nodes
+    // Topologically sort dirty nodes (parents before children)
     final sorted = topologicalSort(dirtyNodes);
 
     // Update each node in order
     for (final node in sorted) {
-      // Recalculate would happen here based on parent objects
-      // For now, just mark as clean
-      _nodes[node.id] = node.copyWith(isDirty: false);
+      if (node.isFree) {
+        // Free objects don't need recalculation, just mark clean
+        _nodes[node.id] = node.copyWith(isDirty: false);
+        continue;
+      }
+
+      // Get parent objects
+      final parents = node.parentIds
+          .map((id) => _nodes[id]?.object)
+          .whereType<GeometryObject>()
+          .toList();
+
+      if (parents.length != node.parentIds.length) {
+        // Some parents are missing, skip this node
+        continue;
+      }
+
+      // Reconstruct object based on its type and parents
+      final rebuilt = _reconstructObject(node.object, parents);
+
+      if (rebuilt != null) {
+        _nodes[node.id] = node.copyWith(
+          object: rebuilt,
+          isDirty: false,
+          lastModified: DateTime.now(),
+        );
+      } else {
+        // Couldn't reconstruct, just mark clean
+        _nodes[node.id] = node.copyWith(isDirty: false);
+      }
     }
+  }
+
+  /// Reconstruct a dependent object from its parent objects
+  GeometryObject? _reconstructObject(
+    GeometryObject obj,
+    List<GeometryObject> parents,
+  ) {
+    // Type check: all parents must be points for these constructors
+    final points = parents.whereType<GeoPoint>().toList();
+    if (points.length != parents.length) return null;
+
+    if (obj is GeoLine2P && points.length == 2) {
+      // Line from 2 points - use static factory
+      return GeoLine2P.fromPoints(
+        id: obj.id,
+        label: obj.label,
+        p1: points[0],
+        p2: points[1],
+        thickness: obj.thickness,
+        style: obj.style,
+        color: obj.color,
+        visible: obj.visible,
+      );
+    }
+
+    if (obj is GeoCircle2P && points.length == 2) {
+      // Circle from center + point on circumference
+      return GeoCircle2P.fromPoints(
+        id: obj.id,
+        label: obj.label,
+        center: points[0],
+        pointOnCircle: points[1],
+        thickness: obj.thickness,
+        filled: obj.filled,
+        color: obj.color,
+        visible: obj.visible,
+      );
+    }
+
+    if (obj is GeoMidpoint && points.length == 2) {
+      // Midpoint of two points
+      return GeoMidpoint.fromPoints(
+        id: obj.id,
+        label: obj.label,
+        p1: points[0],
+        p2: points[1],
+        size: obj.size,
+        color: obj.color,
+        visible: obj.visible,
+      );
+    }
+
+    // Add more types as needed (GeoCircle3P, GeoPerpendicularBisector, etc.)
+    return null;
   }
 
   /// Topologically sort nodes by depth
   List<DAGNode> topologicalSort([List<DAGNode>? nodesToSort]) {
     final nodes = nodesToSort ?? _nodes.values.toList();
-    
+
     // Sort by depth (lower depth = earlier in sort)
     final sorted = List<DAGNode>.from(nodes)
       ..sort((a, b) => a.depth.compareTo(b.depth));
-    
+
     return sorted;
   }
 
@@ -214,7 +301,7 @@ class DAGManager {
 
     for (final node in _nodes.values) {
       if (!node.object.visible) continue;
-      
+
       final distance = node.object.distanceTo(position);
       if (distance < threshold) {
         candidates.add((node.object, distance));
@@ -280,7 +367,8 @@ class Viewport {
   void zoomAt(Offset screenPoint, double factor) {
     final worldPoint = screenToWorld(screenPoint);
     zoom *= factor;
-    center = worldPoint -
+    center =
+        worldPoint -
         (screenPoint - Offset(canvasSize.width / 2, canvasSize.height / 2)) /
             zoom;
   }

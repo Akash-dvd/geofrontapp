@@ -6,18 +6,9 @@ import 'geo_point.dart';
 
 /// Abstract base class for all circle types
 abstract class GeoCircle extends SimpleGeometryObject {
-  /// Center x coordinate
-  final double centerX;
-  
-  /// Center y coordinate
-  final double centerY;
-  
-  /// Radius
-  final double radius;
-  
   /// Rendering thickness
   final double thickness;
-  
+
   /// Whether to fill the circle
   final bool filled;
 
@@ -26,28 +17,37 @@ abstract class GeoCircle extends SimpleGeometryObject {
     required super.label,
     required super.dependencies,
     required super.multivector,
-    required this.centerX,
-    required this.centerY,
-    required this.radius,
     this.thickness = 2.0,
     this.filled = false,
     super.color = Colors.green,
     super.visible,
   });
 
+  /// Center x coordinate derived from multivector
+  double get centerX => multivector.e1;
+
+  /// Center y coordinate derived from multivector
+  double get centerY => multivector.e2;
+
+  /// Radius derived from multivector norm
+  double get radius {
+    final normOpt = multivector.norm();
+    return normOpt.fold(() => 0.0, (normValue) => math.sqrt(normValue.abs()));
+  }
+
   Offset get center => Offset(centerX, centerY);
 
   @override
   void draw(Canvas canvas, Paint paint) {
     if (!visible) return;
-    
+
     final circlePaint = Paint()
       ..color = color
       ..strokeWidth = thickness
       ..style = filled ? PaintingStyle.fill : PaintingStyle.stroke;
-    
+
     canvas.drawCircle(center, radius, circlePaint);
-    
+
     // Draw label
     if (label.isNotEmpty) {
       final textPainter = TextPainter(
@@ -72,9 +72,7 @@ abstract class GeoCircle extends SimpleGeometryObject {
   @override
   bool contains(Offset position) {
     final dist = (position - center).distance;
-    return filled
-        ? dist <= radius
-        : (dist - radius).abs() <= thickness;
+    return filled ? dist <= radius : (dist - radius).abs() <= thickness;
   }
 
   @override
@@ -95,14 +93,13 @@ abstract class GeoCircle extends SimpleGeometryObject {
     if (other is GeoCircle) {
       final centerDist = (center - other.center).distance;
       return centerDist <= (radius + other.radius) &&
-             centerDist >= (radius - other.radius).abs();
+          centerDist >= (radius - other.radius).abs();
     }
     return other.intersects(this);
   }
 
   @override
-  List<Object?> get props =>
-      [...super.props, centerX, centerY, radius, thickness, filled];
+  List<Object?> get props => [...super.props, thickness, filled];
 }
 
 /// Circle defined by center point and a point on the circumference
@@ -112,16 +109,14 @@ class GeoCircle2P extends GeoCircle {
     required super.label,
     required super.dependencies, // Should have exactly 2 dependencies
     required super.multivector,
-    required super.centerX,
-    required super.centerY,
-    required super.radius,
     super.thickness,
     super.filled,
     super.color,
     super.visible,
   }) : assert(
-            dependencies.length == 2,
-            'Circle from 2 points requires exactly 2 point dependencies');
+         dependencies.length == 2,
+         'Circle from 2 points requires exactly 2 point dependencies',
+       );
 
   /// Create circle from center and point on circumference
   static GeoCircle2P fromPoints({
@@ -135,18 +130,16 @@ class GeoCircle2P extends GeoCircle {
     bool visible = true,
   }) {
     // Calculate multivector using definitions.dart placeholder
-    final mv = constructCircleFromCenterAndPoint(center.multivector, pointOnCircle.multivector);
-    
-    final radius = (center.position - pointOnCircle.position).distance;
-    
+    final mv = constructCircleFromCenterAndPoint(
+      center.multivector,
+      pointOnCircle.multivector,
+    );
+
     return GeoCircle2P(
       id: id,
       label: label,
       dependencies: [center.id, pointOnCircle.id],
       multivector: mv,
-      centerX: center.x,
-      centerY: center.y,
-      radius: radius,
       thickness: thickness,
       filled: filled,
       color: color,
@@ -173,19 +166,16 @@ class GeoCircle2P extends GeoCircle {
       label: label ?? this.label,
       dependencies: dependencies ?? this.dependencies,
       multivector: multivector ?? this.multivector,
-      centerX: centerX ?? this.centerX,
-      centerY: centerY ?? this.centerY,
-      radius: radius ?? this.radius,
       thickness: thickness ?? this.thickness,
       filled: filled ?? this.filled,
       color: color ?? this.color,
       visible: visible ?? this.visible,
     );
   }
-  
+
   @override
   String get type => 'GeoCircle2P';
-  
+
   @override
   Map<String, dynamic> toJson() {
     final json = super.toJson();
@@ -198,20 +188,18 @@ class GeoCircle2P extends GeoCircle {
     };
     return json;
   }
-  
+
   static GeoCircle2P fromJson(Map<String, dynamic> json) {
     final props = json['properties'] as Map<String, dynamic>;
     final colorHex = (json['color'] as String).replaceAll('#', '');
     final deps = (json['dependencies'] as List).cast<String>();
-    
+
     return GeoCircle2P(
       id: json['id'] as String,
       label: json['label'] as String,
       dependencies: deps,
-      multivector: Multivector.zero(),
-      centerX: (props['centerX'] as num).toDouble(),
-      centerY: (props['centerY'] as num).toDouble(),
-      radius: (props['radius'] as num).toDouble(),
+      multivector:
+          Multivector.zero(), // Will be recalculated during DAG reconstruction
       thickness: (props['thickness'] as num?)?.toDouble() ?? 2.0,
       filled: props['filled'] as bool? ?? false,
       color: Color(int.parse(colorHex, radix: 16)),
@@ -227,16 +215,14 @@ class GeoCircle3P extends GeoCircle {
     required super.label,
     required super.dependencies, // Should have exactly 3 dependencies
     required super.multivector,
-    required super.centerX,
-    required super.centerY,
-    required super.radius,
     super.thickness,
     super.filled,
     super.color,
     super.visible,
   }) : assert(
-            dependencies.length == 3,
-            'Circle through 3 points requires exactly 3 point dependencies');
+         dependencies.length == 3,
+         'Circle through 3 points requires exactly 3 point dependencies',
+       );
 
   /// Create circle through three points
   static GeoCircle3P? fromPoints({
@@ -250,34 +236,28 @@ class GeoCircle3P extends GeoCircle {
     Color color = Colors.green,
     bool visible = true,
   }) {
-    // Calculate multivector using definitions.dart placeholder
-    final mv = constructCircleThrough3Points(p1.multivector, p2.multivector, p3.multivector);
-    
-    // Calculate circumcircle using determinant method
-    final d = 2 * (p1.x * (p2.y - p3.y) + p2.x * (p3.y - p1.y) + p3.x * (p1.y - p2.y));
-    
+    // Check if points are collinear before creating multivector
+    final d =
+        2 *
+        (p1.x * (p2.y - p3.y) + p2.x * (p3.y - p1.y) + p3.x * (p1.y - p2.y));
+
     if (d.abs() < 0.001) {
       // Points are collinear
       return null;
     }
-    
-    final p1Sq = p1.x * p1.x + p1.y * p1.y;
-    final p2Sq = p2.x * p2.x + p2.y * p2.y;
-    final p3Sq = p3.x * p3.x + p3.y * p3.y;
-    
-    final cx = (p1Sq * (p2.y - p3.y) + p2Sq * (p3.y - p1.y) + p3Sq * (p1.y - p2.y)) / d;
-    final cy = (p1Sq * (p3.x - p2.x) + p2Sq * (p1.x - p3.x) + p3Sq * (p2.x - p1.x)) / d;
-    
-    final radius = math.sqrt((p1.x - cx) * (p1.x - cx) + (p1.y - cy) * (p1.y - cy));
-    
+
+    // Calculate multivector using definitions.dart placeholder
+    final mv = constructCircleThrough3Points(
+      p1.multivector,
+      p2.multivector,
+      p3.multivector,
+    );
+
     return GeoCircle3P(
       id: id,
       label: label,
       dependencies: [p1.id, p2.id, p3.id],
       multivector: mv,
-      centerX: cx,
-      centerY: cy,
-      radius: radius,
       thickness: thickness,
       filled: filled,
       color: color,
@@ -304,19 +284,16 @@ class GeoCircle3P extends GeoCircle {
       label: label ?? this.label,
       dependencies: dependencies ?? this.dependencies,
       multivector: multivector ?? this.multivector,
-      centerX: centerX ?? this.centerX,
-      centerY: centerY ?? this.centerY,
-      radius: radius ?? this.radius,
       thickness: thickness ?? this.thickness,
       filled: filled ?? this.filled,
       color: color ?? this.color,
       visible: visible ?? this.visible,
     );
   }
-  
+
   @override
   String get type => 'GeoCircle3P';
-  
+
   @override
   Map<String, dynamic> toJson() {
     final json = super.toJson();
@@ -329,20 +306,18 @@ class GeoCircle3P extends GeoCircle {
     };
     return json;
   }
-  
+
   static GeoCircle3P fromJson(Map<String, dynamic> json) {
     final props = json['properties'] as Map<String, dynamic>;
     final colorHex = (json['color'] as String).replaceAll('#', '');
     final deps = (json['dependencies'] as List).cast<String>();
-    
+
     return GeoCircle3P(
       id: json['id'] as String,
       label: json['label'] as String,
       dependencies: deps,
-      multivector: Multivector.zero(),
-      centerX: (props['centerX'] as num).toDouble(),
-      centerY: (props['centerY'] as num).toDouble(),
-      radius: (props['radius'] as num).toDouble(),
+      multivector:
+          Multivector.zero(), // Will be recalculated during DAG reconstruction
       thickness: (props['thickness'] as num?)?.toDouble() ?? 2.0,
       filled: props['filled'] as bool? ?? false,
       color: Color(int.parse(colorHex, radix: 16)),
@@ -358,9 +333,6 @@ class GeoInvCircle extends GeoCircle {
     required super.label,
     required super.dependencies,
     required super.multivector,
-    required super.centerX,
-    required super.centerY,
-    required super.radius,
     super.thickness,
     super.filled,
     super.color = Colors.purple,
@@ -386,19 +358,16 @@ class GeoInvCircle extends GeoCircle {
       label: label ?? this.label,
       dependencies: dependencies ?? this.dependencies,
       multivector: multivector ?? this.multivector,
-      centerX: centerX ?? this.centerX,
-      centerY: centerY ?? this.centerY,
-      radius: radius ?? this.radius,
       thickness: thickness ?? this.thickness,
       filled: filled ?? this.filled,
       color: color ?? this.color,
       visible: visible ?? this.visible,
     );
   }
-  
+
   @override
   String get type => 'GeoInvCircle';
-  
+
   @override
   Map<String, dynamic> toJson() {
     final json = super.toJson();
@@ -411,20 +380,18 @@ class GeoInvCircle extends GeoCircle {
     };
     return json;
   }
-  
+
   static GeoInvCircle fromJson(Map<String, dynamic> json) {
     final props = json['properties'] as Map<String, dynamic>;
     final colorHex = (json['color'] as String).replaceAll('#', '');
     final deps = (json['dependencies'] as List).cast<String>();
-    
+
     return GeoInvCircle(
       id: json['id'] as String,
       label: json['label'] as String,
       dependencies: deps,
-      multivector: Multivector.zero(),
-      centerX: (props['centerX'] as num).toDouble(),
-      centerY: (props['centerY'] as num).toDouble(),
-      radius: (props['radius'] as num).toDouble(),
+      multivector:
+          Multivector.zero(), // Will be recalculated during DAG reconstruction
       thickness: (props['thickness'] as num?)?.toDouble() ?? 2.0,
       filled: props['filled'] as bool? ?? false,
       color: Color(int.parse(colorHex, radix: 16)),

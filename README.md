@@ -20,3 +20,5 @@ samples, guidance on mobile development, and a full API reference.
 flutter run -d web-server --web-hostname 0.0.0.0 --web-port 8081
 
  ssh -L 8081:localhost:8081 -L 9100:localhost:9100 akash@192.168.1.3
+
+ flutter run -d chrome --web-port=8081 --web-hostname=0.0.0.0 --web-renderer=html
