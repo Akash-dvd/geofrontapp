@@ -4,6 +4,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../bloc/problem_bloc.dart';
 import '../bloc/problem_event.dart';
 import '../bloc/problem_state.dart';
+import '../config/app_theme.dart';
 import '../models/problem.dart';
 import '../services/directus_file_service.dart';
 import 'problem_details_screen.dart';
@@ -151,28 +152,45 @@ class _ProblemManagementScreenState extends State<ProblemManagementScreen> {
                 const FetchProblems(refresh: true),
               );
             },
-            child: ListView.builder(
+            child: CustomScrollView(
               controller: _scrollController,
-              itemCount: problems.length + (hasMore ? 1 : 0),
-              itemBuilder: (context, index) {
-                if (index >= problems.length) {
-                  return Container(
-                    padding: const EdgeInsets.all(16),
-                    alignment: Alignment.center,
-                    child: isLoadingMore
-                        ? const CircularProgressIndicator()
-                        : const SizedBox.shrink(),
-                  );
-                }
+              slivers: [
+                SliverPadding(
+                  padding: const EdgeInsets.all(16),
+                  sliver: SliverGrid(
+                    gridDelegate:
+                        const SliverGridDelegateWithMaxCrossAxisExtent(
+                          maxCrossAxisExtent: 300,
+                          mainAxisExtent: 400,
+                          crossAxisSpacing: 12,
+                          mainAxisSpacing: 12,
+                        ),
+                    delegate: SliverChildBuilderDelegate((context, index) {
+                      if (index >= problems.length) {
+                        return null;
+                      }
 
-                final problem = problems[index];
-                return ProblemListItem(
-                  problem: problem,
-                  onTap: () => _navigateToDetails(context, problem),
-                  onEdit: () => _navigateToEdit(context, problem),
-                  onDelete: () => _showDeleteDialog(context, problem),
-                );
-              },
+                      final problem = problems[index];
+                      return ProblemCard(
+                        problem: problem,
+                        onTap: () => _navigateToDetails(context, problem),
+                        onEdit: () => _navigateToEdit(context, problem),
+                        onDelete: () => _showDeleteDialog(context, problem),
+                      );
+                    }, childCount: problems.length),
+                  ),
+                ),
+                if (hasMore)
+                  SliverToBoxAdapter(
+                    child: Container(
+                      padding: const EdgeInsets.all(16),
+                      alignment: Alignment.center,
+                      child: isLoadingMore
+                          ? const CircularProgressIndicator()
+                          : const SizedBox.shrink(),
+                    ),
+                  ),
+              ],
             ),
           );
         },
@@ -250,9 +268,36 @@ class _ProblemManagementScreenState extends State<ProblemManagementScreen> {
   }
 }
 
-/// Individual problem list item widget with thumbnail
+/// Individual problem card widget using Material Design patterns (DEPRECATED - Use ProblemCard instead)
 class ProblemListItem extends StatelessWidget {
   const ProblemListItem({
+    super.key,
+    required this.problem,
+    required this.onTap,
+    required this.onEdit,
+    required this.onDelete,
+  });
+
+  final Problem problem;
+  final VoidCallback onTap;
+  final VoidCallback onEdit;
+  final VoidCallback onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    // Delegate to the new ProblemCard widget
+    return ProblemCard(
+      problem: problem,
+      onTap: onTap,
+      onEdit: onEdit,
+      onDelete: onDelete,
+    );
+  }
+}
+
+/// Simple Material Design card for problems
+class ProblemCard extends StatelessWidget {
+  const ProblemCard({
     super.key,
     required this.problem,
     required this.onTap,
@@ -270,139 +315,115 @@ class ProblemListItem extends StatelessWidget {
     final fileService = DirectusFileService(baseUrl: 'http://192.168.1.3:8055');
 
     return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: onTap,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.max,
+          mainAxisAlignment: MainAxisAlignment.start,
           children: [
-            // Thumbnail image
-            if (problem.thumbnailId != null)
-              Image.network(
-                fileService.getFileUrl(
-                  problem.thumbnailId!,
-                  width: 800,
-                  height: 400,
-                  fit: 'cover',
-                  quality: 80,
-                ),
-                height: 200,
-                width: double.infinity,
-                fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) {
-                  return Container(
-                    height: 200,
-                    color: Colors.grey[300],
-                    child: const Center(
-                      child: Icon(
-                        Icons.image_not_supported,
-                        size: 48,
+            // Image with fixed height
+            SizedBox(
+              height: 240,
+              width: double.infinity,
+              child: problem.thumbnailId != null
+                  ? Image.network(
+                      fileService.getFileUrl(
+                        problem.thumbnailId!,
+                        width: 300,
+                        height: 200,
+                        fit: 'cover',
+                        quality: 80,
+                      ),
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) {
+                        return Container(
+                          color: Colors.grey[300],
+                          child: const Icon(
+                            Icons.image_not_supported,
+                            color: Colors.grey,
+                          ),
+                        );
+                      },
+                    )
+                  : Container(
+                      color: Colors.grey[300],
+                      child: const Icon(
+                        Icons.image,
                         color: Colors.grey,
+                        size: 40,
                       ),
                     ),
-                  );
-                },
-                loadingBuilder: (context, child, loadingProgress) {
-                  if (loadingProgress == null) return child;
-                  return Container(
-                    height: 200,
-                    color: Colors.grey[200],
-                    child: Center(
-                      child: CircularProgressIndicator(
-                        value: loadingProgress.expectedTotalBytes != null
-                            ? loadingProgress.cumulativeBytesLoaded /
-                                  loadingProgress.expectedTotalBytes!
-                            : null,
-                      ),
-                    ),
-                  );
-                },
-              )
-            else
-              Container(
-                height: 200,
-                color: Colors.grey[300],
-                child: const Center(
-                  child: Icon(Icons.image, size: 48, color: Colors.grey),
-                ),
-              ),
-
-            // Problem details
+            ),
+            // Content
             Padding(
-              padding: const EdgeInsets.all(16.0),
+              padding: const EdgeInsets.fromLTRB(12.0, 12.0, 12.0, 4.0),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Expanded(
-                        child: Text(
-                          problem.title,
-                          style: Theme.of(context).textTheme.titleLarge
-                              ?.copyWith(fontWeight: FontWeight.bold),
-                        ),
-                      ),
-                      PopupMenuButton<String>(
-                        onSelected: (value) {
-                          switch (value) {
-                            case 'edit':
-                              onEdit();
-                              break;
-                            case 'delete':
-                              onDelete();
-                              break;
-                          }
-                        },
-                        itemBuilder: (context) => [
-                          const PopupMenuItem(
-                            value: 'edit',
-                            child: Row(
-                              children: [
-                                Icon(Icons.edit, size: 20),
-                                SizedBox(width: 8),
-                                Text('Edit'),
-                              ],
-                            ),
-                          ),
-                          const PopupMenuItem(
-                            value: 'delete',
-                            child: Row(
-                              children: [
-                                Icon(Icons.delete, size: 20, color: Colors.red),
-                                SizedBox(width: 8),
-                                Text(
-                                  'Delete',
-                                  style: TextStyle(color: Colors.red),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
                   Text(
-                    problem.description,
+                    problem.title,
+                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
-                    style: TextStyle(color: Colors.grey[600], fontSize: 14),
                   ),
-                  const SizedBox(height: 12),
-                  Row(
+                  const SizedBox(height: 4),
+                  SizedBox(
+                    height: 32,
+                    child: Text(
+                      problem.description,
+                      style: Theme.of(
+                        context,
+                      ).textTheme.bodySmall?.copyWith(color: Colors.grey[600]),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 4,
                     children: [
-                      _buildChip(
+                      _buildSimpleChip(
                         problem.difficulty.displayName,
                         _getDifficultyColor(problem.difficulty),
                       ),
-                      const SizedBox(width: 8),
-                      _buildChip(
+                      _buildSimpleChip(
                         problem.category.displayName,
-                        Colors.blue[100]!,
+                        AppTheme.getCategoryColor(Theme.of(context).brightness),
                       ),
                     ],
+                  ),
+                ],
+              ),
+            ),
+            // Action buttons - tight layout with no bottom padding
+            Padding(
+              padding: const EdgeInsets.only(right: 8, bottom: 0),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton(
+                    onPressed: onEdit,
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
+                    ),
+                    child: const Text('Edit'),
+                  ),
+                  TextButton(
+                    onPressed: onDelete,
+                    style: TextButton.styleFrom(
+                      foregroundColor: Colors.red,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
+                    ),
+                    child: const Text('Delete'),
                   ),
                 ],
               ),
@@ -413,16 +434,17 @@ class ProblemListItem extends StatelessWidget {
     );
   }
 
-  Widget _buildChip(String label, Color color) {
+  Widget _buildSimpleChip(String label, Color color) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
         color: color,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(12),
       ),
       child: Text(
         label,
-        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+        style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600),
+        overflow: TextOverflow.ellipsis,
       ),
     );
   }
@@ -430,13 +452,13 @@ class ProblemListItem extends StatelessWidget {
   Color _getDifficultyColor(ProblemDifficulty difficulty) {
     switch (difficulty) {
       case ProblemDifficulty.beginner:
-        return Colors.green[100]!;
+        return AppTheme.beginnerColor;
       case ProblemDifficulty.intermediate:
-        return Colors.yellow[100]!;
+        return AppTheme.intermediateColor;
       case ProblemDifficulty.advanced:
-        return Colors.orange[100]!;
+        return AppTheme.advancedColor;
       case ProblemDifficulty.expert:
-        return Colors.red[100]!;
+        return AppTheme.expertColor;
     }
   }
 }

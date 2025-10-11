@@ -2,60 +2,35 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Flutter Web Server (SSH Remote)",
+      "name": "Flutter Web Debug",
       "request": "launch",
       "type": "dart",
       "program": "lib/main.dart",
       "args": [
-        "-d",
-        "web-server",
-        "--web-hostname=0.0.0.0",
-        "--web-port=8081"
-      ],
-      "deviceId": "web-server",
-      "cwd": "${workspaceFolder}"
-    },
-    {
-      "name": "Flutter Web (Chrome Debug)",
-      "request": "launch",
-      "type": "dart",
-      "program": "lib/main.dart",
-      "args": [
-        "-d",
-        "chrome",
-        "--web-port=8081",
-        "--web-hostname=0.0.0.0"
+        "--web-port=8080"
       ],
       "deviceId": "chrome",
-      "cwd": "${workspaceFolder}",
-      "env": {
-        "DISPLAY": "192.168.1.4:0.0"
-      }
+      "cwd": "${workspaceFolder}"
     },
     {
-      "name": "Flutter Web Server (Development)",
+      "name": "Flutter Web Server (Port 8081)",
       "request": "launch",
       "type": "dart",
       "program": "lib/main.dart",
       "args": [
-        "-d",
-        "web-server",
         "--web-hostname=0.0.0.0",
         "--web-port=8081"
       ],
-      "deviceId": "web-server",
+      "deviceId": "chrome",
       "cwd": "${workspaceFolder}"
     },
     {
-      "name": "geodraw package",
+      "name": "GeoDraw Package Debug",
       "request": "launch",
       "type": "dart",
       "program": "packages/geodraw/lib/main.dart",
-      "args": [
-        "-d",
-        "chrome",
-        "--web-port=8081"
-      ]
+      "deviceId": "chrome",
+      "cwd": "${workspaceFolder}"
     }
   ]
 }

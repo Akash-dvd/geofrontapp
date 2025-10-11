@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:graphql_flutter/graphql_flutter.dart';
 
-import 'bloc/problem_bloc.dart';
-import 'config/graphql_config.dart';
-import 'screens/problem_management_screen.dart';
+// Import from packages
+import 'package:geoapp/geoapp.dart';
+import 'package:frontpage/frontpage.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -29,11 +29,11 @@ class GeoFrontApp extends StatelessWidget {
         child: MaterialApp(
           title: 'GeoFront App',
           debugShowCheckedModeBanner: false,
-          theme: ThemeData(
-            colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
-            useMaterial3: true,
-          ),
-          home: const ProblemManagementScreen(),
+          theme: AppTheme.lightTheme,
+          darkTheme: AppTheme.darkTheme,
+          themeMode: ThemeMode.system, // Automatically follows system theme
+          home:
+              const FrontPage(), // Start with FrontPage instead of ProblemManagementScreen
         ),
       ),
     );

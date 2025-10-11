@@ -43,6 +43,10 @@ dependencies:
   graphql_flutter: ^5.1.2
   
   # Local packages
+  geoapp:
+    path: packages/geoapp
+  frontpage:
+    path: packages/frontpage
   frontcalc:
     path: packages/frontcalc
   geodraw:

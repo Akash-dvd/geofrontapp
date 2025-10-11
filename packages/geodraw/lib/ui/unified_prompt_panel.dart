@@ -3,7 +3,6 @@ library;
 
 import 'package:flutter/material.dart';
 import '../cli/cli.dart';
-import '../cli/cli_adapter.dart';
 import '../dag/dag_manager.dart';
 import '../ai/ai_service.dart';
 import '../ai/ai_adapter.dart';
