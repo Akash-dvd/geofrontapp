@@ -42,15 +42,20 @@ dependencies:
   # GraphQL integration (Constitutional requirement)
   graphql_flutter: ^5.1.2
   
+  # Environment configuration
+  flutter_dotenv: ^5.1.0
+  
   # Local packages
   geoapp:
     path: packages/geoapp
   frontpage:
     path: packages/frontpage
-  frontcalc:
-    path: packages/frontcalc
+  geocalc:
+    path: packages/geocalc
   geodraw:
     path: packages/geodraw
+  designsystem:
+    path: packages/designsystem
 
 dev_dependencies:
   flutter_test:

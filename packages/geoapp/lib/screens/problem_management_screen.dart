@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:designsystem/designsystem.dart';
 
 import '../bloc/problem_bloc.dart';
 import '../bloc/problem_event.dart';
 import '../bloc/problem_state.dart';
-import '../config/app_theme.dart';
+import '../config/build_flags.dart';
+import '../config/env_config.dart';
 import '../models/problem.dart';
 import '../services/directus_file_service.dart';
 import 'problem_details_screen.dart';
@@ -61,8 +63,8 @@ class _ProblemManagementScreenState extends State<ProblemManagementScreen> {
             icon: const Icon(Icons.refresh),
             onPressed: () {
               context.read<ProblemBloc>().add(
-                const FetchProblems(refresh: true),
-              );
+                    const FetchProblems(refresh: true),
+                  );
             },
           ),
         ],
@@ -111,8 +113,8 @@ class _ProblemManagementScreenState extends State<ProblemManagementScreen> {
                   ElevatedButton(
                     onPressed: () {
                       context.read<ProblemBloc>().add(
-                        const FetchProblems(refresh: true),
-                      );
+                            const FetchProblems(refresh: true),
+                          );
                     },
                     child: const Text('Retry'),
                   ),
@@ -149,8 +151,8 @@ class _ProblemManagementScreenState extends State<ProblemManagementScreen> {
           return RefreshIndicator(
             onRefresh: () async {
               context.read<ProblemBloc>().add(
-                const FetchProblems(refresh: true),
-              );
+                    const FetchProblems(refresh: true),
+                  );
             },
             child: CustomScrollView(
               controller: _scrollController,
@@ -160,11 +162,11 @@ class _ProblemManagementScreenState extends State<ProblemManagementScreen> {
                   sliver: SliverGrid(
                     gridDelegate:
                         const SliverGridDelegateWithMaxCrossAxisExtent(
-                          maxCrossAxisExtent: 300,
-                          mainAxisExtent: 400,
-                          crossAxisSpacing: 12,
-                          mainAxisSpacing: 12,
-                        ),
+                      maxCrossAxisExtent: 300,
+                      mainAxisExtent: 400,
+                      crossAxisSpacing: 12,
+                      mainAxisSpacing: 12,
+                    ),
                     delegate: SliverChildBuilderDelegate((context, index) {
                       if (index >= problems.length) {
                         return null;
@@ -312,7 +314,9 @@ class ProblemCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final fileService = DirectusFileService(baseUrl: 'http://192.168.1.3:8055');
+    final fileService = BuildFlags.useDirectus
+        ? DirectusFileService(baseUrl: EnvConfig.directusUrl)
+        : null; // TODO: Implement Supabase file service
 
     return Card(
       child: InkWell(
@@ -326,7 +330,7 @@ class ProblemCard extends StatelessWidget {
             SizedBox(
               height: 240,
               width: double.infinity,
-              child: problem.thumbnailId != null
+              child: problem.thumbnailId != null && fileService != null
                   ? Image.network(
                       fileService.getFileUrl(
                         problem.thumbnailId!,
@@ -364,8 +368,8 @@ class ProblemCard extends StatelessWidget {
                   Text(
                     problem.title,
                     style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
+                          fontWeight: FontWeight.bold,
+                        ),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                   ),

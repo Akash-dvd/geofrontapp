@@ -1,6 +1,6 @@
 import 'package:equatable/equatable.dart';
 import 'package:flutter/material.dart';
-import 'package:frontcalc/Multivector.dart';
+import 'package:geocalc/Multivector.dart';
 import 'canvas_object.dart';
 
 /// Abstract base class for all geometric objects
@@ -9,16 +9,16 @@ abstract class GeometryObject extends CanvasObject with EquatableMixin {
   /// Unique identifier
   @override
   final String id;
-  
+
   /// Display label for this object
   final String label;
-  
+
   /// List of object IDs this object depends on
   final List<String> dependencies;
-  
+
   /// Color for rendering
   final Color color;
-  
+
   /// Whether this object is visible on the canvas
   @override
   final bool visible;
@@ -33,7 +33,7 @@ abstract class GeometryObject extends CanvasObject with EquatableMixin {
 
   /// Calculate distance from this object to a point
   double distanceTo(Offset point);
-  
+
   /// Create a copy of this object with updated properties
   GeometryObject copyWith({
     String? id,
@@ -45,7 +45,7 @@ abstract class GeometryObject extends CanvasObject with EquatableMixin {
 
   @override
   List<Object?> get props => [id, label, dependencies, color, visible];
-  
+
   /// Base toJson implementation - includes common properties
   /// Subclasses should override and call super.toJson() then add their properties
   @override
@@ -77,7 +77,7 @@ abstract class SimpleGeometryObject extends GeometryObject {
 
   /// Check if this object intersects with another
   bool intersects(SimpleGeometryObject other);
-  
+
   @override
   List<Object?> get props => [...super.props, multivector];
 }
@@ -118,7 +118,7 @@ abstract class SimpleGeometryObjectList<T extends SimpleGeometryObject>
   @override
   Rect getBounds() {
     if (objects.isEmpty) return Rect.zero;
-    
+
     return objects
         .map((obj) => obj.getBounds())
         .reduce((a, b) => a.expandToInclude(b));
@@ -127,7 +127,7 @@ abstract class SimpleGeometryObjectList<T extends SimpleGeometryObject>
   @override
   double distanceTo(Offset point) {
     if (objects.isEmpty) return double.infinity;
-    
+
     return objects
         .map((obj) => obj.distanceTo(point))
         .reduce((a, b) => a < b ? a : b);
@@ -141,10 +141,10 @@ abstract class SimpleGeometryObjectList<T extends SimpleGeometryObject>
 abstract class ComplexGeometryObject extends GeometryObject {
   /// Starting boundary point
   final String startPointId;
-  
+
   /// Ending boundary point
   final String endPointId;
-  
+
   /// ID of the underlying simple object
   final String underlyingObjectId;
 
@@ -164,11 +164,11 @@ abstract class ComplexGeometryObject extends GeometryObject {
 
   @override
   List<Object?> get props => [
-        ...super.props,
-        startPointId,
-        endPointId,
-        underlyingObjectId,
-      ];
+    ...super.props,
+    startPointId,
+    endPointId,
+    underlyingObjectId,
+  ];
 }
 
 /// Base class for collections forming composite shapes
@@ -210,7 +210,7 @@ abstract class ComplexGeometryObjectList<T extends ComplexGeometryObject>
   @override
   Rect getBounds() {
     if (elements.isEmpty) return Rect.zero;
-    
+
     return elements
         .map((element) => element.getBounds())
         .reduce((a, b) => a.expandToInclude(b));
@@ -219,7 +219,7 @@ abstract class ComplexGeometryObjectList<T extends ComplexGeometryObject>
   @override
   double distanceTo(Offset point) {
     if (elements.isEmpty) return double.infinity;
-    
+
     return elements
         .map((element) => element.distanceTo(point))
         .reduce((a, b) => a < b ? a : b);

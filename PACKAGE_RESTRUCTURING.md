@@ -27,7 +27,7 @@ geofrontapp/
 │   │   │   └── frontpage.dart      # Simple landing page with button
 │   │   └── pubspec.yaml
 │   │
-│   ├── frontcalc/                   # Existing calculation module
+│   ├── geocalc/                   # Existing calculation module
 │   └── geodraw/                     # Existing drawing module
 │
 └── pubspec.yaml                     # Main app dependencies
@@ -98,7 +98,7 @@ ProblemFormScreen
 ### ✅ **Scalability**
 - Easy to add new feature packages
 - Can replace frontpage without affecting geoapp
-- Future: geodraw and frontcalc can be integrated similarly
+- Future: geodraw and geocalc can be integrated similarly
 
 ### ✅ **Maintainability**
 - Smaller, focused codebases
@@ -146,7 +146,7 @@ ProblemFormScreen
 - graphql_flutter
 - geoapp (local)
 - frontpage (local)
-- frontcalc (local)
+- geocalc (local)
 - geodraw (local)
 
 ### geoapp Package
@@ -171,7 +171,7 @@ ProblemFormScreen
    - Add drawing/visualization screens
    - Connect to problem solving
 
-3. **Integrate frontcalc Package**
+3. **Integrate geocalc Package**
    - Add calculation engine
    - Connect to problem solving
 

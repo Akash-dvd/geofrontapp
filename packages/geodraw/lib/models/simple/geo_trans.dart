@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:frontcalc/Multivector.dart';
+import 'package:geocalc/Multivector.dart';
 import '../geometry_object.dart';
 
 /// Abstract base class for geometric transformations
@@ -36,7 +36,7 @@ abstract class GeoTrans extends SimpleGeometryObject {
 class GeoInverse extends GeoTrans {
   /// Center of inversion
   final String centerPointId;
-  
+
   /// Power of inversion (radius squared)
   final double power;
 
@@ -76,25 +76,22 @@ class GeoInverse extends GeoTrans {
 
   @override
   List<Object?> get props => [...super.props, centerPointId, power];
-  
+
   @override
   String get type => 'GeoInverse';
-  
+
   @override
   Map<String, dynamic> toJson() {
     final json = super.toJson();
-    json['properties'] = {
-      'centerPointId': centerPointId,
-      'power': power,
-    };
+    json['properties'] = {'centerPointId': centerPointId, 'power': power};
     return json;
   }
-  
+
   static GeoInverse fromJson(Map<String, dynamic> json) {
     final props = json['properties'] as Map<String, dynamic>;
     final colorHex = (json['color'] as String).replaceAll('#', '');
     final deps = (json['dependencies'] as List).cast<String>();
-    
+
     return GeoInverse(
       id: json['id'] as String,
       label: json['label'] as String,
@@ -112,7 +109,7 @@ class GeoInverse extends GeoTrans {
 class GeoRotate extends GeoTrans {
   /// Center of rotation
   final String centerPointId;
-  
+
   /// Angle in radians
   final double angle;
 
@@ -152,25 +149,22 @@ class GeoRotate extends GeoTrans {
 
   @override
   List<Object?> get props => [...super.props, centerPointId, angle];
-  
+
   @override
   String get type => 'GeoRotate';
-  
+
   @override
   Map<String, dynamic> toJson() {
     final json = super.toJson();
-    json['properties'] = {
-      'centerPointId': centerPointId,
-      'angle': angle,
-    };
+    json['properties'] = {'centerPointId': centerPointId, 'angle': angle};
     return json;
   }
-  
+
   static GeoRotate fromJson(Map<String, dynamic> json) {
     final props = json['properties'] as Map<String, dynamic>;
     final colorHex = (json['color'] as String).replaceAll('#', '');
     final deps = (json['dependencies'] as List).cast<String>();
-    
+
     return GeoRotate(
       id: json['id'] as String,
       label: json['label'] as String,
@@ -188,7 +182,7 @@ class GeoRotate extends GeoTrans {
 class GeoDilate extends GeoTrans {
   /// Center of dilation
   final String centerPointId;
-  
+
   /// Scale factor
   final double factor;
 
@@ -228,25 +222,22 @@ class GeoDilate extends GeoTrans {
 
   @override
   List<Object?> get props => [...super.props, centerPointId, factor];
-  
+
   @override
   String get type => 'GeoDilate';
-  
+
   @override
   Map<String, dynamic> toJson() {
     final json = super.toJson();
-    json['properties'] = {
-      'centerPointId': centerPointId,
-      'factor': factor,
-    };
+    json['properties'] = {'centerPointId': centerPointId, 'factor': factor};
     return json;
   }
-  
+
   static GeoDilate fromJson(Map<String, dynamic> json) {
     final props = json['properties'] as Map<String, dynamic>;
     final colorHex = (json['color'] as String).replaceAll('#', '');
     final deps = (json['dependencies'] as List).cast<String>();
-    
+
     return GeoDilate(
       id: json['id'] as String,
       label: json['label'] as String,

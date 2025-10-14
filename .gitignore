@@ -43,3 +43,12 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Environment files (contain secrets)
+.env
+.env.local
+.env.cloud
+fb-admin.json
+
+# Generated env file (copied by switch script)
+.env

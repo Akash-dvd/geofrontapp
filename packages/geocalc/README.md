@@ -1,4 +1,4 @@
-# FrontCalc
+# geocalc
 
 A geometric algebra package implementing multivector operations for advanced mathematical computations.
 
@@ -15,7 +15,7 @@ A geometric algebra package implementing multivector operations for advanced mat
 ## Usage
 
 ```dart
-import 'package:frontcalc/frontcalc.dart';
+import 'package:geocalc/geocalc.dart';
 
 void main() {
   // Create multivectors

@@ -10,14 +10,16 @@ dependencies:
   flutter:
     sdk: flutter
   # Local calculation package
-  frontcalc:
-    path: ../frontcalc
+  geocalc:
+    path: ../geocalc
   # Equatable for value equality
   equatable: ^2.0.5
   # Collection utilities
   collection: ^1.18.0
   # HTTP client for AI service
   http: ^1.2.0
+  designsystem:
+    path: ../designsystem
 
 dev_dependencies:
   flutter_test:

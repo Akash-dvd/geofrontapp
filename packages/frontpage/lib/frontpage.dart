@@ -107,6 +107,14 @@ class _FrontPageState extends State<FrontPage> {
     );
   }
 
+  void _openGeoDrawPlayground() {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (context) => const ProblemFormScreen(),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = _buildLocalTheme(context);
@@ -125,6 +133,7 @@ class _FrontPageState extends State<FrontPage> {
                 _TopNavigation(
                   onDemoTap: () => _scrollTo(_demoSectionKey),
                   onContactTap: () => _scrollTo(_ctaSectionKey),
+                  onLaunchGeoDraw: _openGeoDrawPlayground,
                   onWorkspaceTap: () => Navigator.of(context).push(
                     MaterialPageRoute<void>(
                       builder: (context) => const ProblemManagementScreen(),
@@ -133,6 +142,7 @@ class _FrontPageState extends State<FrontPage> {
                 ),
                 _HeroSection(
                   demoKey: _demoSectionKey,
+                  onLaunchGeoDraw: _openGeoDrawPlayground,
                   onPrimaryCta: () => _scrollTo(_demoSectionKey),
                   onSecondaryCta: () => _scrollTo(_ctaSectionKey),
                 ),
@@ -161,11 +171,13 @@ class _TopNavigation extends StatelessWidget {
   const _TopNavigation({
     required this.onDemoTap,
     required this.onContactTap,
+    required this.onLaunchGeoDraw,
     required this.onWorkspaceTap,
   });
 
   final VoidCallback onDemoTap;
   final VoidCallback onContactTap;
+  final VoidCallback onLaunchGeoDraw;
   final VoidCallback onWorkspaceTap;
 
   @override
@@ -182,6 +194,21 @@ class _TopNavigation extends StatelessWidget {
             _NavButton(label: 'Features', onTap: onDemoTap),
             _NavButton(label: 'Contact', onTap: onContactTap),
             const SizedBox(width: 16),
+            OutlinedButton.icon(
+              onPressed: onLaunchGeoDraw,
+              style: OutlinedButton.styleFrom(
+                foregroundColor: _Palette.secondary,
+                side: const BorderSide(color: _Palette.secondary, width: 1.2),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              icon: const Icon(Icons.draw),
+              label: const Text('Launch GeoDraw'),
+            ),
+            const SizedBox(width: 12),
             FilledButton.icon(
               onPressed: onWorkspaceTap,
               style: FilledButton.styleFrom(
@@ -223,11 +250,13 @@ class _NavButton extends StatelessWidget {
 class _HeroSection extends StatelessWidget {
   const _HeroSection({
     required this.demoKey,
+    required this.onLaunchGeoDraw,
     required this.onPrimaryCta,
     required this.onSecondaryCta,
   });
 
   final GlobalKey demoKey;
+  final VoidCallback onLaunchGeoDraw;
   final VoidCallback onPrimaryCta;
   final VoidCallback onSecondaryCta;
 
@@ -300,8 +329,9 @@ class _HeroSection extends StatelessWidget {
                                 runSpacing: 12,
                                 children: [
                                   ElevatedButton(
-                                    onPressed: onPrimaryCta,
-                                    child: const Text('Try the Live Demo'),
+                                    onPressed: onLaunchGeoDraw,
+                                    child:
+                                        const Text('Launch GeoDraw Playground'),
                                   ),
                                   OutlinedButton(
                                     onPressed: onSecondaryCta,
@@ -319,17 +349,32 @@ class _HeroSection extends StatelessWidget {
                                     icon: const Icon(Icons.list_alt),
                                     label: const Text('Enter Problem List'),
                                   ),
+                                  TextButton(
+                                    onPressed: onPrimaryCta,
+                                    child: const Text('View Interactive Demo'),
+                                  ),
                                 ],
                               ),
                             ],
                           ),
                         ),
                       ),
-                      Expanded(
-                        flex: isSmall ? 0 : 5,
-                        child: _GeometryHeroDemo(
-                            prefersReducedMotion: prefersReducedMotion),
-                      ),
+                      if (!isSmall)
+                        Expanded(
+                          flex: 5,
+                          child: SizedBox(
+                            height: 500,
+                            child: _GeometryHeroDemo(
+                                prefersReducedMotion: prefersReducedMotion),
+                          ),
+                        )
+                      else
+                        SizedBox(
+                          height: 400,
+                          width: double.infinity,
+                          child: _GeometryHeroDemo(
+                              prefersReducedMotion: prefersReducedMotion),
+                        ),
                     ],
                   ),
                 ],
@@ -414,9 +459,11 @@ class _GeometryHeroDemoState extends State<_GeometryHeroDemo>
       ),
       padding: const EdgeInsets.all(24),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Expanded(
+          SizedBox(
+            height: 300,
             child: AnimatedBuilder(
               animation: _animation,
               builder: (context, child) {
@@ -733,7 +780,7 @@ class _InteractiveDemoSectionState extends State<_InteractiveDemoSection> {
   Widget build(BuildContext context) {
     final prefersReducedMotion =
         MediaQuery.maybeOf(context)?.disableAnimations ?? false;
-  final steps = widget.steps;
+    final steps = widget.steps;
 
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 96, horizontal: 24),
@@ -756,164 +803,176 @@ class _InteractiveDemoSectionState extends State<_InteractiveDemoSection> {
                     ?.copyWith(color: _Palette.neutralDark.withOpacity(0.85)),
               ),
               const SizedBox(height: 32),
-              LayoutBuilder(
-                builder: (context, constraints) {
-                  final isSmall = constraints.maxWidth < 1000;
-                  final canvas = Expanded(
-                    flex: 5,
-                    child: Container(
-                      height: 420,
-                      decoration: BoxDecoration(
-                        color: _Palette.neutralLight,
-                        borderRadius: BorderRadius.circular(24),
-                        border: Border.all(
-                            color: _Palette.primary.withOpacity(0.08)),
-                      ),
-                      padding: const EdgeInsets.all(24),
-                      child: Stack(
-                        children: [
-                          Positioned.fill(
-                            child: CustomPaint(
-                              painter: _GeoPlaygroundPainter(
-                                  stepIndex: _currentStepIndex),
-                            ),
-                          ),
-                          Align(
-                            alignment: Alignment.topLeft,
-                            child: Wrap(
-                              spacing: 12,
-                              children: [
-                                _PlaygroundChip(
-                                    label: 'Add point',
-                                    icon: Icons.add_location_alt_outlined,
-                                    onPressed: () {}),
-                                _PlaygroundChip(
-                                    label: 'Add line',
-                                    icon: Icons.timeline_outlined,
-                                    onPressed: () {}),
-                                _PlaygroundChip(
-                                  label: _isAutoSolving
-                                      ? 'Solving…'
-                                      : 'Auto-solve',
-                                  icon: Icons.auto_fix_high_outlined,
-                                  onPressed:
-                                      _isAutoSolving ? null : _startAutoSolve,
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  );
-
-                  final panel = Expanded(
-                    flex: 4,
-                    child: Padding(
-                      padding: EdgeInsets.only(
-                          left: isSmall ? 0 : 32, top: isSmall ? 24 : 0),
+              SizedBox(
+                height: 900, // Fixed height for the interactive demo
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    final isSmall = constraints.maxWidth < 1000;
+                    final canvas = Expanded(
+                      flex: 5,
                       child: Container(
                         height: 420,
                         decoration: BoxDecoration(
-                          color: Colors.white,
+                          color: _Palette.neutralLight,
                           borderRadius: BorderRadius.circular(24),
                           border: Border.all(
-                              color: _Palette.primary.withOpacity(0.1)),
-                          boxShadow: [
-                            BoxShadow(
-                                color: Colors.black.withOpacity(0.08),
-                                blurRadius: 24,
-                                offset: const Offset(0, 18)),
-                          ],
+                              color: _Palette.primary.withOpacity(0.08)),
                         ),
                         padding: const EdgeInsets.all(24),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                        child: Stack(
                           children: [
-                            Row(
-                              children: [
-                                const Icon(Icons.auto_stories_outlined,
-                                    color: _Palette.secondary),
-                                const SizedBox(width: 12),
-                                Text('Symbolic reasoning',
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .titleMedium
-                                        ?.copyWith(
-                                            fontWeight: FontWeight.w600)),
-                                const Spacer(),
-                                IconButton(
-                                  tooltip: 'Copy JSON payload',
-                                  onPressed: () {},
-                                  icon: const Icon(Icons.copy_outlined),
-                                ),
-                              ],
+                            Positioned.fill(
+                              child: CustomPaint(
+                                painter: _GeoPlaygroundPainter(
+                                    stepIndex: _currentStepIndex),
+                              ),
                             ),
-                            const Divider(),
-                            Expanded(
-                              child: AnimatedSwitcher(
-                                duration: prefersReducedMotion
-                                    ? Duration.zero
-                                    : const Duration(milliseconds: 500),
-                                child: ListView.builder(
-                                  key: ValueKey(_currentStepIndex),
-                                  itemCount: steps.length,
-                                  itemBuilder: (context, index) {
-                                    final step = steps[index];
-                                    final isActive = index <= _currentStepIndex;
-                                    return AnimatedDefaultTextStyle(
-                                      duration:
-                                          const Duration(milliseconds: 300),
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .bodyMedium!
-                                          .copyWith(
-                                            color: isActive
-                                                ? _Palette.primary
-                                                : _Palette.neutralDark
-                                                    .withOpacity(0.5),
-                                            fontWeight: isActive
-                                                ? FontWeight.w600
-                                                : FontWeight.w400,
-                                          ),
-                                      child: Padding(
-                                        padding: const EdgeInsets.symmetric(
-                                            vertical: 8),
-                                        child: Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: [
-                                            Text('${index + 1}. ${step.title}'),
-                                            const SizedBox(height: 6),
-                                            Math.tex(step.latex,
-                                                textStyle: const TextStyle(
-                                                    fontSize: 14)),
-                                            if (isActive) ...[
-                                              const SizedBox(height: 4),
-                                              Text(step.explanation,
-                                                  style: Theme.of(context)
-                                                      .textTheme
-                                                      .bodySmall),
-                                            ],
-                                          ],
-                                        ),
-                                      ),
-                                    );
-                                  },
-                                ),
+                            Align(
+                              alignment: Alignment.topLeft,
+                              child: Wrap(
+                                spacing: 12,
+                                children: [
+                                  _PlaygroundChip(
+                                      label: 'Add point',
+                                      icon: Icons.add_location_alt_outlined,
+                                      onPressed: () {}),
+                                  _PlaygroundChip(
+                                      label: 'Add line',
+                                      icon: Icons.timeline_outlined,
+                                      onPressed: () {}),
+                                  _PlaygroundChip(
+                                    label: _isAutoSolving
+                                        ? 'Solving…'
+                                        : 'Auto-solve',
+                                    icon: Icons.auto_fix_high_outlined,
+                                    onPressed:
+                                        _isAutoSolving ? null : _startAutoSolve,
+                                  ),
+                                ],
                               ),
                             ),
                           ],
                         ),
                       ),
-                    ),
-                  );
+                    );
 
-                  if (isSmall) {
-                    return Column(children: [canvas, panel]);
-                  }
-                  return Row(children: [canvas, panel]);
-                },
+                    final panel = Expanded(
+                      flex: 4,
+                      child: Padding(
+                        padding: EdgeInsets.only(
+                            left: isSmall ? 0 : 32, top: isSmall ? 24 : 0),
+                        child: Container(
+                          height: 420,
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(24),
+                            border: Border.all(
+                                color: _Palette.primary.withOpacity(0.1)),
+                            boxShadow: [
+                              BoxShadow(
+                                  color: Colors.black.withOpacity(0.08),
+                                  blurRadius: 24,
+                                  offset: const Offset(0, 18)),
+                            ],
+                          ),
+                          padding: const EdgeInsets.all(24),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  const Icon(Icons.auto_stories_outlined,
+                                      color: _Palette.secondary),
+                                  const SizedBox(width: 12),
+                                  Text('Symbolic reasoning',
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .titleMedium
+                                          ?.copyWith(
+                                              fontWeight: FontWeight.w600)),
+                                  const Spacer(),
+                                  IconButton(
+                                    tooltip: 'Copy JSON payload',
+                                    onPressed: () {},
+                                    icon: const Icon(Icons.copy_outlined),
+                                  ),
+                                ],
+                              ),
+                              const Divider(),
+                              Expanded(
+                                child: AnimatedSwitcher(
+                                  duration: prefersReducedMotion
+                                      ? Duration.zero
+                                      : const Duration(milliseconds: 500),
+                                  child: ListView.builder(
+                                    key: ValueKey(_currentStepIndex),
+                                    itemCount: steps.length,
+                                    itemBuilder: (context, index) {
+                                      final step = steps[index];
+                                      final isActive =
+                                          index <= _currentStepIndex;
+                                      return AnimatedDefaultTextStyle(
+                                        duration:
+                                            const Duration(milliseconds: 300),
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .bodyMedium!
+                                            .copyWith(
+                                              color: isActive
+                                                  ? _Palette.primary
+                                                  : _Palette.neutralDark
+                                                      .withOpacity(0.5),
+                                              fontWeight: isActive
+                                                  ? FontWeight.w600
+                                                  : FontWeight.w400,
+                                            ),
+                                        child: Padding(
+                                          padding: const EdgeInsets.symmetric(
+                                              vertical: 8),
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                  '${index + 1}. ${step.title}'),
+                                              const SizedBox(height: 6),
+                                              Math.tex(step.latex,
+                                                  textStyle: const TextStyle(
+                                                      fontSize: 14)),
+                                              if (isActive) ...[
+                                                const SizedBox(height: 4),
+                                                Text(step.explanation,
+                                                    style: Theme.of(context)
+                                                        .textTheme
+                                                        .bodySmall),
+                                              ],
+                                            ],
+                                          ),
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    );
+
+                    if (isSmall) {
+                      // Remove Expanded wrappers for Column layout
+                      return Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          SizedBox(height: 420, child: canvas.child),
+                          SizedBox(height: 420, child: panel.child),
+                        ],
+                      );
+                    }
+                    return Row(children: [canvas, panel]);
+                  },
+                ),
               ),
               const SizedBox(height: 32),
               Text('Sample geometry payload (mocked)',
@@ -1678,11 +1737,11 @@ class _HeroMeshPainter extends CustomPainter {
 
 /// Palette constants for front page.
 class _Palette {
-  static const Color primary = Color(0xFF0B2340);
-  static const Color secondary = Color(0xFF0F9D8E);
-  static const Color accent = Color(0xFFFFB239);
-  static const Color neutralLight = Color(0xFFF7F9FC);
-  static const Color neutralDark = Color(0xFF1F2937);
+  static const Color primary = AppPalette.primary;
+  static const Color secondary = AppPalette.secondary;
+  static const Color accent = AppPalette.accent;
+  static const Color neutralLight = AppPalette.neutralLight;
+  static const Color neutralDark = AppPalette.neutralDark;
 }
 
 /// Sample geometry steps used across hero + demo sections.

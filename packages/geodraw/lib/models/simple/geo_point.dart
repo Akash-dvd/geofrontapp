@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:frontcalc/Multivector.dart';
+import 'package:geocalc/Multivector.dart';
 import '../geometry_object.dart';
 
 /// Abstract base class for all point types

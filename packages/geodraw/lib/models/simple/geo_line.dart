@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:frontcalc/Multivector.dart';
+import 'package:geocalc/Multivector.dart';
 import '../geometry_object.dart';
 import 'geo_point.dart';
 

@@ -1,0 +1,132 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Dev: Local (Directus)",
+      "type": "shell",
+      "command": "powershell",
+      "args": [
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "./scripts/switch_env.ps1",
+        "local",
+        "run"
+      ],
+      "windows": {
+        "command": "powershell"
+      },
+      "linux": {
+        "command": "bash",
+        "args": ["./scripts/switch_env.sh", "local", "run"]
+      },
+      "osx": {
+        "command": "bash",
+        "args": ["./scripts/switch_env.sh", "local", "run"]
+      },
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "new"
+      },
+      "group": "build"
+    },
+    {
+      "label": "Dev: Cloud (Hasura+Supabase)",
+      "type": "shell",
+      "command": "powershell",
+      "args": [
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "./scripts/switch_env.ps1",
+        "cloud",
+        "run"
+      ],
+      "windows": {
+        "command": "powershell"
+      },
+      "linux": {
+        "command": "bash",
+        "args": ["./scripts/switch_env.sh", "cloud", "run"]
+      },
+      "osx": {
+        "command": "bash",
+        "args": ["./scripts/switch_env.sh", "cloud", "run"]
+      },
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "new"
+      },
+      "group": "build"
+    },
+    {
+      "label": "Build: Web (Cloud)",
+      "type": "shell",
+      "command": "powershell",
+      "args": [
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "./scripts/switch_env.ps1",
+        "cloud",
+        "build",
+        "web",
+        "--release"
+      ],
+      "windows": {
+        "command": "powershell"
+      },
+      "linux": {
+        "command": "bash",
+        "args": ["./scripts/switch_env.sh", "cloud", "build", "web", "--release"]
+      },
+      "osx": {
+        "command": "bash",
+        "args": ["./scripts/switch_env.sh", "cloud", "build", "web", "--release"]
+      },
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      },
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      }
+    },
+    {
+      "label": "Build: APK (Cloud)",
+      "type": "shell",
+      "command": "powershell",
+      "args": [
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "./scripts/switch_env.ps1",
+        "cloud",
+        "build",
+        "apk",
+        "--release"
+      ],
+      "windows": {
+        "command": "powershell"
+      },
+      "linux": {
+        "command": "bash",
+        "args": ["./scripts/switch_env.sh", "cloud", "build", "apk", "--release"]
+      },
+      "osx": {
+        "command": "bash",
+        "args": ["./scripts/switch_env.sh", "cloud", "build", "apk", "--release"]
+      },
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      },
+      "group": "build"
+    }
+  ]
+}

@@ -40,8 +40,8 @@ USER ACTION: Click at position (100, 150)
     super(multivector: constructFreePoint(100, 150))
     ↓
 ┌─────────────────────────────────────────────────────────────────┐
-│ frontcalc.constructFreePoint(100, 150)                          │
-│ Package: frontcalc/lib/constructors.dart                        │
+│ geocalc.constructFreePoint(100, 150)                          │
+│ Package: geocalc/lib/constructors.dart                        │
 │ Returns: Multivector with e1=100, e2=150                        │
 └─────────────────────────────────────────────────────────────────┘
     ↓
@@ -200,7 +200,7 @@ GeoPointer(id, label, x, y)
   → y getter returns multivector.e2
 ```
 
-### 3. frontcalc.constructFreePoint() (external package)
+### 3. geocalc.constructFreePoint() (external package)
 **Role**: Creates multivector representation
 ```dart
 constructFreePoint(x, y)
@@ -233,7 +233,7 @@ constructFreePoint(x, y)
 1. ✅ **Tool Click** → UnifiedPointTool.handleInput()
 2. ✅ **Execute** → SimpleExecutor.execute(ToolType.point, [100, 150])
 3. ✅ **Construct** → GeoPointer(id, label, 100, 150)
-4. ✅ **Multivector** → constructFreePoint(100, 150) from frontcalc
+4. ✅ **Multivector** → constructFreePoint(100, 150) from geocalc
 5. ✅ **Properties** → x/y getters return multivector.e1/e2
 6. ✅ **DAG** → dagManager.addObject(point, [])
 7. ✅ **Render** → Canvas calls point.draw() which uses x/y getters
@@ -268,7 +268,7 @@ constructFreePoint(x, y)
                   │
                   ▼
 ┌─────────────────────────────────────────────────┐
-│      frontcalc.constructFreePoint()             │
+│      geocalc.constructFreePoint()             │
 │      - Creates Multivector(e1=x, e2=y, ...)     │
 └─────────────────┬───────────────────────────────┘
                   │

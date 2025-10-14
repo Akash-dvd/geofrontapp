@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'dart:math' as math;
-import 'package:frontcalc/Multivector.dart';
+import 'package:geocalc/Multivector.dart';
 import '../geometry_object.dart';
 import 'geo_point.dart';
 

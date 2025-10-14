@@ -7,7 +7,7 @@
 - **DAGManager**: Has placeholder `constraints` list (currently unused)
 - **Problem Model**: Has `geometryData` field for storing GeoDraw constructions
 - **Directus Backend**: Running with GraphQL at `http://192.168.1.3:8055/graphql`
-- **FrontCalc Package**: Multivector-based geometric algebra calculations
+- **geocalc Package**: Multivector-based geometric algebra calculations
 
 ### ❌ What's Missing
 - **No solver system** - Constraint solving not implemented

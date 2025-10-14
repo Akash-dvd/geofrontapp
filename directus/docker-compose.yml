@@ -50,7 +50,7 @@ services:
       
       # CORS (allow Flutter app)
       CORS_ENABLED: "true"
-      CORS_ORIGIN: "http://localhost:8080,http://127.0.0.1:8080,http://192.168.1.4:8080,http://192.168.1.3:8080,http://0.0.0.0:8080,http://localhost:8080,http://127.0.0.1:8080"
+      CORS_ORIGIN: "http://192.168.1.4:8080,http://192.168.1.3:8080,http://0.0.0.0:8080,http://localhost:8080,http://127.0.0.1:8080"
       CORS_CREDENTIALS: "true"
       
       # GraphQL
@@ -69,6 +69,19 @@ services:
       
       # Rate limiting (disable for development)
       RATE_LIMITER_ENABLED: "false"
+      
+      # ===== Firebase JWT Authentication =====
+      # Validates Firebase tokens from email/password, Google, and anonymous sign-in
+      AUTH_PROVIDERS: "jwt"
+      AUTH_JWT_SECRET: "__firebase__"
+      AUTH_JWT_ISSUER: "https://securetoken.google.com/aksharaintelligence-41f4a"
+      AUTH_JWT_AUDIENCE: "aksharaintelligence-41f4a"
+      AUTH_JWT_PUBLIC_KEY: "https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com"
+      AUTH_JWT_IDENTIFIER_KEY: "user_id"
+      AUTH_JWT_EMAIL_KEY: "email"
+      AUTH_JWT_ALLOW_PUBLIC_REGISTRATION: "true"
+      # TODO: Get role UUID from Directus UI and replace below
+      AUTH_JWT_DEFAULT_ROLE_ID: "d9682cff-6f6e-4f09-9e1d-47f9e90784eb"
       
     volumes:
       - directus_uploads:/directus/uploads

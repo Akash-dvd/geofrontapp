@@ -1,7 +1,7 @@
 # Compilation Errors - Fix Required
 
 ## Summary
-The geodraw package is now properly integrated, but there are compilation errors in the `frontcalc` package that need to be fixed before the app can run.
+The geodraw package is now properly integrated, but there are compilation errors in the `geocalc` package that need to be fixed before the app can run.
 
 ## Errors Fixed ✅
 
@@ -14,7 +14,7 @@ The geodraw package is now properly integrated, but there are compilation errors
 
 ## Errors Remaining ❌
 
-### Frontcalc Package (`packages/frontcalc/lib/Multivector.dart`)
+### geocalc Package (`packages/geocalc/lib/Multivector.dart`)
 
 The Multivector class has constructor issues:
 
@@ -80,15 +80,15 @@ Multivector operator +(Multivector other) {
 
 ## Next Steps
 
-1. Fix the frontcalc package errors (see above)
+1. Fix the geocalc package errors (see above)
 2. Hot restart the Flutter app
 3. The geodraw canvas should now work properly
 
 ## Workaround (Temporary)
 
-If you want to test the UI without frontcalc working, you could temporarily:
+If you want to test the UI without geocalc working, you could temporarily:
 1. Comment out the Multivector imports in geodraw files
 2. Replace Multivector usage with placeholder types
 3. This would let you see the canvas UI but geometry calculations wouldn't work
 
-However, it's better to fix frontcalc properly since geodraw relies on it for geometric calculations.
+However, it's better to fix geocalc properly since geodraw relies on it for geometric calculations.

@@ -144,7 +144,7 @@ The GeoDraw package has been successfully implemented according to the specifica
 ```yaml
 dependencies:
   flutter: sdk
-  frontcalc: path (local calculation package)
+  geocalc: path (local calculation package)
   equatable: ^2.0.5
   collection: ^1.18.0
   http: ^1.2.0  # NEW for AI service

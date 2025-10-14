@@ -2,7 +2,7 @@
 
 ## Current Problems
 
-1. **Too Many Layers**: Input → Adapter → UnifiedCommand → Executor → Class → frontcalc
+1. **Too Many Layers**: Input → Adapter → UnifiedCommand → Executor → Class → geocalc
 2. **Pointless Wrapping**: UnifiedCommand just wraps type+args, then gets unwrapped
 3. **Duplicate Logic**: Each adapter does the same: parse → resolve → wrap → execute
 4. **Unnecessary Abstraction**: Classes already have clean factory methods
@@ -14,7 +14,7 @@
 
 ### What We Keep
 - ✅ Geometry classes with `.fromPoints()` / `.fromLine()` factories
-- ✅ frontcalc for all math (multivector as sole source)
+- ✅ geocalc for all math (multivector as sole source)
 - ✅ DAGManager for graph management
 - ✅ ObjectResolver for string→object lookup
 - ✅ CommandNameMapper for string→ToolType mapping
@@ -47,7 +47,7 @@ Input Sources:
         - Call: GeoLine2P.fromPoints(id, label, p1, p2)
                        ↓
            [Geometry Class Factory]
-        - Call frontcalc: constructLineFrom2Points(p1.mv, p2.mv)
+        - Call geocalc: constructLineFrom2Points(p1.mv, p2.mv)
         - Return constructed object with multivector
                        ↓
               [DAGManager.addObject]
@@ -142,7 +142,7 @@ class _ConstructionResult {
    - Parser: string → type+args
    - SimpleExecutor: type+args → object → DAG
    - Classes: geometric construction
-   - frontcalc: math
+   - geocalc: math
 5. **Easy to Test**: Each layer is simple and focused
 6. **Easy to Extend**: Add new command = add new case to switch + factory method
 

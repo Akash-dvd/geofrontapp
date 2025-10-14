@@ -12,7 +12,7 @@ The GeoDraw package has been successfully implemented as an interactive geometry
 
 #### 1. Core Package Structure
 - Package directory: `packages/geodraw/`
-- Dependencies configured (Flutter, frontcalc, equatable, collection)
+- Dependencies configured (Flutter, geocalc, equatable, collection)
 - Test infrastructure set up
 - All tests passing (20/20 tests)
 
