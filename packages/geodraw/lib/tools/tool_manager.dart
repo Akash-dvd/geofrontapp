@@ -1,13 +1,15 @@
 import 'package:flutter/material.dart';
 import 'tool.dart';
 import 'unified_tool.dart';
-import '../dag/dag_manager.dart';
+import '../core/dag/dag_manager.dart';
+import '../core/command/command_history.dart';
 import '../models/geometry_object.dart';
 import '../models/simple/geo_point.dart';
 
 /// Manages the active tool and tool state
 class ToolManager {
   final DAGManager dagManager;
+  final CommandHistory? commandHistory;
 
   ToolType _activeToolType = ToolType.select;
   Tool? _activeTool;
@@ -18,6 +20,7 @@ class ToolManager {
 
   ToolManager({
     required this.dagManager,
+    this.commandHistory,
     this.onObjectCreated,
     this.onObjectSelected,
     this.onToolStateChanged,
@@ -58,6 +61,7 @@ class ToolManager {
       case ToolType.point:
         return _PointTool(
           dagManager: dagManager,
+          commandHistory: commandHistory,
           onObjectCreated: onObjectCreated,
           onObjectSelected: onObjectSelected,
           onToolStateChanged: onToolStateChanged,
@@ -66,6 +70,7 @@ class ToolManager {
       case ToolType.line:
         return _LineTool(
           dagManager: dagManager,
+          commandHistory: commandHistory,
           onObjectCreated: onObjectCreated,
           onObjectSelected: onObjectSelected,
           onToolStateChanged: onToolStateChanged,
@@ -74,6 +79,7 @@ class ToolManager {
       case ToolType.circle:
         return _CircleTool(
           dagManager: dagManager,
+          commandHistory: commandHistory,
           onObjectCreated: onObjectCreated,
           onObjectSelected: onObjectSelected,
           onToolStateChanged: onToolStateChanged,
@@ -168,6 +174,7 @@ class ToolMetadata {
 class _PointTool extends UnifiedTool {
   _PointTool({
     required super.dagManager,
+    super.commandHistory,
     super.onObjectCreated,
     super.onObjectSelected,
     super.onToolStateChanged,
@@ -231,6 +238,7 @@ class _LineTool extends UnifiedTool {
 
   _LineTool({
     required super.dagManager,
+    super.commandHistory,
     super.onObjectCreated,
     super.onObjectSelected,
     super.onToolStateChanged,
@@ -250,7 +258,7 @@ class _LineTool extends UnifiedTool {
 
   @override
   GeometryObject? createObjectAtPosition(Offset position) {
-    final nextType = verifier.schema.getNextArgumentType(verifier.arguments);
+    final nextType = verifier.schema.nextConstraint(verifier.arguments);
     if (nextType != null && nextType.accepts(GeoPointer)) {
       final point = GeoPointer(
         id: 'point_${DateTime.now().millisecondsSinceEpoch}',
@@ -287,6 +295,7 @@ class _CircleTool extends UnifiedTool {
 
   _CircleTool({
     required super.dagManager,
+    super.commandHistory,
     super.onObjectCreated,
     super.onObjectSelected,
     super.onToolStateChanged,
@@ -306,7 +315,7 @@ class _CircleTool extends UnifiedTool {
 
   @override
   GeometryObject? createObjectAtPosition(Offset position) {
-    final nextType = verifier.schema.getNextArgumentType(verifier.arguments);
+    final nextType = verifier.schema.nextConstraint(verifier.arguments);
     if (nextType != null && nextType.accepts(GeoPointer)) {
       final point = GeoPointer(
         id: 'point_${DateTime.now().millisecondsSinceEpoch}',

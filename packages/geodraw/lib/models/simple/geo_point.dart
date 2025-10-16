@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:geocalc/Multivector.dart';
+
+import '../canvas_style.dart';
 import '../geometry_object.dart';
 
 /// Abstract base class for all point types
@@ -15,6 +17,7 @@ abstract class GeoPoint extends SimpleGeometryObject {
     this.size = 5.0,
     super.color = Colors.red,
     super.visible,
+    super.styleOverrides,
   });
 
   /// X coordinate derived from multivector
@@ -96,9 +99,11 @@ class GeoPointer extends GeoPoint {
     super.size,
     super.color,
     super.visible,
+    Map<String, dynamic>? styleOverrides,
   }) : super(
          dependencies: [], // Free points have no dependencies
          multivector: constructFreePoint(x, y),
+         styleOverrides: styleOverrides,
        );
 
   @override
@@ -112,18 +117,22 @@ class GeoPointer extends GeoPoint {
     double? size,
     Color? color,
     bool? visible,
+    CanvasStyle? style,
   }) {
     // Recalculate multivector from x, y if provided
     final newX = x ?? this.x;
     final newY = y ?? this.y;
+    final overrides = resolveStyleOverrides(style);
+    final resolvedColor = resolveColor(color, style);
     return GeoPointer(
       id: id ?? this.id,
       label: label ?? this.label,
       x: newX,
       y: newY,
       size: size ?? this.size,
-      color: color ?? this.color,
+      color: resolvedColor,
       visible: visible ?? this.visible,
+      styleOverrides: overrides,
     );
   }
 
@@ -139,7 +148,8 @@ class GeoPointer extends GeoPoint {
 
   static GeoPointer fromJson(Map<String, dynamic> json) {
     final props = json['properties'] as Map<String, dynamic>;
-    final colorHex = (json['color'] as String).replaceAll('#', '');
+    final styleOverrides = GeometryObject.extractStyleOverrides(json);
+    final color = GeometryObject.colorFromJson(json, Colors.red);
 
     return GeoPointer(
       id: json['id'] as String,
@@ -147,8 +157,9 @@ class GeoPointer extends GeoPoint {
       x: (props['x'] as num).toDouble(),
       y: (props['y'] as num).toDouble(),
       size: (props['size'] as num?)?.toDouble() ?? 5.0,
-      color: Color(int.parse(colorHex, radix: 16)),
+      color: color,
       visible: json['visible'] as bool? ?? true,
+      styleOverrides: styleOverrides,
     );
   }
 }
@@ -163,6 +174,7 @@ class GeoMidpoint extends GeoPoint {
     super.size,
     super.color = Colors.green,
     super.visible,
+    super.styleOverrides,
   }) : assert(dependencies.length == 2, 'Midpoint requires exactly 2 points');
 
   /// Calculate midpoint from two points
@@ -174,8 +186,14 @@ class GeoMidpoint extends GeoPoint {
     double size = 5.0,
     Color color = Colors.green,
     bool visible = true,
+    CanvasStyle? style,
   }) {
     final mv = constructMidpoint(p1.multivector, p2.multivector);
+    final resolveOverrides = style != null
+        ? Map<String, dynamic>.unmodifiable(
+            style.diff(CanvasStyle.baseDefaults),
+          )
+        : null;
 
     return GeoMidpoint(
       id: id,
@@ -183,8 +201,9 @@ class GeoMidpoint extends GeoPoint {
       dependencies: [p1.id, p2.id],
       multivector: mv,
       size: size,
-      color: color,
+      color: style?.strokeColor ?? color,
       visible: visible,
+      styleOverrides: resolveOverrides,
     );
   }
 
@@ -199,15 +218,19 @@ class GeoMidpoint extends GeoPoint {
     double? size,
     Color? color,
     bool? visible,
+    CanvasStyle? style,
   }) {
+    final overrides = resolveStyleOverrides(style);
+    final resolvedColor = resolveColor(color, style);
     return GeoMidpoint(
       id: id ?? this.id,
       label: label ?? this.label,
       dependencies: dependencies ?? this.dependencies,
       multivector: multivector ?? this.multivector,
       size: size ?? this.size,
-      color: color ?? this.color,
+      color: resolvedColor,
       visible: visible ?? this.visible,
+      styleOverrides: overrides,
     );
   }
 
@@ -223,7 +246,8 @@ class GeoMidpoint extends GeoPoint {
 
   static GeoMidpoint fromJson(Map<String, dynamic> json) {
     final props = json['properties'] as Map<String, dynamic>;
-    final colorHex = (json['color'] as String).replaceAll('#', '');
+    final styleOverrides = GeometryObject.extractStyleOverrides(json);
+    final color = GeometryObject.colorFromJson(json, Colors.green);
     final deps = (json['dependencies'] as List).cast<String>();
 
     return GeoMidpoint(
@@ -233,8 +257,9 @@ class GeoMidpoint extends GeoPoint {
       multivector:
           Multivector.zero(), // Will be recalculated during DAG reconstruction
       size: (props['size'] as num?)?.toDouble() ?? 5.0,
-      color: Color(int.parse(colorHex, radix: 16)),
+      color: color,
       visible: json['visible'] as bool? ?? true,
+      styleOverrides: styleOverrides,
     );
   }
 }
@@ -249,6 +274,7 @@ class GeoInvPoint extends GeoPoint {
     super.size,
     super.color = Colors.purple,
     super.visible,
+    super.styleOverrides,
   });
 
   @override
@@ -262,15 +288,19 @@ class GeoInvPoint extends GeoPoint {
     double? size,
     Color? color,
     bool? visible,
+    CanvasStyle? style,
   }) {
+    final overrides = resolveStyleOverrides(style);
+    final resolvedColor = resolveColor(color, style);
     return GeoInvPoint(
       id: id ?? this.id,
       label: label ?? this.label,
       dependencies: dependencies ?? this.dependencies,
       multivector: multivector ?? this.multivector,
       size: size ?? this.size,
-      color: color ?? this.color,
+      color: resolvedColor,
       visible: visible ?? this.visible,
+      styleOverrides: overrides,
     );
   }
 
@@ -286,7 +316,8 @@ class GeoInvPoint extends GeoPoint {
 
   static GeoInvPoint fromJson(Map<String, dynamic> json) {
     final props = json['properties'] as Map<String, dynamic>;
-    final colorHex = (json['color'] as String).replaceAll('#', '');
+    final styleOverrides = GeometryObject.extractStyleOverrides(json);
+    final color = GeometryObject.colorFromJson(json, Colors.purple);
     final deps = (json['dependencies'] as List).cast<String>();
 
     return GeoInvPoint(
@@ -296,8 +327,9 @@ class GeoInvPoint extends GeoPoint {
       multivector:
           Multivector.zero(), // Will be recalculated during DAG reconstruction
       size: (props['size'] as num?)?.toDouble() ?? 5.0,
-      color: Color(int.parse(colorHex, radix: 16)),
+      color: color,
       visible: json['visible'] as bool? ?? true,
+      styleOverrides: styleOverrides,
     );
   }
 }

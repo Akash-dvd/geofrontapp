@@ -3,17 +3,26 @@ library;
 
 import '../cli/cli.dart';
 import '../dag/dag_manager.dart';
-import '../command/command_parser.dart' as cmd;
-import '../command/simple_executor.dart' as executor;
-import '../command/cli_verifier.dart';
+import '../core/command/command_parser.dart' as cmd;
+import '../core/command/simple_executor.dart' as executor;
+import '../core/command/cli_verifier.dart';
+import '../core/command/command_registry.dart';
+import '../core/command/command_history_entry.dart';
+import '../tools/tool.dart';
 
 /// Thin wrapper: CLI input → validate → parse → execute
 class CLIAdapter {
   final DAGManager dagManager;
   final cmd.CommandParser parser;
+  final CLIVerifier verifier;
+  final CommandRegistry _registry;
 
   CLIAdapter({required this.dagManager})
-    : parser = cmd.CommandParser(dagManager);
+    : parser = cmd.CommandParser(dagManager),
+      verifier = CLIVerifier(registry: dagManager.commandRegistry),
+      _registry = dagManager.commandRegistry;
+
+  CommandRegistry get registry => _registry;
 
   /// Parse CLI command → validate → execute
   Future<ExecutionResult> executeCommand(Command cliCommand) async {
@@ -24,7 +33,7 @@ class CLIAdapter {
       }
 
       // 2. Verify all arguments at once (CLI provides complete command)
-      final validation = CLIVerifier.verifyCommand(
+      final validation = verifier.verifyCommand(
         cliCommand.toolType!,
         cliCommand.arguments,
       );
@@ -54,7 +63,9 @@ class CLIAdapter {
           return arg.toString();
         })
         .join(', ');
-    return '${cmd.name}($argsString)';
+    final canonical = _registry.canonicalNameForType(cmd.toolType!);
+    final name = canonical ?? cmd.name;
+    return '$name($argsString)';
   }
 
   /// Convert SimpleExecutor's ExecutionResult to CLI's ExecutionResult
@@ -84,18 +95,88 @@ class UnifiedCLIExecutor {
   Future<ExecutionResult> execute(Command command) async {
     try {
       final result = await adapter.executeCommand(command);
-      history.add(command.originalInput, result);
+      final entry = _buildEntry(
+        type: command.toolType,
+        fallbackName: command.name,
+        arguments: command.arguments,
+        objectId: result.objectId,
+      );
+      history.add(entry, result);
       return result;
     } catch (e) {
       final errorResult = ExecutionResult.error(e.toString());
-      history.add(command.originalInput, errorResult);
+      final entry = _buildEntry(
+        type: command.toolType,
+        fallbackName: command.name,
+        arguments: command.arguments,
+        objectId: 'error',
+      );
+      history.add(entry, errorResult);
       return errorResult;
     }
   }
 
   /// Execute from command string
   Future<ExecutionResult> executeString(String commandString) async {
-    final parser = cmd.CommandParser(adapter.dagManager);
-    return await parser.parseAndExecute(commandString);
+    try {
+      final parsed = adapter.parser.parse(commandString);
+      final coreResult = await adapter.parser.executeParsed(parsed);
+      final converted = adapter._convertResult(coreResult);
+
+      final entry = CommandHistoryEntry(
+        commandId: converted.objectId ?? parsed.canonicalName,
+        canonicalName: parsed.canonicalName,
+        arguments: parsed.arguments,
+      );
+
+      history.add(entry, converted);
+      return converted;
+    } on cmd.CommandParserException catch (e) {
+      final coreError = executor.ExecutionResult.error(e.message);
+      final converted = adapter._convertResult(coreError);
+      final entry = CommandHistoryEntry(
+        commandId: 'error',
+        canonicalName: _extractName(commandString),
+        arguments: const [],
+      );
+      history.add(entry, converted);
+      return converted;
+    } catch (e) {
+      final coreError = executor.ExecutionResult.error(e.toString());
+      final converted = adapter._convertResult(coreError);
+      final entry = CommandHistoryEntry(
+        commandId: 'error',
+        canonicalName: _extractName(commandString),
+        arguments: const [],
+      );
+      history.add(entry, converted);
+      return converted;
+    }
+  }
+
+  CommandHistoryEntry _buildEntry({
+    ToolType? type,
+    required String fallbackName,
+    required List<dynamic> arguments,
+    String? objectId,
+  }) {
+    final canonical = type != null
+        ? adapter.registry.canonicalNameForType(type) ?? fallbackName
+        : fallbackName;
+
+    return CommandHistoryEntry(
+      commandId: objectId ?? fallbackName,
+      canonicalName: canonical,
+      arguments: arguments,
+    );
+  }
+
+  static String _extractName(String commandString) {
+    final trimmed = commandString.trim();
+    final idx = trimmed.indexOf('(');
+    if (idx <= 0) {
+      return trimmed.isEmpty ? 'unknown' : trimmed;
+    }
+    return trimmed.substring(0, idx).trim();
   }
 }

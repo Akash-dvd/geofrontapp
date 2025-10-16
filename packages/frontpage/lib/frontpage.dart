@@ -1230,10 +1230,12 @@ class _CtaSectionState extends State<_CtaSection> {
                             label: 'Work email',
                             keyboardType: TextInputType.emailAddress,
                             validator: (value) {
-                              if (value == null || value.isEmpty)
+                              if (value == null || value.isEmpty) {
                                 return 'Required';
-                              if (!value.contains('@'))
+                              }
+                              if (!value.contains('@')) {
                                 return 'Enter a valid email';
+                              }
                               return null;
                             },
                           ),

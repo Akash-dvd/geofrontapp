@@ -2,6 +2,7 @@ import 'package:equatable/equatable.dart';
 import 'package:flutter/material.dart';
 import 'package:geocalc/Multivector.dart';
 import 'canvas_object.dart';
+import 'canvas_style.dart';
 
 /// Abstract base class for all geometric objects
 /// Extends CanvasObject and adds geometric properties
@@ -16,12 +17,12 @@ abstract class GeometryObject extends CanvasObject with EquatableMixin {
   /// List of object IDs this object depends on
   final List<String> dependencies;
 
-  /// Color for rendering
-  final Color color;
-
   /// Whether this object is visible on the canvas
   @override
   final bool visible;
+
+  /// Serialized style overrides relative to [defaultStyle].
+  final Map<String, dynamic> styleOverrides;
 
   GeometryObject({
     required this.id,
@@ -29,7 +30,74 @@ abstract class GeometryObject extends CanvasObject with EquatableMixin {
     required this.dependencies,
     this.color = Colors.blue,
     this.visible = true,
-  });
+    Map<String, dynamic>? styleOverrides,
+  }) : styleOverrides = Map.unmodifiable(styleOverrides ?? const {});
+
+  /// Color for rendering
+  final Color color;
+
+  @override
+  CanvasStyle get style {
+    final resolved = CanvasStyle.fromDiff(defaultStyle, styleOverrides);
+    if (resolved.strokeColor != color) {
+      return resolved.copyWith(strokeColor: color);
+    }
+    return resolved;
+  }
+
+  /// Resolve the style overrides map to use for a new instance.
+  Map<String, dynamic> resolveStyleOverrides(CanvasStyle? newStyle) {
+    if (newStyle == null) {
+      return styleOverrides;
+    }
+    return Map.unmodifiable(newStyle.diff(defaultStyle));
+  }
+
+  /// Resolve the color to use for a new instance, keeping it aligned with style.
+  Color resolveColor(Color? newColor, CanvasStyle? newStyle) {
+    if (newStyle != null) {
+      return newStyle.strokeColor;
+    }
+    return newColor ?? color;
+  }
+
+  /// Extracts the style override map from serialized JSON if present.
+  static Map<String, dynamic>? extractStyleOverrides(
+    Map<String, dynamic> json,
+  ) {
+    final raw = json['style'];
+    if (raw is Map<String, dynamic>) {
+      return Map<String, dynamic>.from(raw);
+    }
+    if (raw is Map) {
+      return raw.map((key, value) => MapEntry(key.toString(), value));
+    }
+    return null;
+  }
+
+  /// Resolve stroke color from JSON, falling back to [fallback] when absent.
+  static Color colorFromJson(Map<String, dynamic> json, Color fallback) {
+    final style = extractStyleOverrides(json);
+    if (style != null) {
+      final stroke = style['strokeColor'];
+      if (stroke is String) {
+        return CanvasStyle.colorFromHex(stroke);
+      }
+      if (stroke is int) {
+        return Color(stroke);
+      }
+    }
+
+    final raw = json['color'];
+    if (raw is String) {
+      return CanvasStyle.colorFromHex(raw);
+    }
+    if (raw is int) {
+      return Color(raw);
+    }
+
+    return fallback;
+  }
 
   /// Calculate distance from this object to a point
   double distanceTo(Offset point);
@@ -41,23 +109,36 @@ abstract class GeometryObject extends CanvasObject with EquatableMixin {
     List<String>? dependencies,
     Color? color,
     bool? visible,
+    CanvasStyle? style,
   });
 
   @override
-  List<Object?> get props => [id, label, dependencies, color, visible];
+  List<Object?> get props => [
+    id,
+    label,
+    dependencies,
+    color,
+    styleOverrides,
+    visible,
+  ];
 
-  /// Base toJson implementation - includes common properties
   /// Subclasses should override and call super.toJson() then add their properties
   @override
   Map<String, dynamic> toJson() {
-    return {
+    final data = <String, dynamic>{
       'id': id,
       'type': type,
       'label': label,
       'dependencies': dependencies,
-      'color': '#${color.value.toRadixString(16).padLeft(8, '0')}',
+      'color': '#${style.strokeColor.value.toRadixString(16).padLeft(8, '0')}',
       'visible': visible,
     };
+
+    if (styleOverrides.isNotEmpty) {
+      data['style'] = styleOverrides;
+    }
+
+    return data;
   }
 }
 
@@ -73,6 +154,7 @@ abstract class SimpleGeometryObject extends GeometryObject {
     required this.multivector,
     super.color,
     super.visible,
+    super.styleOverrides,
   });
 
   /// Check if this object intersects with another
@@ -95,6 +177,7 @@ abstract class SimpleGeometryObjectList<T extends SimpleGeometryObject>
     required this.objects,
     super.color,
     super.visible,
+    super.styleOverrides,
   });
 
   /// Number of objects in this list
@@ -157,6 +240,7 @@ abstract class ComplexGeometryObject extends GeometryObject {
     required this.underlyingObjectId,
     super.color,
     super.visible,
+    super.styleOverrides,
   });
 
   /// Calculate the length of this object
@@ -184,6 +268,7 @@ abstract class ComplexGeometryObjectList<T extends ComplexGeometryObject>
     required this.elements,
     super.color,
     super.visible,
+    super.styleOverrides,
   });
 
   /// Number of vertices in this shape

@@ -2,8 +2,8 @@
 library;
 
 import '../dag/dag_manager.dart';
-import '../command/command_parser.dart';
-import '../command/simple_executor.dart';
+import '../core/command/command_parser.dart';
+import '../core/command/simple_executor.dart';
 
 /// Thin wrapper: AI input → parse → validate → execute
 /// AI provides batches of commands all at once, validates each independently
@@ -18,7 +18,17 @@ class AIAdapter {
   Future<List<ExecutionResult>> executeBatch(
     List<String> commandStrings,
   ) async {
-    return await parser.parseAndExecuteBatch(commandStrings);
+    final results = <ExecutionResult>[];
+
+    for (final cmdString in commandStrings) {
+      final result = await parser.parseAndExecute(cmdString);
+      results.add(result);
+      if (!result.success) {
+        break;
+      }
+    }
+
+    return results;
   }
 
   /// Execute a single AI command string

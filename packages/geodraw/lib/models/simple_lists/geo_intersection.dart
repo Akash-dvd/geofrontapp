@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'dart:math' as math;
+
+import '../canvas_style.dart';
 import '../geometry_object.dart';
 import '../simple/geo_point.dart';
 import '../simple/geo_line.dart';
@@ -14,6 +16,7 @@ class GeoIntersection extends SimpleGeometryObjectList<GeoPoint> {
     required super.objects,
     super.color = Colors.orange,
     super.visible,
+    super.styleOverrides,
   }) : assert(
          dependencies.length == 2,
          'Intersection requires exactly 2 object dependencies',
@@ -175,14 +178,18 @@ class GeoIntersection extends SimpleGeometryObjectList<GeoPoint> {
     List<GeoPoint>? objects,
     Color? color,
     bool? visible,
+    CanvasStyle? style,
   }) {
+    final overrides = resolveStyleOverrides(style);
+    final resolvedColor = resolveColor(color, style);
     return GeoIntersection(
       id: id ?? this.id,
       label: label ?? this.label,
       dependencies: dependencies ?? this.dependencies,
       objects: objects ?? this.objects,
-      color: color ?? this.color,
+      color: resolvedColor,
       visible: visible ?? this.visible,
+      styleOverrides: overrides,
     );
   }
 }
@@ -196,6 +203,7 @@ class GeoTangent extends SimpleGeometryObjectList<GeoLine> {
     required super.objects,
     super.color = Colors.pink,
     super.visible,
+    super.styleOverrides,
   });
 
   @override
@@ -209,14 +217,18 @@ class GeoTangent extends SimpleGeometryObjectList<GeoLine> {
     List<GeoLine>? objects,
     Color? color,
     bool? visible,
+    CanvasStyle? style,
   }) {
+    final overrides = resolveStyleOverrides(style);
+    final resolvedColor = resolveColor(color, style);
     return GeoTangent(
       id: id ?? this.id,
       label: label ?? this.label,
       dependencies: dependencies ?? this.dependencies,
       objects: objects ?? this.objects,
-      color: color ?? this.color,
+      color: resolvedColor,
       visible: visible ?? this.visible,
+      styleOverrides: overrides,
     );
   }
 }

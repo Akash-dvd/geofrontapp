@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+
+import '../canvas_style.dart';
 import '../geometry_object.dart';
 
 /// Segment between two points
@@ -12,6 +14,7 @@ class GeoSegment extends ComplexGeometryObject {
     required super.underlyingObjectId,
     super.color = Colors.blue,
     super.visible,
+    super.styleOverrides,
   });
 
   @override
@@ -55,7 +58,10 @@ class GeoSegment extends ComplexGeometryObject {
     String? underlyingObjectId,
     Color? color,
     bool? visible,
+    CanvasStyle? style,
   }) {
+    final overrides = resolveStyleOverrides(style);
+    final resolvedColor = resolveColor(color, style);
     return GeoSegment(
       id: id ?? this.id,
       label: label ?? this.label,
@@ -63,8 +69,9 @@ class GeoSegment extends ComplexGeometryObject {
       startPointId: startPointId ?? this.startPointId,
       endPointId: endPointId ?? this.endPointId,
       underlyingObjectId: underlyingObjectId ?? this.underlyingObjectId,
-      color: color ?? this.color,
+      color: resolvedColor,
       visible: visible ?? this.visible,
+      styleOverrides: overrides,
     );
   }
 }
@@ -78,6 +85,7 @@ class GeoTriangle extends ComplexGeometryObjectList<GeoSegment> {
     required super.elements,
     super.color = Colors.purple,
     super.visible,
+    super.styleOverrides,
   }) : assert(elements.length == 3, 'Triangle requires exactly 3 segments');
 
   @override
@@ -106,14 +114,18 @@ class GeoTriangle extends ComplexGeometryObjectList<GeoSegment> {
     List<GeoSegment>? elements,
     Color? color,
     bool? visible,
+    CanvasStyle? style,
   }) {
+    final overrides = resolveStyleOverrides(style);
+    final resolvedColor = resolveColor(color, style);
     return GeoTriangle(
       id: id ?? this.id,
       label: label ?? this.label,
       dependencies: dependencies ?? this.dependencies,
       elements: elements ?? this.elements,
-      color: color ?? this.color,
+      color: resolvedColor,
       visible: visible ?? this.visible,
+      styleOverrides: overrides,
     );
   }
 }
@@ -127,6 +139,7 @@ class GeoPolygon extends ComplexGeometryObjectList<GeoSegment> {
     required super.elements,
     super.color = Colors.brown,
     super.visible,
+    super.styleOverrides,
   });
 
   @override
@@ -165,14 +178,18 @@ class GeoPolygon extends ComplexGeometryObjectList<GeoSegment> {
     List<GeoSegment>? elements,
     Color? color,
     bool? visible,
+    CanvasStyle? style,
   }) {
+    final overrides = resolveStyleOverrides(style);
+    final resolvedColor = resolveColor(color, style);
     return GeoPolygon(
       id: id ?? this.id,
       label: label ?? this.label,
       dependencies: dependencies ?? this.dependencies,
       elements: elements ?? this.elements,
-      color: color ?? this.color,
+      color: resolvedColor,
       visible: visible ?? this.visible,
+      styleOverrides: overrides,
     );
   }
 }

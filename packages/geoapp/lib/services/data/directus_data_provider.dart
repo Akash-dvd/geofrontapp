@@ -1,6 +1,4 @@
 import 'package:geoapp/geoapp.dart';
-import '../../config/env_config.dart';
-import 'data_provider.dart';
 
 /// Directus Data Provider for local development
 /// Uses Firebase ID token for authentication or falls back to DIRECTUS_TOKEN
@@ -17,7 +15,7 @@ class DirectusDataProvider implements DataProvider {
 
   // TODO: Add HTTP client initialization
   // import 'package:http/http.dart' as http;
-  
+
   Map<String, String> get _headers {
     // Prefer Firebase ID token, fallback to static token for local dev
     final token = _idToken.isNotEmpty ? _idToken : _staticToken;

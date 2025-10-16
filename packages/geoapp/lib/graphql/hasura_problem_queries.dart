@@ -27,7 +27,7 @@ class HasuraProblemQueries {
         thumbnail_id
         created_at
         updated_at
-        user_id
+        owner_uid
       }
       problems_aggregate {
         aggregate {
@@ -55,13 +55,13 @@ class HasuraProblemQueries {
         thumbnail_id
         created_at
         updated_at
-        user_id
+        owner_uid
       }
     }
   ''';
 
   /// Create a new problem
-  /// Firebase ID token provides user_id via JWT claims
+  /// Firebase ID token provides owner_uid via JWT claims
   static const String createProblem = '''
     mutation CreateProblem(
       \$title: String!
@@ -103,7 +103,7 @@ class HasuraProblemQueries {
         thumbnail_id
         created_at
         updated_at
-        user_id
+        owner_uid
       }
     }
   ''';
@@ -154,7 +154,7 @@ class HasuraProblemQueries {
         thumbnail_id
         created_at
         updated_at
-        user_id
+        owner_uid
       }
     }
   ''';

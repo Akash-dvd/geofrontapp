@@ -7,7 +7,7 @@ void main() {
       final dag = DAGManager();
       final p1 = GeoPointer(id: 'p1', label: 'A', x: 10, y: 20);
       final p2 = GeoPointer(id: 'p2', label: 'B', x: 30, y: 40);
-      
+
       dag.addObject(p1, []);
       dag.addObject(p2, []);
 
@@ -40,7 +40,7 @@ void main() {
       final originalDag = DAGManager();
       final p1 = GeoPointer(id: 'p1', label: 'A', x: 10, y: 20);
       final p2 = GeoPointer(id: 'p2', label: 'B', x: 30, y: 40);
-      
+
       originalDag.addObject(p1, []);
       originalDag.addObject(p2, []);
 
@@ -49,7 +49,7 @@ void main() {
       final decodedDag = codec.decode(json);
 
       expect(decodedDag.nodeCount, 2);
-      
+
       final decodedP1 = decodedDag.getObject('p1') as GeoPointer?;
       expect(decodedP1, isNotNull);
       expect(decodedP1!.label, 'A');
@@ -61,16 +61,11 @@ void main() {
       final dag = DAGManager();
       final p1 = GeoPointer(id: 'p1', label: 'A', x: 0, y: 0);
       final p2 = GeoPointer(id: 'p2', label: 'B', x: 10, y: 10);
-      
+
       dag.addObject(p1, []);
       dag.addObject(p2, []);
 
-      final line = GeoLine2P.fromPoints(
-        id: 'l1',
-        label: 'AB',
-        p1: p1,
-        p2: p2,
-      );
+      final line = GeoLine2P.fromPoints(id: 'l1', label: 'AB', p1: p1, p2: p2);
       dag.addObject(line, ['p1', 'p2']);
 
       final codec = GeoDrawCodec();
@@ -87,7 +82,7 @@ void main() {
       final dag = DAGManager();
       final center = GeoPointer(id: 'c1', label: 'C', x: 0, y: 0);
       final point = GeoPointer(id: 'p1', label: 'P', x: 5, y: 0);
-      
+
       dag.addObject(center, []);
       dag.addObject(point, []);
 
@@ -168,7 +163,7 @@ void main() {
 
       expect(result.success, isTrue);
       expect(dag.nodeCount, 1);
-      
+
       final point = dag.nodes.values.first.object as GeoPointer;
       expect(point.label, 'A');
       expect(point.x, 10);
@@ -223,7 +218,7 @@ void main() {
 
       expect(result.success, isTrue);
       expect(dag.nodeCount, 3);
-      
+
       final midpoint = result.data as GeoMidpoint;
       expect(midpoint.x, 5);
       expect(midpoint.y, 5);
@@ -250,12 +245,12 @@ void main() {
       // Create some objects
       await executor.execute(parser.parse('point(0, 0)')!);
       await executor.execute(parser.parse('point(10, 10)')!);
-      
+
       expect(dag.nodeCount, 2);
 
       // Clear
       final clearResult = await executor.execute(parser.parse('clear')!);
-      
+
       expect(clearResult.success, isTrue);
       expect(dag.nodeCount, 0);
     });
@@ -269,7 +264,7 @@ void main() {
       await executor.execute(parser.parse('point(10, 10, B)')!);
 
       final listResult = await executor.execute(parser.parse('list')!);
-      
+
       expect(listResult.success, isTrue);
       expect(listResult.message, contains('2'));
     });

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'dart:math' as math;
 import 'package:geocalc/Multivector.dart';
+
+import '../canvas_style.dart';
 import '../geometry_object.dart';
 import 'geo_point.dart';
 
@@ -21,6 +23,7 @@ abstract class GeoCircle extends SimpleGeometryObject {
     this.filled = false,
     super.color = Colors.green,
     super.visible,
+    super.styleOverrides,
   });
 
   /// Center x coordinate derived from multivector
@@ -113,6 +116,7 @@ class GeoCircle2P extends GeoCircle {
     super.filled,
     super.color,
     super.visible,
+    super.styleOverrides,
   }) : assert(
          dependencies.length == 2,
          'Circle from 2 points requires exactly 2 point dependencies',
@@ -160,7 +164,10 @@ class GeoCircle2P extends GeoCircle {
     bool? filled,
     Color? color,
     bool? visible,
+    CanvasStyle? style,
   }) {
+    final overrides = resolveStyleOverrides(style);
+    final resolvedColor = resolveColor(color, style);
     return GeoCircle2P(
       id: id ?? this.id,
       label: label ?? this.label,
@@ -168,8 +175,9 @@ class GeoCircle2P extends GeoCircle {
       multivector: multivector ?? this.multivector,
       thickness: thickness ?? this.thickness,
       filled: filled ?? this.filled,
-      color: color ?? this.color,
+      color: resolvedColor,
       visible: visible ?? this.visible,
+      styleOverrides: overrides,
     );
   }
 
@@ -191,7 +199,8 @@ class GeoCircle2P extends GeoCircle {
 
   static GeoCircle2P fromJson(Map<String, dynamic> json) {
     final props = json['properties'] as Map<String, dynamic>;
-    final colorHex = (json['color'] as String).replaceAll('#', '');
+    final styleOverrides = GeometryObject.extractStyleOverrides(json);
+    final color = GeometryObject.colorFromJson(json, Colors.green);
     final deps = (json['dependencies'] as List).cast<String>();
 
     return GeoCircle2P(
@@ -202,8 +211,9 @@ class GeoCircle2P extends GeoCircle {
           Multivector.zero(), // Will be recalculated during DAG reconstruction
       thickness: (props['thickness'] as num?)?.toDouble() ?? 2.0,
       filled: props['filled'] as bool? ?? false,
-      color: Color(int.parse(colorHex, radix: 16)),
+      color: color,
       visible: json['visible'] as bool? ?? true,
+      styleOverrides: styleOverrides,
     );
   }
 }
@@ -219,6 +229,7 @@ class GeoCircle3P extends GeoCircle {
     super.filled,
     super.color,
     super.visible,
+    super.styleOverrides,
   }) : assert(
          dependencies.length == 3,
          'Circle through 3 points requires exactly 3 point dependencies',
@@ -278,7 +289,10 @@ class GeoCircle3P extends GeoCircle {
     bool? filled,
     Color? color,
     bool? visible,
+    CanvasStyle? style,
   }) {
+    final overrides = resolveStyleOverrides(style);
+    final resolvedColor = resolveColor(color, style);
     return GeoCircle3P(
       id: id ?? this.id,
       label: label ?? this.label,
@@ -286,8 +300,9 @@ class GeoCircle3P extends GeoCircle {
       multivector: multivector ?? this.multivector,
       thickness: thickness ?? this.thickness,
       filled: filled ?? this.filled,
-      color: color ?? this.color,
+      color: resolvedColor,
       visible: visible ?? this.visible,
+      styleOverrides: overrides,
     );
   }
 
@@ -309,7 +324,8 @@ class GeoCircle3P extends GeoCircle {
 
   static GeoCircle3P fromJson(Map<String, dynamic> json) {
     final props = json['properties'] as Map<String, dynamic>;
-    final colorHex = (json['color'] as String).replaceAll('#', '');
+    final styleOverrides = GeometryObject.extractStyleOverrides(json);
+    final color = GeometryObject.colorFromJson(json, Colors.green);
     final deps = (json['dependencies'] as List).cast<String>();
 
     return GeoCircle3P(
@@ -320,8 +336,9 @@ class GeoCircle3P extends GeoCircle {
           Multivector.zero(), // Will be recalculated during DAG reconstruction
       thickness: (props['thickness'] as num?)?.toDouble() ?? 2.0,
       filled: props['filled'] as bool? ?? false,
-      color: Color(int.parse(colorHex, radix: 16)),
+      color: color,
       visible: json['visible'] as bool? ?? true,
+      styleOverrides: styleOverrides,
     );
   }
 }
@@ -337,6 +354,7 @@ class GeoInvCircle extends GeoCircle {
     super.filled,
     super.color = Colors.purple,
     super.visible,
+    super.styleOverrides,
   });
 
   @override
@@ -352,7 +370,10 @@ class GeoInvCircle extends GeoCircle {
     bool? filled,
     Color? color,
     bool? visible,
+    CanvasStyle? style,
   }) {
+    final overrides = resolveStyleOverrides(style);
+    final resolvedColor = resolveColor(color, style);
     return GeoInvCircle(
       id: id ?? this.id,
       label: label ?? this.label,
@@ -360,8 +381,9 @@ class GeoInvCircle extends GeoCircle {
       multivector: multivector ?? this.multivector,
       thickness: thickness ?? this.thickness,
       filled: filled ?? this.filled,
-      color: color ?? this.color,
+      color: resolvedColor,
       visible: visible ?? this.visible,
+      styleOverrides: overrides,
     );
   }
 
@@ -383,7 +405,8 @@ class GeoInvCircle extends GeoCircle {
 
   static GeoInvCircle fromJson(Map<String, dynamic> json) {
     final props = json['properties'] as Map<String, dynamic>;
-    final colorHex = (json['color'] as String).replaceAll('#', '');
+    final styleOverrides = GeometryObject.extractStyleOverrides(json);
+    final color = GeometryObject.colorFromJson(json, Colors.purple);
     final deps = (json['dependencies'] as List).cast<String>();
 
     return GeoInvCircle(
@@ -394,8 +417,9 @@ class GeoInvCircle extends GeoCircle {
           Multivector.zero(), // Will be recalculated during DAG reconstruction
       thickness: (props['thickness'] as num?)?.toDouble() ?? 2.0,
       filled: props['filled'] as bool? ?? false,
-      color: Color(int.parse(colorHex, radix: 16)),
+      color: color,
       visible: json['visible'] as bool? ?? true,
+      styleOverrides: styleOverrides,
     );
   }
 }

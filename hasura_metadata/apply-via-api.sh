@@ -17,7 +17,7 @@ apply_permission() {
         -H "Content-Type: application/json" \
         -d "$1")
     
-    echo "$response" | grep -q "message" && echo "  ❌ Error: $response" || echo "  ✅ Applied"
+    echo "$response" | grep -q '"message":"success"' && echo "  ✅ Applied" || echo "  ❌ Error: $response"
 }
 
 echo "📋 Creating SELECT permission for problems table..."
@@ -28,7 +28,7 @@ apply_permission '{
     "table": {"schema": "public", "name": "problems"},
     "role": "user",
     "permission": {
-      "columns": ["id","title","description","difficulty","category","geometry_data","solution","scalar_constraints","object_constraints","scalar_proof","object_proof","status","image_id","owner_uid","created_at","updated_at"],
+      "columns": ["id","title","description","difficulty","category","geometry_data","solution","scalar_constraints","object_constraints","scalar_proof","object_proof","status","image_id","thumbnail_id","owner_uid","created_at","updated_at"],
       "filter": {
         "_or": [
           {"owner_uid": {"_eq": "X-Hasura-User-Id"}},
@@ -49,7 +49,7 @@ apply_permission '{
     "permission": {
       "check": {"owner_uid": {"_eq": "X-Hasura-User-Id"}},
       "set": {"owner_uid": "x-hasura-User-Id", "status": "draft"},
-      "columns": ["title","description","difficulty","category","geometry_data","solution","scalar_constraints","object_constraints","scalar_proof","object_proof","image_id"]
+      "columns": ["title","description","difficulty","category","geometry_data","solution","scalar_constraints","object_constraints","scalar_proof","object_proof","image_id","thumbnail_id"]
     }
   }
 }'
@@ -62,7 +62,7 @@ apply_permission '{
     "table": {"schema": "public", "name": "problems"},
     "role": "user",
     "permission": {
-      "columns": ["title","description","difficulty","category","geometry_data","solution","scalar_constraints","object_constraints","scalar_proof","object_proof","status","image_id"],
+      "columns": ["title","description","difficulty","category","geometry_data","solution","scalar_constraints","object_constraints","scalar_proof","object_proof","status","image_id","thumbnail_id"],
       "filter": {"owner_uid": {"_eq": "X-Hasura-User-Id"}},
       "check": {"owner_uid": {"_eq": "X-Hasura-User-Id"}}
     }

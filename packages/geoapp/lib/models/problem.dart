@@ -93,10 +93,13 @@ class Problem extends Equatable {
   final DateTime createdAt;
   final DateTime updatedAt;
 
-  /// Create Problem from GraphQL response (Directus format)
+  /// Create Problem from GraphQL response (supports both Hasura and Directus formats)
   factory Problem.fromJson(Map<String, dynamic> json) {
-    final dateCreated = json['date_created'] as String?;
-    final dateUpdated = json['date_updated'] as String?;
+    // Handle both Hasura (created_at) and Directus (date_created) formats
+    final dateCreated =
+        json['created_at'] as String? ?? json['date_created'] as String?;
+    final dateUpdated =
+        json['updated_at'] as String? ?? json['date_updated'] as String?;
 
     return Problem(
       id: json['id'].toString(),
@@ -110,17 +113,18 @@ class Problem extends Equatable {
       objectConstraints: json['object_constraints'] as Map<String, dynamic>?,
       scalarProof: json['scalar_proof'] as Map<String, dynamic>?,
       objectProof: json['object_proof'] as Map<String, dynamic>?,
-      thumbnailId: json['thumbnail'] != null
-          ? (json['thumbnail'] is String
-                ? json['thumbnail'] as String
-                : (json['thumbnail'] as Map<String, dynamic>)['id'] as String?)
-          : null,
-      createdAt: dateCreated != null
-          ? DateTime.parse(dateCreated)
-          : DateTime.now(),
-      updatedAt: dateUpdated != null
-          ? DateTime.parse(dateUpdated)
-          : DateTime.now(),
+      thumbnailId: json['thumbnail_id'] != null
+          ? json['thumbnail_id'] as String?
+          : (json['thumbnail'] != null
+              ? (json['thumbnail'] is String
+                  ? json['thumbnail'] as String
+                  : (json['thumbnail'] as Map<String, dynamic>)['id']
+                      as String?)
+              : null),
+      createdAt:
+          dateCreated != null ? DateTime.parse(dateCreated) : DateTime.now(),
+      updatedAt:
+          dateUpdated != null ? DateTime.parse(dateUpdated) : DateTime.now(),
     );
   }
 
@@ -178,21 +182,21 @@ class Problem extends Equatable {
 
   @override
   List<Object?> get props => [
-    id,
-    title,
-    description,
-    difficulty,
-    category,
-    geometryData,
-    solution,
-    scalarConstraints,
-    objectConstraints,
-    scalarProof,
-    objectProof,
-    thumbnailId,
-    createdAt,
-    updatedAt,
-  ];
+        id,
+        title,
+        description,
+        difficulty,
+        category,
+        geometryData,
+        solution,
+        scalarConstraints,
+        objectConstraints,
+        scalarProof,
+        objectProof,
+        thumbnailId,
+        createdAt,
+        updatedAt,
+      ];
 }
 
 /// Data structure for paginated problem results (Directus format)

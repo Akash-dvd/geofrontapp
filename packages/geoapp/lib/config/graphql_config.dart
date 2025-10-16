@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:graphql_flutter/graphql_flutter.dart';
-import '../services/app_services.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'build_flags.dart';
 import 'env_config.dart';
 
@@ -12,7 +12,7 @@ class GraphQLConfig {
   static String get _graphqlEndpoint {
     if (BuildFlags.useDirectus) {
       // Local Directus backend
-      return EnvConfig.directusUrl + '/graphql';
+      return '${EnvConfig.directusUrl}/graphql';
     } else {
       // Cloud Hasura backend
       return EnvConfig.hasuraEndpoint;
@@ -29,12 +29,19 @@ class GraphQLConfig {
     final AuthLink authLink = AuthLink(
       getToken: () async {
         try {
-          // Get Firebase ID token from auth provider
-          final idToken = await AppServices.auth.getIdToken();
+          // Get Firebase ID token directly from FirebaseAuth
+          // (AppServices might not be initialized yet)
+          final user = FirebaseAuth.instance.currentUser;
+          if (user == null) {
+            debugPrint('⚠️ GraphQL AuthLink: No user signed in');
+            return null;
+          }
+
+          final idToken = await user.getIdToken();
+          debugPrint('✅ GraphQL AuthLink: Got token for user ${user.uid}');
           return idToken != null ? 'Bearer $idToken' : null;
         } catch (e) {
-          // If not authenticated yet, return null
-          // Directus can fall back to DIRECTUS_TOKEN in data provider
+          debugPrint('❌ GraphQL AuthLink error: $e');
           return null;
         }
       },

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:geocalc/Multivector.dart';
+
+import '../canvas_style.dart';
 import '../geometry_object.dart';
 import 'geo_point.dart';
 
@@ -9,7 +11,7 @@ abstract class GeoLine extends SimpleGeometryObject {
   final double thickness;
 
   /// Line style (solid, dashed, dotted)
-  final LineStyle style;
+  final LineStyle lineStyle;
 
   GeoLine({
     required super.id,
@@ -17,9 +19,10 @@ abstract class GeoLine extends SimpleGeometryObject {
     required super.dependencies,
     required super.multivector,
     this.thickness = 2.0,
-    this.style = LineStyle.solid,
+    this.lineStyle = LineStyle.solid,
     super.color = Colors.blue,
     super.visible,
+    super.styleOverrides,
   });
 
   /// Line equation coefficient a (from multivector)
@@ -42,7 +45,7 @@ abstract class GeoLine extends SimpleGeometryObject {
       ..style = PaintingStyle.stroke;
 
     // Apply line style
-    if (style == LineStyle.dashed) {
+    if (lineStyle == LineStyle.dashed) {
       linePaint.strokeCap = StrokeCap.round;
     }
 
@@ -50,9 +53,9 @@ abstract class GeoLine extends SimpleGeometryObject {
     // This will be clipped by the viewport
     final points = _getLinePoints();
     if (points != null) {
-      if (style == LineStyle.dashed) {
+      if (lineStyle == LineStyle.dashed) {
         _drawDashedLine(canvas, linePaint, points.$1, points.$2);
-      } else if (style == LineStyle.dotted) {
+      } else if (lineStyle == LineStyle.dotted) {
         _drawDottedLine(canvas, linePaint, points.$1, points.$2);
       } else {
         canvas.drawLine(points.$1, points.$2, linePaint);
@@ -166,7 +169,7 @@ abstract class GeoLine extends SimpleGeometryObject {
   }
 
   @override
-  List<Object?> get props => [...super.props, thickness, style];
+  List<Object?> get props => [...super.props, thickness, lineStyle];
 }
 
 enum LineStyle { solid, dashed, dotted }
@@ -179,9 +182,10 @@ class GeoLine2P extends GeoLine {
     required super.dependencies, // Should have exactly 2 dependencies
     required super.multivector,
     super.thickness,
-    super.style,
+    super.lineStyle,
     super.color,
     super.visible,
+    super.styleOverrides,
   }) : assert(
          dependencies.length == 2,
          'Line through 2 points requires exactly 2 point dependencies',
@@ -194,12 +198,19 @@ class GeoLine2P extends GeoLine {
     required GeoPoint p1,
     required GeoPoint p2,
     double thickness = 2.0,
-    LineStyle style = LineStyle.solid,
+    LineStyle lineStyle = LineStyle.solid,
     Color color = Colors.blue,
     bool visible = true,
+    CanvasStyle? style,
   }) {
     // Calculate multivector using definitions.dart placeholder
     final mv = constructLineFrom2Points(p1.multivector, p2.multivector);
+    final resolvedColor = style?.strokeColor ?? color;
+    final overrides = style != null
+        ? Map<String, dynamic>.unmodifiable(
+            style.diff(CanvasStyle.baseDefaults),
+          )
+        : null;
 
     return GeoLine2P(
       id: id,
@@ -207,9 +218,10 @@ class GeoLine2P extends GeoLine {
       dependencies: [p1.id, p2.id],
       multivector: mv,
       thickness: thickness,
-      style: style,
-      color: color,
+      lineStyle: lineStyle,
+      color: resolvedColor,
       visible: visible,
+      styleOverrides: overrides,
     );
   }
 
@@ -223,19 +235,23 @@ class GeoLine2P extends GeoLine {
     double? b,
     double? c,
     double? thickness,
-    LineStyle? style,
+    LineStyle? lineStyle,
     Color? color,
     bool? visible,
+    CanvasStyle? style,
   }) {
+    final overrides = resolveStyleOverrides(style);
+    final resolvedColor = resolveColor(color, style);
     return GeoLine2P(
       id: id ?? this.id,
       label: label ?? this.label,
       dependencies: dependencies ?? this.dependencies,
       multivector: multivector ?? this.multivector,
       thickness: thickness ?? this.thickness,
-      style: style ?? this.style,
-      color: color ?? this.color,
+      lineStyle: lineStyle ?? this.lineStyle,
+      color: resolvedColor,
       visible: visible ?? this.visible,
+      styleOverrides: overrides,
     );
   }
 
@@ -250,15 +266,17 @@ class GeoLine2P extends GeoLine {
       'b': b,
       'c': c,
       'thickness': thickness,
-      'style': style.toString().split('.').last,
+      'lineStyle': lineStyle.toString().split('.').last,
     };
     return json;
   }
 
   static GeoLine2P fromJson(Map<String, dynamic> json) {
     final props = json['properties'] as Map<String, dynamic>;
-    final colorHex = (json['color'] as String).replaceAll('#', '');
+    final styleOverrides = GeometryObject.extractStyleOverrides(json);
+    final color = GeometryObject.colorFromJson(json, Colors.blue);
     final deps = (json['dependencies'] as List).cast<String>();
+    final lineStyleToken = props['lineStyle'] ?? props['style'];
 
     return GeoLine2P(
       id: json['id'] as String,
@@ -267,9 +285,10 @@ class GeoLine2P extends GeoLine {
       multivector:
           Multivector.zero(), // Will be recalculated during DAG reconstruction
       thickness: (props['thickness'] as num?)?.toDouble() ?? 2.0,
-      style: _parseLineStyle(props['style'] as String?),
-      color: Color(int.parse(colorHex, radix: 16)),
+      lineStyle: GeoLine2P._parseLineStyle(lineStyleToken as String?),
+      color: color,
       visible: json['visible'] as bool? ?? true,
+      styleOverrides: styleOverrides,
     );
   }
 
@@ -293,9 +312,10 @@ class GeoPerpendicularBisector extends GeoLine {
     required super.dependencies,
     required super.multivector,
     super.thickness,
-    super.style,
+    super.lineStyle,
     super.color = Colors.cyan,
     super.visible,
+    super.styleOverrides,
   });
 
   static GeoPerpendicularBisector fromPoints({
@@ -304,7 +324,7 @@ class GeoPerpendicularBisector extends GeoLine {
     required GeoPoint p1,
     required GeoPoint p2,
     double thickness = 2.0,
-    LineStyle style = LineStyle.solid,
+    LineStyle lineStyle = LineStyle.solid,
     Color color = Colors.cyan,
     bool visible = true,
   }) {
@@ -317,7 +337,7 @@ class GeoPerpendicularBisector extends GeoLine {
       dependencies: [p1.id, p2.id],
       multivector: mv,
       thickness: thickness,
-      style: style,
+      lineStyle: lineStyle,
       color: color,
       visible: visible,
     );
@@ -333,19 +353,23 @@ class GeoPerpendicularBisector extends GeoLine {
     double? b,
     double? c,
     double? thickness,
-    LineStyle? style,
+    LineStyle? lineStyle,
     Color? color,
     bool? visible,
+    CanvasStyle? style,
   }) {
+    final overrides = resolveStyleOverrides(style);
+    final resolvedColor = resolveColor(color, style);
     return GeoPerpendicularBisector(
       id: id ?? this.id,
       label: label ?? this.label,
       dependencies: dependencies ?? this.dependencies,
       multivector: multivector ?? this.multivector,
       thickness: thickness ?? this.thickness,
-      style: style ?? this.style,
-      color: color ?? this.color,
+      lineStyle: lineStyle ?? this.lineStyle,
+      color: resolvedColor,
       visible: visible ?? this.visible,
+      styleOverrides: overrides,
     );
   }
 
@@ -360,15 +384,17 @@ class GeoPerpendicularBisector extends GeoLine {
       'b': b,
       'c': c,
       'thickness': thickness,
-      'style': style.toString().split('.').last,
+      'lineStyle': lineStyle.toString().split('.').last,
     };
     return json;
   }
 
   static GeoPerpendicularBisector fromJson(Map<String, dynamic> json) {
     final props = json['properties'] as Map<String, dynamic>;
-    final colorHex = (json['color'] as String).replaceAll('#', '');
+    final styleOverrides = GeometryObject.extractStyleOverrides(json);
+    final color = GeometryObject.colorFromJson(json, Colors.cyan);
     final deps = (json['dependencies'] as List).cast<String>();
+    final lineStyleToken = props['lineStyle'] ?? props['style'];
 
     return GeoPerpendicularBisector(
       id: json['id'] as String,
@@ -377,9 +403,10 @@ class GeoPerpendicularBisector extends GeoLine {
       multivector:
           Multivector.zero(), // Will be recalculated during DAG reconstruction
       thickness: (props['thickness'] as num?)?.toDouble() ?? 2.0,
-      style: GeoLine2P._parseLineStyle(props['style'] as String?),
-      color: Color(int.parse(colorHex, radix: 16)),
+      lineStyle: GeoLine2P._parseLineStyle(lineStyleToken as String?),
+      color: color,
       visible: json['visible'] as bool? ?? true,
+      styleOverrides: styleOverrides,
     );
   }
 }
@@ -392,9 +419,10 @@ class GeoPerpendicularLine extends GeoLine {
     required super.dependencies,
     required super.multivector,
     super.thickness,
-    super.style,
+    super.lineStyle,
     super.color = Colors.orange,
     super.visible,
+    super.styleOverrides,
   });
 
   /// Create perpendicular line to another line through a point
@@ -404,7 +432,7 @@ class GeoPerpendicularLine extends GeoLine {
     required GeoLine line,
     required GeoPoint point,
     double thickness = 2.0,
-    LineStyle style = LineStyle.solid,
+    LineStyle lineStyle = LineStyle.solid,
     Color color = Colors.orange,
     bool visible = true,
   }) {
@@ -416,7 +444,7 @@ class GeoPerpendicularLine extends GeoLine {
       dependencies: [line.id, point.id],
       multivector: mv,
       thickness: thickness,
-      style: style,
+      lineStyle: lineStyle,
       color: color,
       visible: visible,
     );
@@ -432,19 +460,23 @@ class GeoPerpendicularLine extends GeoLine {
     double? b,
     double? c,
     double? thickness,
-    LineStyle? style,
+    LineStyle? lineStyle,
     Color? color,
     bool? visible,
+    CanvasStyle? style,
   }) {
+    final overrides = resolveStyleOverrides(style);
+    final resolvedColor = resolveColor(color, style);
     return GeoPerpendicularLine(
       id: id ?? this.id,
       label: label ?? this.label,
       dependencies: dependencies ?? this.dependencies,
       multivector: multivector ?? this.multivector,
       thickness: thickness ?? this.thickness,
-      style: style ?? this.style,
-      color: color ?? this.color,
+      lineStyle: lineStyle ?? this.lineStyle,
+      color: resolvedColor,
       visible: visible ?? this.visible,
+      styleOverrides: overrides,
     );
   }
 
@@ -459,15 +491,17 @@ class GeoPerpendicularLine extends GeoLine {
       'b': b,
       'c': c,
       'thickness': thickness,
-      'style': style.toString().split('.').last,
+      'lineStyle': lineStyle.toString().split('.').last,
     };
     return json;
   }
 
   static GeoPerpendicularLine fromJson(Map<String, dynamic> json) {
     final props = json['properties'] as Map<String, dynamic>;
-    final colorHex = (json['color'] as String).replaceAll('#', '');
+    final styleOverrides = GeometryObject.extractStyleOverrides(json);
+    final color = GeometryObject.colorFromJson(json, Colors.orange);
     final deps = (json['dependencies'] as List).cast<String>();
+    final lineStyleToken = props['lineStyle'] ?? props['style'];
 
     return GeoPerpendicularLine(
       id: json['id'] as String,
@@ -476,9 +510,10 @@ class GeoPerpendicularLine extends GeoLine {
       multivector:
           Multivector.zero(), // Will be recalculated during DAG reconstruction
       thickness: (props['thickness'] as num?)?.toDouble() ?? 2.0,
-      style: GeoLine2P._parseLineStyle(props['style'] as String?),
-      color: Color(int.parse(colorHex, radix: 16)),
+      lineStyle: GeoLine2P._parseLineStyle(lineStyleToken as String?),
+      color: color,
       visible: json['visible'] as bool? ?? true,
+      styleOverrides: styleOverrides,
     );
   }
 }
@@ -491,9 +526,10 @@ class GeoParallelLine extends GeoLine {
     required super.dependencies,
     required super.multivector,
     super.thickness,
-    super.style,
+    super.lineStyle,
     super.color = Colors.teal,
     super.visible,
+    super.styleOverrides,
   });
 
   /// Create parallel line to another line through a point
@@ -503,7 +539,7 @@ class GeoParallelLine extends GeoLine {
     required GeoLine line,
     required GeoPoint point,
     double thickness = 2.0,
-    LineStyle style = LineStyle.solid,
+    LineStyle lineStyle = LineStyle.solid,
     Color color = Colors.teal,
     bool visible = true,
   }) {
@@ -515,7 +551,7 @@ class GeoParallelLine extends GeoLine {
       dependencies: [line.id, point.id],
       multivector: mv,
       thickness: thickness,
-      style: style,
+      lineStyle: lineStyle,
       color: color,
       visible: visible,
     );
@@ -531,19 +567,23 @@ class GeoParallelLine extends GeoLine {
     double? b,
     double? c,
     double? thickness,
-    LineStyle? style,
+    LineStyle? lineStyle,
     Color? color,
     bool? visible,
+    CanvasStyle? style,
   }) {
+    final overrides = resolveStyleOverrides(style);
+    final resolvedColor = resolveColor(color, style);
     return GeoParallelLine(
       id: id ?? this.id,
       label: label ?? this.label,
       dependencies: dependencies ?? this.dependencies,
       multivector: multivector ?? this.multivector,
       thickness: thickness ?? this.thickness,
-      style: style ?? this.style,
-      color: color ?? this.color,
+      lineStyle: lineStyle ?? this.lineStyle,
+      color: resolvedColor,
       visible: visible ?? this.visible,
+      styleOverrides: overrides,
     );
   }
 
@@ -558,15 +598,17 @@ class GeoParallelLine extends GeoLine {
       'b': b,
       'c': c,
       'thickness': thickness,
-      'style': style.toString().split('.').last,
+      'lineStyle': lineStyle.toString().split('.').last,
     };
     return json;
   }
 
   static GeoParallelLine fromJson(Map<String, dynamic> json) {
     final props = json['properties'] as Map<String, dynamic>;
-    final colorHex = (json['color'] as String).replaceAll('#', '');
+    final styleOverrides = GeometryObject.extractStyleOverrides(json);
+    final color = GeometryObject.colorFromJson(json, Colors.teal);
     final deps = (json['dependencies'] as List).cast<String>();
+    final lineStyleToken = props['lineStyle'] ?? props['style'];
 
     return GeoParallelLine(
       id: json['id'] as String,
@@ -575,9 +617,10 @@ class GeoParallelLine extends GeoLine {
       multivector:
           Multivector.zero(), // Will be recalculated during DAG reconstruction
       thickness: (props['thickness'] as num?)?.toDouble() ?? 2.0,
-      style: GeoLine2P._parseLineStyle(props['style'] as String?),
-      color: Color(int.parse(colorHex, radix: 16)),
+      lineStyle: GeoLine2P._parseLineStyle(lineStyleToken as String?),
+      color: color,
       visible: json['visible'] as bool? ?? true,
+      styleOverrides: styleOverrides,
     );
   }
 }

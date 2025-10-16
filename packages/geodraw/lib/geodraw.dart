@@ -7,6 +7,7 @@ library;
 // Core abstractions
 export 'models/canvas_object.dart';
 export 'models/geometry_object.dart';
+export 'models/text/canvas_text.dart';
 
 // Simple geometry objects
 export 'models/simple/geo_point.dart';
@@ -52,4 +53,4 @@ export 'ai/ai_adapter.dart';
 
 // Command system (new simplified system)
 // Exports: SimpleExecutor, CommandParser, CommandSchema, Verifiers, ObjectResolver
-export 'command/command.dart';
+export 'core/command/command.dart';

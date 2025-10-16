@@ -13,8 +13,8 @@ import 'problem_state.dart';
 /// Follows constitutional requirement for BLoC state management
 class ProblemBloc extends Bloc<ProblemEvent, ProblemState> {
   ProblemBloc({required GraphQLClient graphQLClient})
-    : _graphQLClient = graphQLClient,
-      super(const ProblemInitial()) {
+      : _graphQLClient = graphQLClient,
+        super(const ProblemInitial()) {
     on<FetchProblems>(_onFetchProblems);
     on<LoadMoreProblems>(_onLoadMoreProblems);
     on<CreateProblem>(_onCreateProblem);
@@ -163,28 +163,27 @@ class ProblemBloc extends Bloc<ProblemEvent, ProblemState> {
         ),
       );
 
-      // Use REST API for create since GraphQL has schema issues with file relationships
-      final response = await http.post(
-        Uri.parse('http://192.168.1.3:8055/items/problems'),
-        headers: {'Content-Type': 'application/json'},
-        body: json.encode({
-          'title': event.title,
-          'description': event.description,
-          'difficulty': event.difficulty.name,
-          'category': event.category.name,
-          'geometry_data': event.geometryData,
-          'solution': event.solution,
-          if (event.thumbnailId != null) 'thumbnail': event.thumbnailId,
-        }),
+      // Use GraphQL mutation (works for both Hasura and Directus)
+      final result = await _graphQLClient.mutate(
+        MutationOptions(
+          document: gql(ProblemQueries.createProblem),
+          variables: {
+            'title': event.title,
+            'description': event.description,
+            'difficulty': event.difficulty.name,
+            'category': event.category.name,
+            'geometry_data': event.geometryData,
+            'solution': event.solution,
+            if (event.thumbnailId != null) 'thumbnail_id': event.thumbnailId,
+          },
+        ),
       );
 
-      print('DEBUG: REST API response status: ${response.statusCode}');
-
-      if (response.statusCode != 200 && response.statusCode != 201) {
-        print('DEBUG: REST API error: ${response.body}');
+      if (result.hasException) {
+        print('DEBUG: GraphQL error: ${result.exception.toString()}');
         emit(
           ProblemError(
-            message: 'Failed to create problem: ${response.body}',
+            message: 'Failed to create problem: ${result.exception.toString()}',
             currentProblems: _allProblems,
           ),
         );
@@ -192,8 +191,22 @@ class ProblemBloc extends Bloc<ProblemEvent, ProblemState> {
       }
 
       print('DEBUG: Problem created successfully');
-      final responseData = json.decode(response.body);
-      final newProblem = Problem.fromJson(responseData['data']);
+      // Handle response from both Hasura and Directus
+      final problemData = result.data?['insert_problems_one'] ??
+          result.data?['create_problems_item'];
+
+      if (problemData == null) {
+        print('DEBUG: No problem data in response');
+        emit(
+          ProblemError(
+            message: 'Failed to create problem: No data returned',
+            currentProblems: _allProblems,
+          ),
+        );
+        return;
+      }
+
+      final newProblem = Problem.fromJson(problemData);
       print(
         'DEBUG: New problem ID: ${newProblem.id}, ThumbnailId: ${newProblem.thumbnailId}',
       );

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -35,6 +36,10 @@ class _ProblemFormScreenState extends State<ProblemFormScreen> {
   ProblemMetadata? _metadata;
   bool _isAuthenticated = false;
   bool _isSavingThumbnail = false;
+  double _paletteWidth = 330;
+  static const double _minPaletteWidth = 220;
+  static const double _paletteHandleWidth = 12;
+  static const double _minCanvasWidth = 360;
 
   @override
   void initState() {
@@ -156,10 +161,38 @@ class _ProblemFormScreenState extends State<ProblemFormScreen> {
         final showSidePanel = constraints.maxWidth > 960;
         final sidePanelWidth = showSidePanel ? 320.0 : 280.0;
 
+        final maxPaletteSpace = constraints.maxWidth -
+            sidePanelWidth -
+            _paletteHandleWidth -
+            _minCanvasWidth;
+
+        final maxAllowedPaletteWidth = math.max(
+          _minPaletteWidth,
+          math.min(
+            constraints.maxWidth * 0.65,
+            maxPaletteSpace,
+          ),
+        );
+
+        final minAllowedPaletteWidth = math.min(
+          _minPaletteWidth,
+          maxAllowedPaletteWidth,
+        );
+
+        final clampedPaletteWidth = _paletteWidth.clamp(
+          minAllowedPaletteWidth,
+          maxAllowedPaletteWidth,
+        );
+
+        if (clampedPaletteWidth != _paletteWidth) {
+          _paletteWidth = clampedPaletteWidth;
+        }
+
         return Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             SizedBox(
-              width: 220,
+              width: _paletteWidth,
               child: ToolPalette(
                 toolManager: _toolManager,
                 onToolSelected: (tool) {
@@ -168,6 +201,19 @@ class _ProblemFormScreenState extends State<ProblemFormScreen> {
                   });
                 },
               ),
+            ),
+            _PaletteResizeHandle(
+              width: _paletteHandleWidth,
+              onDrag: (delta) {
+                if (delta == 0) return;
+                setState(() {
+                  final newWidth = (_paletteWidth + delta).clamp(
+                    minAllowedPaletteWidth,
+                    maxAllowedPaletteWidth,
+                  );
+                  _paletteWidth = newWidth;
+                });
+              },
             ),
             Expanded(
               child: Container(
@@ -436,6 +482,40 @@ class _ProblemFormScreenState extends State<ProblemFormScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
           content: Text('Unable to capture thumbnail. Continue anyway.')),
+    );
+  }
+}
+
+class _PaletteResizeHandle extends StatelessWidget {
+  const _PaletteResizeHandle({required this.width, required this.onDrag});
+
+  final double width;
+  final ValueChanged<double> onDrag;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return MouseRegion(
+      cursor: SystemMouseCursors.resizeColumn,
+      child: GestureDetector(
+        behavior: HitTestBehavior.translucent,
+        onPanUpdate: (details) => onDrag(details.delta.dx),
+        child: Container(
+          width: width,
+          color: Colors.transparent,
+          child: Center(
+            child: Container(
+              width: 2,
+              height: 48,
+              decoration: BoxDecoration(
+                color: theme.dividerColor.withOpacity(0.8),
+                borderRadius: BorderRadius.circular(999),
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
