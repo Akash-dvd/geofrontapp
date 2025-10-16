@@ -5,7 +5,6 @@ import '../dag/dag_manager.dart';
 import 'object_resolver.dart';
 import 'simple_executor.dart';
 import 'command_registry.dart';
-import '../../tools/tool.dart';
 
 /// Exception thrown when command parsing fails.
 class CommandParserException implements Exception {
@@ -21,13 +20,11 @@ class CommandParserException implements Exception {
 class ParsedCommand {
   final String originalInput;
   final String canonicalName;
-  final ToolType toolType;
   final List<dynamic> arguments;
 
   ParsedCommand({
     required this.originalInput,
     required this.canonicalName,
-    required this.toolType,
     required List<dynamic> arguments,
   }) : arguments = List<dynamic>.unmodifiable(arguments);
 }
@@ -68,7 +65,6 @@ class CommandParser {
     return ParsedCommand(
       originalInput: commandString,
       canonicalName: definition.name,
-      toolType: definition.toolType,
       arguments: args,
     );
   }
@@ -76,7 +72,7 @@ class CommandParser {
   /// Execute a pre-parsed command.
   Future<ExecutionResult> executeParsed(ParsedCommand command) async {
     return executor.execute(
-      type: command.toolType,
+      commandName: command.canonicalName,
       arguments: command.arguments,
     );
   }

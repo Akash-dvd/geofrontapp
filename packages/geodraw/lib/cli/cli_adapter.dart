@@ -5,10 +5,10 @@ import '../cli/cli.dart';
 import '../core/dag/dag_manager.dart';
 import '../core/command/command_parser.dart' as cmd;
 import '../core/command/simple_executor.dart' as executor;
-import '../core/command/cli_verifier.dart';
+// import '../core/command/cli_verifier.dart';
+import 'cli_verifier.dart';
 import '../core/command/command_registry.dart';
 import '../core/command/command_history_entry.dart';
-import '../tools/tool.dart';
 
 /// Thin wrapper: CLI input → validate → parse → execute
 class CLIAdapter {
@@ -27,14 +27,14 @@ class CLIAdapter {
   /// Parse CLI command → validate → execute
   Future<ExecutionResult> executeCommand(Command cliCommand) async {
     try {
-      // 1. Check if command is valid (parser already mapped to ToolType)
-      if (cliCommand.toolType == null) {
+      final definition = _registry.definitionByName(cliCommand.name);
+      if (definition == null) {
         return ExecutionResult.error('Unknown command: ${cliCommand.name}');
       }
 
       // 2. Verify all arguments at once (CLI provides complete command)
       final validation = verifier.verifyCommand(
-        cliCommand.toolType!,
+        definition.name,
         cliCommand.arguments,
       );
 
@@ -45,7 +45,10 @@ class CLIAdapter {
       }
 
       // 3. Use parser to execute - convert Command to command string format
-      final commandString = _toCommandString(cliCommand);
+      final commandString = _toCommandString(
+        definition.name,
+        cliCommand.arguments,
+      );
       final result = await parser.parseAndExecute(commandString);
 
       // 4. Convert result format
@@ -56,16 +59,14 @@ class CLIAdapter {
   }
 
   /// Convert CLI Command to command string format
-  String _toCommandString(Command cmd) {
-    final argsString = cmd.arguments
+  String _toCommandString(String canonicalName, List<dynamic> arguments) {
+    final argsString = arguments
         .map((arg) {
           if (arg is String) return '"$arg"';
           return arg.toString();
         })
         .join(', ');
-    final canonical = _registry.canonicalNameForType(cmd.toolType!);
-    final name = canonical ?? cmd.name;
-    return '$name($argsString)';
+    return '$canonicalName($argsString)';
   }
 
   /// Convert SimpleExecutor's ExecutionResult to CLI's ExecutionResult
@@ -95,9 +96,10 @@ class UnifiedCLIExecutor {
   Future<ExecutionResult> execute(Command command) async {
     try {
       final result = await adapter.executeCommand(command);
+      final canonical =
+          adapter.registry.definitionByName(command.name)?.name ?? command.name;
       final entry = _buildEntry(
-        type: command.toolType,
-        fallbackName: command.name,
+        commandName: canonical,
         arguments: command.arguments,
         objectId: result.objectId,
       );
@@ -105,9 +107,10 @@ class UnifiedCLIExecutor {
       return result;
     } catch (e) {
       final errorResult = ExecutionResult.error(e.toString());
+      final canonical =
+          adapter.registry.definitionByName(command.name)?.name ?? command.name;
       final entry = _buildEntry(
-        type: command.toolType,
-        fallbackName: command.name,
+        commandName: canonical,
         arguments: command.arguments,
         objectId: 'error',
       );
@@ -155,17 +158,14 @@ class UnifiedCLIExecutor {
   }
 
   CommandHistoryEntry _buildEntry({
-    ToolType? type,
-    required String fallbackName,
+    required String commandName,
     required List<dynamic> arguments,
     String? objectId,
   }) {
-    final canonical = type != null
-        ? adapter.registry.canonicalNameForType(type) ?? fallbackName
-        : fallbackName;
+    final canonical = commandName;
 
     return CommandHistoryEntry(
-      commandId: objectId ?? fallbackName,
+      commandId: objectId ?? canonical,
       canonicalName: canonical,
       arguments: arguments,
     );

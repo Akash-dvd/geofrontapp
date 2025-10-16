@@ -3,14 +3,14 @@ library;
 
 import 'dart:collection';
 
-import '../../tools/tool.dart';
 import 'command_definition.dart';
 import 'command_schema.dart';
+import 'command_runtime.dart';
 import '../../models/simple/geo_point.dart';
 import '../../models/simple/geo_line.dart';
 import '../../models/simple/geo_circle.dart';
 
-/// Stores command definitions and provides lookup by name or tool type
+/// Stores command definitions and provides lookup by name
 class CommandRegistry {
   CommandRegistry._internal() {
     _registerDefaults();
@@ -20,31 +20,56 @@ class CommandRegistry {
   static final CommandRegistry standard = CommandRegistry._internal();
 
   final Map<String, CommandDefinition> _byName = HashMap();
-  final Map<ToolType, CommandDefinition> _byType = HashMap();
+  final LinkedHashSet<CommandDefinition> _definitions =
+      LinkedHashSet<CommandDefinition>.identity();
+
+  int _pointLabelCounter = 0;
+  int _lineLabelCounter = 0;
+  int _circleLabelCounter = 0;
+  int _circleThreeLabelCounter = 0;
+  int _midpointLabelCounter = 0;
+  int _perpendicularLabelCounter = 0;
+  int _parallelLabelCounter = 0;
+  int _perpBisectorLabelCounter = 0;
 
   void _registerDefaults() {
     // Register core geometry constructors
     _register(
       CommandDefinition(
         name: 'point',
-        toolType: ToolType.point,
         description: 'Create a free point at coordinates',
         schema: CommandSchema(
           description: 'Free point',
-          createsObject: true,
           argumentTypes: [
             TypeConstraint.numeric(description: 'x-coordinate'),
             TypeConstraint.numeric(description: 'y-coordinate'),
           ],
           argumentHints: ['Enter x-coordinate', 'Enter y-coordinate'],
         ),
+        executor: (context, arguments) async {
+          final x = (arguments[0] as num).toDouble();
+          final y = (arguments[1] as num).toDouble();
+          final point = GeoPointer(
+            id: context.generateId('point'),
+            label: context.resolveLabel(_nextPointLabel),
+            x: x,
+            y: y,
+          );
+
+          context.dagManager.addObject(point, []);
+
+          return ExecutionResult.successful(
+            objectId: point.id,
+            message: 'Created ${point.label}',
+            object: point,
+          );
+        },
       ),
     );
 
     _register(
       CommandDefinition(
         name: 'line',
-        toolType: ToolType.line,
         description: 'Create a line through two points',
         schema: CommandSchema(
           description: 'Line through points',
@@ -61,13 +86,30 @@ class CommandRegistry {
           argumentHints: ['Select first point', 'Select second point'],
         ),
         aliases: const ['segment', 'lineSegment'],
+        executor: (context, arguments) async {
+          final p1 = arguments[0] as GeoPoint;
+          final p2 = arguments[1] as GeoPoint;
+          final line = GeoLine2P.fromPoints(
+            id: context.generateId('line'),
+            label: context.resolveLabel(_nextLineLabel),
+            p1: p1,
+            p2: p2,
+          );
+
+          context.dagManager.addObject(line, [p1.id, p2.id]);
+
+          return ExecutionResult.successful(
+            objectId: line.id,
+            message: 'Created ${line.label}',
+            object: line,
+          );
+        },
       ),
     );
 
     _register(
       CommandDefinition(
         name: 'circle',
-        toolType: ToolType.circle,
         description: 'Create a circle with center and point',
         schema: CommandSchema(
           description: 'Circle with center and point',
@@ -83,13 +125,30 @@ class CommandRegistry {
           ],
           argumentHints: ['Select center point', 'Select point on circle'],
         ),
+        executor: (context, arguments) async {
+          final center = arguments[0] as GeoPoint;
+          final pointOnCircle = arguments[1] as GeoPoint;
+          final circle = GeoCircle2P.fromPoints(
+            id: context.generateId('circle'),
+            label: context.resolveLabel(_nextCircleLabel),
+            center: center,
+            pointOnCircle: pointOnCircle,
+          );
+
+          context.dagManager.addObject(circle, [center.id, pointOnCircle.id]);
+
+          return ExecutionResult.successful(
+            objectId: circle.id,
+            message: 'Created ${circle.label}',
+            object: circle,
+          );
+        },
       ),
     );
 
     _register(
       CommandDefinition(
         name: 'circle3',
-        toolType: ToolType.circleThreePoints,
         description: 'Create a circle through three points',
         aliases: const ['circleThrough3', 'circumcircle'],
         schema: CommandSchema(
@@ -114,13 +173,38 @@ class CommandRegistry {
             'Select third point',
           ],
         ),
+        executor: (context, arguments) async {
+          final p1 = arguments[0] as GeoPoint;
+          final p2 = arguments[1] as GeoPoint;
+          final p3 = arguments[2] as GeoPoint;
+          final circle = GeoCircle3P.fromPoints(
+            id: context.generateId('circle'),
+            label: context.resolveLabel(_nextCircleThreeLabel),
+            p1: p1,
+            p2: p2,
+            p3: p3,
+          );
+
+          if (circle == null) {
+            return ExecutionResult.error(
+              'Cannot create circle: points are collinear',
+            );
+          }
+
+          context.dagManager.addObject(circle, [p1.id, p2.id, p3.id]);
+
+          return ExecutionResult.successful(
+            objectId: circle.id,
+            message: 'Created ${circle.label}',
+            object: circle,
+          );
+        },
       ),
     );
 
     _register(
       CommandDefinition(
         name: 'midpoint',
-        toolType: ToolType.midpoint,
         description: 'Create midpoint of two points',
         schema: CommandSchema(
           description: 'Midpoint between two points',
@@ -136,13 +220,30 @@ class CommandRegistry {
           ],
           argumentHints: ['Select first point', 'Select second point'],
         ),
+        executor: (context, arguments) async {
+          final p1 = arguments[0] as GeoPoint;
+          final p2 = arguments[1] as GeoPoint;
+          final midpoint = GeoMidpoint.fromPoints(
+            id: context.generateId('midpoint'),
+            label: context.resolveLabel(_nextMidpointLabel),
+            p1: p1,
+            p2: p2,
+          );
+
+          context.dagManager.addObject(midpoint, [p1.id, p2.id]);
+
+          return ExecutionResult.successful(
+            objectId: midpoint.id,
+            message: 'Created ${midpoint.label}',
+            object: midpoint,
+          );
+        },
       ),
     );
 
     _register(
       CommandDefinition(
         name: 'perpendicular',
-        toolType: ToolType.perpendicular,
         description: 'Create perpendicular line through a point',
         aliases: const ['perp'],
         schema: CommandSchema(
@@ -159,13 +260,30 @@ class CommandRegistry {
           ],
           argumentHints: ['Select reference line', 'Select point'],
         ),
+        executor: (context, arguments) async {
+          final reference = arguments[0] as GeoLine;
+          final point = arguments[1] as GeoPoint;
+          final perpendicular = GeoPerpendicularLine.fromLine(
+            id: context.generateId('line'),
+            label: context.resolveLabel(_nextPerpendicularLabel),
+            line: reference,
+            point: point,
+          );
+
+          context.dagManager.addObject(perpendicular, [reference.id, point.id]);
+
+          return ExecutionResult.successful(
+            objectId: perpendicular.id,
+            message: 'Created ${perpendicular.label}',
+            object: perpendicular,
+          );
+        },
       ),
     );
 
     _register(
       CommandDefinition(
         name: 'parallel',
-        toolType: ToolType.parallel,
         description: 'Create parallel line through a point',
         aliases: const ['para'],
         schema: CommandSchema(
@@ -182,13 +300,30 @@ class CommandRegistry {
           ],
           argumentHints: ['Select reference line', 'Select point'],
         ),
+        executor: (context, arguments) async {
+          final reference = arguments[0] as GeoLine;
+          final point = arguments[1] as GeoPoint;
+          final parallel = GeoParallelLine.fromLine(
+            id: context.generateId('line'),
+            label: context.resolveLabel(_nextParallelLabel),
+            line: reference,
+            point: point,
+          );
+
+          context.dagManager.addObject(parallel, [reference.id, point.id]);
+
+          return ExecutionResult.successful(
+            objectId: parallel.id,
+            message: 'Created ${parallel.label}',
+            object: parallel,
+          );
+        },
       ),
     );
 
     _register(
       CommandDefinition(
         name: 'perpbisector',
-        toolType: ToolType.perpBisector,
         description: 'Create perpendicular bisector of segment',
         aliases: const ['perpbis'],
         schema: CommandSchema(
@@ -205,13 +340,30 @@ class CommandRegistry {
           ],
           argumentHints: ['Select first point', 'Select second point'],
         ),
+        executor: (context, arguments) async {
+          final p1 = arguments[0] as GeoPoint;
+          final p2 = arguments[1] as GeoPoint;
+          final bisector = GeoPerpendicularBisector.fromPoints(
+            id: context.generateId('line'),
+            label: context.resolveLabel(_nextPerpBisectorLabel),
+            p1: p1,
+            p2: p2,
+          );
+
+          context.dagManager.addObject(bisector, [p1.id, p2.id]);
+
+          return ExecutionResult.successful(
+            objectId: bisector.id,
+            message: 'Created ${bisector.label}',
+            object: bisector,
+          );
+        },
       ),
     );
 
     _register(
       CommandDefinition(
         name: 'intersection',
-        toolType: ToolType.intersection,
         description: 'Find intersection of simple objects',
         schema: CommandSchema(
           description: 'Intersection',
@@ -228,6 +380,9 @@ class CommandRegistry {
           argumentHints: ['Select first object', 'Select second object'],
         ),
         implemented: false,
+        executor: (context, arguments) async {
+          return ExecutionResult.error('Intersection is not implemented');
+        },
       ),
     );
   }
@@ -235,7 +390,7 @@ class CommandRegistry {
   void _register(CommandDefinition definition) {
     final canonicalName = definition.name.toLowerCase();
     _byName[canonicalName] = definition;
-    _byType[definition.toolType] = definition;
+    _definitions.add(definition);
     for (final alias in definition.aliases) {
       _byName[alias.toLowerCase()] = definition;
     }
@@ -245,22 +400,22 @@ class CommandRegistry {
     return _byName[name.toLowerCase()];
   }
 
-  CommandDefinition? definitionByType(ToolType type) => _byType[type];
-
-  CommandSchema? schemaFor(ToolType type) => definitionByType(type)?.schema;
-
-  Iterable<CommandDefinition> get allDefinitions => _byType.values;
-
-  bool isSupported(ToolType type) => _byType.containsKey(type);
-
-  bool isImplemented(ToolType type) {
-    final def = definitionByType(type);
-    return def?.implemented ?? false;
-  }
-
   Iterable<String> commandNames() => _byName.keys;
 
-  ToolType? toolTypeForName(String name) => definitionByName(name)?.toolType;
+  Iterable<CommandDefinition> get allDefinitions =>
+      UnmodifiableListView(_definitions);
 
-  String? canonicalNameForType(ToolType type) => definitionByType(type)?.name;
+  CommandSchema? schemaForName(String name) => definitionByName(name)?.schema;
+
+  bool isImplemented(String name) =>
+      definitionByName(name)?.implemented ?? false;
+
+  String _nextPointLabel() => 'P${++_pointLabelCounter}';
+  String _nextLineLabel() => 'L${++_lineLabelCounter}';
+  String _nextCircleLabel() => 'C${++_circleLabelCounter}';
+  String _nextCircleThreeLabel() => 'C3-${++_circleThreeLabelCounter}';
+  String _nextMidpointLabel() => 'M${++_midpointLabelCounter}';
+  String _nextPerpendicularLabel() => 'Perp${++_perpendicularLabelCounter}';
+  String _nextParallelLabel() => 'Par${++_parallelLabelCounter}';
+  String _nextPerpBisectorLabel() => 'Bis${++_perpBisectorLabelCounter}';
 }

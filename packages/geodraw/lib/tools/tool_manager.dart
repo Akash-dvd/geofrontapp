@@ -184,6 +184,9 @@ class _PointTool extends UnifiedTool {
   ToolType get type => ToolType.point;
 
   @override
+  String get commandName => 'point';
+
+  @override
   String get name => 'Point';
 
   @override
@@ -202,7 +205,7 @@ class _PointTool extends UnifiedTool {
   Future<void> _createPointAt(Offset position) async {
     try {
       final result = await executor.execute(
-        type: ToolType.point,
+        commandName: commandName,
         arguments: [position.dx, position.dy],
       );
 
@@ -246,6 +249,9 @@ class _LineTool extends UnifiedTool {
 
   @override
   ToolType get type => ToolType.line;
+
+  @override
+  String get commandName => 'line';
 
   @override
   String get name => 'Line';
@@ -303,6 +309,9 @@ class _CircleTool extends UnifiedTool {
 
   @override
   ToolType get type => ToolType.circle;
+
+  @override
+  String get commandName => 'circle';
 
   @override
   String get name => 'Circle';

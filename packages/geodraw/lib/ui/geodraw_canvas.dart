@@ -60,28 +60,98 @@ class _GeoDrawCanvasState extends State<GeoDrawCanvas> {
           constraints.maxHeight,
         );
 
-        return GestureDetector(
-          onTapDown: _handleTapDown,
-          onPanStart: _handlePanStart,
-          onPanUpdate: _handlePanUpdate,
-          onPanEnd: _handlePanEnd,
-          child: Listener(
-            onPointerSignal: _handlePointerSignal,
-            child: CustomPaint(
-              painter: GeoDrawCanvasPainter(
-                dagManager: widget.dagManager,
-                viewport: _viewport!,
-                selectedIds: widget.selectedIds,
-                showGrid: widget.showGrid,
-                backgroundColor: widget.backgroundColor,
-                gridColor: widget.gridColor,
+        return Stack(
+          children: [
+            Positioned.fill(child: _buildCanvasContent()),
+            Align(
+              alignment: Alignment.topLeft,
+              child: SafeArea(
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: _buildHistoryControls(context),
+                ),
               ),
-              child: Container(),
             ),
-          ),
+          ],
         );
       },
     );
+  }
+
+  Widget _buildCanvasContent() {
+    return GestureDetector(
+      onTapDown: _handleTapDown,
+      onPanStart: _handlePanStart,
+      onPanUpdate: _handlePanUpdate,
+      onPanEnd: _handlePanEnd,
+      child: Listener(
+        onPointerSignal: _handlePointerSignal,
+        child: CustomPaint(
+          painter: GeoDrawCanvasPainter(
+            dagManager: widget.dagManager,
+            viewport: _viewport!,
+            selectedIds: widget.selectedIds,
+            showGrid: widget.showGrid,
+            backgroundColor: widget.backgroundColor,
+            gridColor: widget.gridColor,
+          ),
+          child: Container(),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHistoryControls(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    return Material(
+      elevation: 4,
+      borderRadius: BorderRadius.circular(12),
+      color: colorScheme.surfaceVariant.withOpacity(0.9),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 4),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Tooltip(
+              message: 'Undo',
+              child: IconButton(
+                icon: const Icon(Icons.undo),
+                onPressed: widget.dagManager.canUndo ? _handleUndo : null,
+              ),
+            ),
+            Tooltip(
+              message: 'Redo',
+              child: IconButton(
+                icon: const Icon(Icons.redo),
+                onPressed: widget.dagManager.canRedo ? _handleRedo : null,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _handleUndo() {
+    if (!widget.dagManager.canUndo) return;
+    final changed = widget.dagManager.undo();
+    if (changed) {
+      setState(() {
+        _viewport = widget.dagManager.viewport ?? _viewport;
+      });
+    }
+  }
+
+  void _handleRedo() {
+    if (!widget.dagManager.canRedo) return;
+    final changed = widget.dagManager.redo();
+    if (changed) {
+      setState(() {
+        _viewport = widget.dagManager.viewport ?? _viewport;
+      });
+    }
   }
 
   void _handleTapDown(TapDownDetails details) {

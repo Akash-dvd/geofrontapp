@@ -4,7 +4,8 @@ library;
 import 'package:flutter/material.dart';
 
 import '../core/command/simple_executor.dart';
-import '../core/command/tool_verifier.dart';
+// import '../core/command/tool_verifier.dart';
+import 'tool_verifier.dart';
 import '../core/command/command_history.dart';
 import '../core/command/command_history_entry.dart';
 import '../core/dag/dag_manager.dart';
@@ -30,8 +31,10 @@ abstract class UnifiedTool implements Tool {
     this.onToolStateChanged,
     this.commandHistory,
   }) : executor = SimpleExecutor(dagManager) {
-    verifier = ToolVerifier(type, registry: dagManager.commandRegistry);
+    verifier = ToolVerifier(commandName, registry: dagManager.commandRegistry);
   }
+
+  String get commandName;
 
   @override
   void handleInput(PointerEvent event) {
@@ -122,7 +125,7 @@ abstract class UnifiedTool implements Tool {
 
     try {
       final result = await executor.execute(
-        type: type,
+        commandName: commandName,
         arguments: verifier.arguments,
       );
 
@@ -161,11 +164,11 @@ abstract class UnifiedTool implements Tool {
     required ExecutionResult result,
     HistoryMarker? marker,
   }) {
-    final canonical =
-        dagManager.commandRegistry.canonicalNameForType(type) ?? type.name;
+    final definition = dagManager.commandRegistry.definitionByName(commandName);
+    final canonical = definition?.name ?? commandName;
     final commandId =
         result.objectId ??
-        '${type.name}_${DateTime.now().millisecondsSinceEpoch}';
+        '${canonical}_${DateTime.now().millisecondsSinceEpoch}';
 
     return CommandHistoryEntry(
       commandId: commandId,

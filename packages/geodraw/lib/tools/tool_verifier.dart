@@ -1,23 +1,25 @@
 /// Verifier for tool-driven sequential argument collection
 library;
 
-import '../../tools/tool.dart';
-import 'command_registry.dart';
-import 'command_schema.dart';
-import 'command_definition.dart';
+import '../core/command/command_definition.dart';
+import '../core/command/command_registry.dart';
+import '../core/command/command_schema.dart';
 
 class ToolVerifier {
   final CommandDefinition definition;
   final CommandSchema schema;
   final List<dynamic> _currentArgs = [];
 
-  ToolVerifier(ToolType type, {CommandRegistry? registry})
-    : definition =
-          (registry ?? CommandRegistry.standard).definitionByType(type) ??
-          (throw ArgumentError('No command definition found for $type')),
-      schema =
-          (registry ?? CommandRegistry.standard).schemaFor(type) ??
-          (throw ArgumentError('No schema registered for $type'));
+  factory ToolVerifier(String commandName, {CommandRegistry? registry}) {
+    final reg = registry ?? CommandRegistry.standard;
+    final definition = reg.definitionByName(commandName);
+    if (definition == null) {
+      throw ArgumentError('No command definition found for $commandName');
+    }
+    return ToolVerifier._(definition);
+  }
+
+  ToolVerifier._(this.definition) : schema = definition.schema;
 
   ValidationResult addArgument(dynamic arg) {
     if (!schema.canAcceptMore(_currentArgs)) {
