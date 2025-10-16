@@ -2,7 +2,7 @@
 library;
 
 import '../cli/cli.dart';
-import '../dag/dag_manager.dart';
+import '../core/dag/dag_manager.dart';
 import '../core/command/command_parser.dart' as cmd;
 import '../core/command/simple_executor.dart' as executor;
 import '../core/command/cli_verifier.dart';

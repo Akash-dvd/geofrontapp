@@ -6,7 +6,7 @@ export 'decoder.dart';
 
 import 'encoder.dart';
 import 'decoder.dart';
-import '../dag/dag_manager.dart';
+import '../core/dag/dag_manager.dart';
 
 /// Main codec class combining encoder and decoder
 class GeoDrawCodec {

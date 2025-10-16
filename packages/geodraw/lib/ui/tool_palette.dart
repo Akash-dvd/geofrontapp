@@ -224,13 +224,13 @@ class _ToolButton extends StatelessWidget {
     final Color accent = theme.colorScheme.secondary;
     final Color fallbackAccent = Colors.deepOrange.shade400;
     final Color activeColor = accent.opacity == 0 ? fallbackAccent : accent;
-    final Color baseColor = activeColor.withOpacity(0.9);
     final Color disabledColor = activeColor.withOpacity(0.35);
+    final Color hoverColor = activeColor.withOpacity(0.12);
 
     final Color iconColor = isActive
-        ? activeColor
+        ? Colors.white
         : enabled
-        ? baseColor
+        ? activeColor.withOpacity(0.9)
         : disabledColor;
 
     final Color borderColor = isActive
@@ -240,9 +240,9 @@ class _ToolButton extends StatelessWidget {
         : disabledColor;
 
     final Color backgroundColor = isActive
-        ? activeColor.withOpacity(0.22)
+        ? activeColor
         : enabled
-        ? activeColor.withOpacity(0.12)
+        ? hoverColor
         : activeColor.withOpacity(0.06);
 
     return Tooltip(

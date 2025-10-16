@@ -3,7 +3,7 @@ library;
 
 import 'package:flutter/material.dart';
 import '../cli/cli.dart';
-import '../dag/dag_manager.dart';
+import '../core/dag/dag_manager.dart';
 import '../ai/ai_service.dart';
 import '../ai/ai_adapter.dart';
 
@@ -93,6 +93,15 @@ class _UnifiedPromptPanelState extends State<UnifiedPromptPanel> {
             size: 16,
           ),
           const SizedBox(width: 8),
+          Text(
+            _mode == PromptMode.cli ? 'CLI' : 'AI',
+            style: TextStyle(
+              color: Colors.grey[300],
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(width: 12),
 
           // Mode toggle
           Container(
@@ -302,16 +311,6 @@ class _UnifiedPromptPanelState extends State<UnifiedPromptPanel> {
       ),
       child: Row(
         children: [
-          Text(
-            _mode == PromptMode.cli ? '> ' : '✨ ',
-            style: TextStyle(
-              fontFamily: _mode == PromptMode.cli ? 'monospace' : null,
-              color: _mode == PromptMode.cli
-                  ? Colors.green[400]
-                  : Colors.purple[300],
-              fontSize: 14,
-            ),
-          ),
           Expanded(
             child: TextField(
               controller: _controller,

@@ -250,11 +250,13 @@ class _ProblemFormScreenState extends State<ProblemFormScreen> {
                       },
                     ),
                   ),
-                  const SizedBox(height: 12),
-                  _MetadataPreviewCard(
-                    metadata: _metadata,
-                    onEdit: _openMetadataSheet,
-                  ),
+                  if (_metadata != null) ...[
+                    const SizedBox(height: 12),
+                    _MetadataPreviewCard(
+                      metadata: _metadata,
+                      onEdit: _openMetadataSheet,
+                    ),
+                  ],
                   const SizedBox(height: 12),
                   SizedBox(
                     height: 220,
@@ -546,67 +548,68 @@ class _MetadataPreviewCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
+    if (metadata == null) {
+      return const SizedBox.shrink();
+    }
+
     return Card(
       margin: EdgeInsets.zero,
       child: Padding(
         padding: const EdgeInsets.all(16),
-        child: metadata == null
-            ? const SizedBox.shrink()
-            : Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          metadata!.title,
-                          style: theme.textTheme.titleMedium,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      IconButton(
-                        tooltip: 'Edit details',
-                        icon: const Icon(Icons.edit_outlined),
-                        onPressed: onEdit,
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    metadata!.description,
-                    style: theme.textTheme.bodyMedium,
-                    maxLines: 4,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    metadata!.title,
+                    style: theme.textTheme.titleMedium,
+                    maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                   ),
-                  const SizedBox(height: 12),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      _ChipLabel(
-                        icon: Icons.emoji_objects_outlined,
-                        label: metadata!.difficulty.displayName,
-                      ),
-                      _ChipLabel(
-                        icon: Icons.category_outlined,
-                        label: metadata!.category.displayName,
-                      ),
-                    ],
-                  ),
-                  if (metadata!.solution != null &&
-                      metadata!.solution!.isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 12),
-                      child: Text(
-                        metadata!.solution!,
-                        style: theme.textTheme.bodySmall,
-                        maxLines: 3,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                ],
+                ),
+                IconButton(
+                  tooltip: 'Edit details',
+                  icon: const Icon(Icons.edit_outlined),
+                  onPressed: onEdit,
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              metadata!.description,
+              style: theme.textTheme.bodyMedium,
+              maxLines: 4,
+              overflow: TextOverflow.ellipsis,
+            ),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                _ChipLabel(
+                  icon: Icons.emoji_objects_outlined,
+                  label: metadata!.difficulty.displayName,
+                ),
+                _ChipLabel(
+                  icon: Icons.category_outlined,
+                  label: metadata!.category.displayName,
+                ),
+              ],
+            ),
+            if (metadata!.solution != null && metadata!.solution!.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 12),
+                child: Text(
+                  metadata!.solution!,
+                  style: theme.textTheme.bodySmall,
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
+          ],
+        ),
       ),
     );
   }

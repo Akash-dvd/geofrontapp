@@ -1,7 +1,7 @@
 /// Simple AI wrapper - parse, validate, and execute batches
 library;
 
-import '../dag/dag_manager.dart';
+import '../core/dag/dag_manager.dart';
 import '../core/command/command_parser.dart';
 import '../core/command/simple_executor.dart';
 

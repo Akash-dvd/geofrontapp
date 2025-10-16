@@ -3,10 +3,7 @@ library;
 
 import 'dart:collection';
 
-import 'package:flutter/material.dart';
-
 import '../../models/canvas_object.dart';
-import '../../models/canvas_style.dart';
 import '../../models/canvas_style_defaults.dart';
 import '../../models/geometry_object.dart';
 import '../../models/simple/geo_circle.dart';
@@ -28,218 +25,59 @@ class TypeHierarchy {
 
   final Map<Type, Set<Type>> _parents = HashMap<Type, Set<Type>>();
 
-  void _registerType(Type type, Set<Type> parents, {CanvasStyle? style}) {
+  void _registerType(Type type, Set<Type> parents) {
     final normalized = {...parents};
     _parents[type] = normalized;
     CanvasStyleDefaults.instance.registerInheritance(type, normalized);
-    if (style != null) {
-      CanvasStyleDefaults.instance.registerStyle(type, style);
-    }
   }
 
   void _registerBuiltIns() {
     // Core canvas hierarchy
-    _registerType(CanvasObject, {Object}, style: CanvasStyle.baseDefaults);
-    _registerType(
-      GeometryObject,
-      {CanvasObject, Object},
-      style: CanvasStyle.baseDefaults.copyWith(strokeWidth: 2.0, filled: false),
-    );
-    _registerType(
-      CanvasText,
-      {CanvasObject, Object},
-      style: CanvasStyle.baseDefaults.copyWith(
-        strokeColor: Colors.transparent,
-        fillColor: Colors.transparent,
-        filled: false,
-        pointRadius: 0,
-        labelColor: Colors.black87,
-        labelFontSize: 16.0,
-      ),
-    );
-    _registerType(SimpleGeometryObject, {GeometryObject, CanvasObject, Object});
-    _registerType(SimpleGeometryObjectList, {
-      GeometryObject,
-      CanvasObject,
-      Object,
-    });
-    _registerType(ComplexGeometryObject, {
-      GeometryObject,
-      CanvasObject,
-      Object,
-    });
-    _registerType(ComplexGeometryObjectList, {
-      GeometryObject,
-      CanvasObject,
-      Object,
-    });
+    _registerType(CanvasObject, {Object});
+    _registerType(GeometryObject, {CanvasObject});
+    _registerType(CanvasText, {CanvasObject});
+    _registerType(SimpleGeometryObject, {GeometryObject});
+    _registerType(SimpleGeometryObjectList, {GeometryObject});
+    _registerType(ComplexGeometryObject, {GeometryObject});
+    _registerType(ComplexGeometryObjectList, {GeometryObject});
 
     // Point family
-    _registerType(
-      GeoPoint,
-      {SimpleGeometryObject, GeometryObject, CanvasObject, Object},
-      style: CanvasStyle.baseDefaults.copyWith(
-        pointRadius: 6.0,
-        filled: true,
-        strokeWidth: 1.5,
-      ),
-    );
-    _registerType(GeoPointer, {
-      GeoPoint,
-      SimpleGeometryObject,
-      GeometryObject,
-      CanvasObject,
-      Object,
-    });
-    _registerType(GeoMidpoint, {
-      GeoPoint,
-      SimpleGeometryObject,
-      GeometryObject,
-      CanvasObject,
-      Object,
-    });
-    _registerType(GeoInvPoint, {
-      GeoPoint,
-      SimpleGeometryObject,
-      GeometryObject,
-      CanvasObject,
-      Object,
-    });
+    _registerType(GeoPoint, {SimpleGeometryObject});
+    _registerType(GeoPointer, {GeoPoint});
+    _registerType(GeoMidpoint, {GeoPoint});
+    _registerType(GeoInvPoint, {GeoPoint});
 
     // Line family
-    _registerType(
-      GeoLine,
-      {SimpleGeometryObject, GeometryObject, CanvasObject, Object},
-      style: CanvasStyle.baseDefaults.copyWith(
-        pointRadius: 0,
-        filled: false,
-        strokeWidth: 2.0,
-      ),
-    );
-    _registerType(GeoLine2P, {
-      GeoLine,
-      SimpleGeometryObject,
-      GeometryObject,
-      CanvasObject,
-      Object,
-    });
-    _registerType(GeoPerpendicularBisector, {
-      GeoLine,
-      SimpleGeometryObject,
-      GeometryObject,
-      CanvasObject,
-      Object,
-    });
-    _registerType(GeoPerpendicularLine, {
-      GeoLine,
-      SimpleGeometryObject,
-      GeometryObject,
-      CanvasObject,
-      Object,
-    });
-    _registerType(GeoParallelLine, {
-      GeoLine,
-      SimpleGeometryObject,
-      GeometryObject,
-      CanvasObject,
-      Object,
-    });
+    _registerType(GeoLine, {SimpleGeometryObject});
+    _registerType(GeoLine2P, {GeoLine});
+    _registerType(GeoPerpendicularBisector, {GeoLine});
+    _registerType(GeoPerpendicularLine, {GeoLine});
+    _registerType(GeoParallelLine, {GeoLine});
 
     // Circle family
-    _registerType(GeoCircle, {
-      SimpleGeometryObject,
-      GeometryObject,
-      CanvasObject,
-      Object,
-    });
-    _registerType(GeoCircle2P, {
-      GeoCircle,
-      SimpleGeometryObject,
-      GeometryObject,
-      CanvasObject,
-      Object,
-    });
-    _registerType(GeoCircle3P, {
-      GeoCircle,
-      SimpleGeometryObject,
-      GeometryObject,
-      CanvasObject,
-      Object,
-    });
-    _registerType(GeoInvCircle, {
-      GeoCircle,
-      SimpleGeometryObject,
-      GeometryObject,
-      CanvasObject,
-      Object,
-    });
+    _registerType(GeoCircle, {SimpleGeometryObject});
+    _registerType(GeoCircle2P, {GeoCircle});
+    _registerType(GeoCircle3P, {GeoCircle});
+    _registerType(GeoInvCircle, {GeoCircle});
 
     // Transformation family
-    _registerType(GeoTrans, {
-      SimpleGeometryObject,
-      GeometryObject,
-      CanvasObject,
-      Object,
-    });
-    _registerType(GeoInverse, {
-      GeoTrans,
-      SimpleGeometryObject,
-      GeometryObject,
-      CanvasObject,
-      Object,
-    });
-    _registerType(GeoRotate, {
-      GeoTrans,
-      SimpleGeometryObject,
-      GeometryObject,
-      CanvasObject,
-      Object,
-    });
-    _registerType(GeoDilate, {
-      GeoTrans,
-      SimpleGeometryObject,
-      GeometryObject,
-      CanvasObject,
-      Object,
-    });
+    _registerType(GeoTrans, {SimpleGeometryObject});
+    _registerType(GeoInverse, {GeoTrans});
+    _registerType(GeoRotate, {GeoTrans});
+    _registerType(GeoDilate, {GeoTrans});
 
     // Simple geometry lists
-    _registerType(GeoIntersection, {
-      SimpleGeometryObjectList,
-      GeometryObject,
-      CanvasObject,
-      Object,
-    });
-    _registerType(GeoTangent, {
-      SimpleGeometryObjectList,
-      GeometryObject,
-      CanvasObject,
-      Object,
-    });
+    _registerType(GeoIntersection, {SimpleGeometryObjectList});
+    _registerType(GeoTangent, {SimpleGeometryObjectList});
 
     // Complex geometry
-    _registerType(GeoSegment, {
-      ComplexGeometryObject,
-      GeometryObject,
-      CanvasObject,
-      Object,
-    });
-    _registerType(GeoTriangle, {
-      ComplexGeometryObjectList,
-      GeometryObject,
-      CanvasObject,
-      Object,
-    });
-    _registerType(GeoPolygon, {
-      ComplexGeometryObjectList,
-      GeometryObject,
-      CanvasObject,
-      Object,
-    });
+    _registerType(GeoSegment, {ComplexGeometryObject});
+    _registerType(GeoTriangle, {ComplexGeometryObjectList});
+    _registerType(GeoPolygon, {ComplexGeometryObjectList});
   }
 
   /// Register a runtime type and its direct parents.
-  /// Parents should include the full direct ancestry chain for accurate lookup.
+  /// Only the immediate parents are required; indirect ancestors are inferred.
   void register(Type type, Set<Type> parents) {
     if (_parents.containsKey(type)) {
       return;

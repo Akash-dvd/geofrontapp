@@ -1,8 +1,8 @@
 import 'dart:convert';
-import '../dag/dag_manager.dart';
+import '../core/dag/dag_manager.dart';
 
 /// Encodes geometry objects and DAG to JSON format
-/// 
+///
 /// Uses object-oriented serialization where each object handles its own
 /// toJson() method. This eliminates the need for type switching and makes
 /// the encoder simple and maintainable.
@@ -26,12 +26,9 @@ class GeoDrawEncoder {
   /// Encode viewport settings
   Map<String, dynamic>? _encodeViewport(Viewport? viewport) {
     if (viewport == null) return null;
-    
+
     return {
-      'center': {
-        'x': viewport.center.dx,
-        'y': viewport.center.dy,
-      },
+      'center': {'x': viewport.center.dx, 'y': viewport.center.dy},
       'zoom': viewport.zoom,
       'gridVisible': viewport.gridVisible,
       'canvasSize': {

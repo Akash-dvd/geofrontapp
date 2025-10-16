@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
-import '../dag/dag_manager.dart' hide Viewport;
-import '../dag/dag_manager.dart' as dag show Viewport;
+import '../core/dag/dag_manager.dart' hide Viewport;
+import '../core/dag/dag_manager.dart' as dag show Viewport;
 import '../models/geometry_object.dart';
 import '../models/simple/geo_point.dart';
 import '../tools/tool_manager.dart';

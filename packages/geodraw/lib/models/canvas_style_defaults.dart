@@ -1,7 +1,13 @@
 import 'dart:collection';
 
+import 'package:flutter/material.dart';
+
 import 'canvas_object.dart';
 import 'canvas_style.dart';
+import 'geometry_object.dart';
+import 'simple/geo_line.dart';
+import 'simple/geo_point.dart';
+import 'text/canvas_text.dart';
 
 /// Maintains default style presets for every [CanvasObject] type.
 class CanvasStyleDefaults {
@@ -18,6 +24,41 @@ class CanvasStyleDefaults {
   void _registerBuiltIns() {
     registerStyle(CanvasObject, CanvasStyle.baseDefaults);
     registerInheritance(CanvasObject, {Object});
+
+    registerStyle(
+      GeometryObject,
+      CanvasStyle.baseDefaults.copyWith(strokeWidth: 2.0, filled: false),
+    );
+
+    registerStyle(
+      CanvasText,
+      CanvasStyle.baseDefaults.copyWith(
+        strokeColor: Colors.transparent,
+        fillColor: Colors.transparent,
+        filled: false,
+        pointRadius: 0,
+        labelColor: Colors.black87,
+        labelFontSize: 16.0,
+      ),
+    );
+
+    registerStyle(
+      GeoPoint,
+      CanvasStyle.baseDefaults.copyWith(
+        pointRadius: 6.0,
+        filled: true,
+        strokeWidth: 1.5,
+      ),
+    );
+
+    registerStyle(
+      GeoLine,
+      CanvasStyle.baseDefaults.copyWith(
+        pointRadius: 0,
+        filled: false,
+        strokeWidth: 2.0,
+      ),
+    );
   }
 
   /// Register explicit inheritance information for a [type].

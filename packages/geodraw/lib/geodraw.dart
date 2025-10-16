@@ -22,8 +22,8 @@ export 'models/simple_lists/geo_intersection.dart';
 export 'models/complex/geo_shapes.dart';
 
 // DAG system
-export 'dag/dag_node.dart';
-export 'dag/dag_manager.dart';
+export 'core/dag/dag_node.dart';
+export 'core/dag/dag_manager.dart';
 
 // UI components
 export 'ui/geodraw_canvas.dart';

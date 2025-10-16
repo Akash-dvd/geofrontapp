@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../dag/dag_manager.dart';
+import '../core/dag/dag_manager.dart';
 import '../models/canvas_style.dart';
 import '../models/geometry_object.dart';
 

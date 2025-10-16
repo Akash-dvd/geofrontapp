@@ -5,10 +5,10 @@ import '../models/simple/geo_point.dart';
 import '../models/simple/geo_line.dart';
 import '../models/simple/geo_circle.dart';
 import '../models/simple/geo_trans.dart';
-import '../dag/dag_manager.dart' as dag;
+import '../core/dag/dag_manager.dart' as dag;
 
 /// Decodes JSON format back to geometry objects and DAG
-/// 
+///
 /// Uses type registry pattern where each class has a fromJson factory.
 /// This eliminates the need for large switch statements and makes the
 /// decoder simple and maintainable.
@@ -19,23 +19,23 @@ class GeoDrawDecoder {
     'GeoPointer': GeoPointer.fromJson,
     'GeoMidpoint': GeoMidpoint.fromJson,
     'GeoInvPoint': GeoInvPoint.fromJson,
-    
+
     // Lines
     'GeoLine2P': GeoLine2P.fromJson,
     'GeoPerpendicularBisector': GeoPerpendicularBisector.fromJson,
     'GeoPerpendicularLine': GeoPerpendicularLine.fromJson,
     'GeoParallelLine': GeoParallelLine.fromJson,
-    
+
     // Circles
     'GeoCircle2P': GeoCircle2P.fromJson,
     'GeoCircle3P': GeoCircle3P.fromJson,
     'GeoInvCircle': GeoInvCircle.fromJson,
-    
+
     // Transformations
     'GeoInverse': GeoInverse.fromJson,
     'GeoRotate': GeoRotate.fromJson,
     'GeoDilate': GeoDilate.fromJson,
-    
+
     // TODO: Add complex objects as they are implemented
     // 'GeoSegment': GeoSegment.fromJson,
     // 'GeoTriangle': GeoTriangle.fromJson,
@@ -66,11 +66,11 @@ class GeoDrawDecoder {
       try {
         final type = objJson['type'] as String;
         final factory = _typeRegistry[type];
-        
+
         if (factory == null) {
           throw UnsupportedError('Unknown type: $type');
         }
-        
+
         // Call the appropriate fromJson factory
         final object = factory(objJson) as GeometryObject;
         final dependencies = (objJson['dependencies'] as List).cast<String>();
@@ -110,8 +110,6 @@ class GeoDrawDecoder {
     });
     return sorted;
   }
-
-
 
   /// Decode from JSON string
   dag.DAGManager decodeFromJson(String jsonString) {
