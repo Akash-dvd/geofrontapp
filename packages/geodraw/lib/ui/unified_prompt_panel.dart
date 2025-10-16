@@ -58,85 +58,59 @@ class _UnifiedPromptPanelState extends State<UnifiedPromptPanel> {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      height: widget.height,
-      decoration: BoxDecoration(
-        color: Colors.grey[900],
-        border: Border(top: BorderSide(color: Colors.grey[700]!, width: 1)),
-      ),
-      child: Column(
-        children: [
-          _buildHeader(),
-          Expanded(
-            child: _mode == PromptMode.cli ? _buildCLIView() : _buildAIView(),
-          ),
-          _buildInputArea(),
-        ],
+    final theme = Theme.of(context);
+    final accent = theme.colorScheme.secondary;
+    final onSurface = theme.colorScheme.onSurface;
+    final surface = theme.colorScheme.surface;
+    final surfaceVariant = theme.colorScheme.surfaceVariant;
+    final borderColor = theme.dividerColor;
+
+    return ConstrainedBox(
+      constraints: BoxConstraints(minHeight: widget.height),
+      child: Container(
+        decoration: BoxDecoration(
+          color: surface,
+          border: Border(top: BorderSide(color: borderColor, width: 1)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _buildHeaderBar(
+              theme,
+              accent,
+              onSurface,
+              surfaceVariant,
+              borderColor,
+            ),
+            Expanded(
+              child: _mode == PromptMode.cli
+                  ? _buildCLIView(theme, onSurface, accent)
+                  : _buildAIView(theme, onSurface, accent, borderColor),
+            ),
+            _buildPromptBar(
+              theme,
+              accent,
+              surface,
+              borderColor,
+            ),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _buildHeader() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: Colors.grey[850],
-        border: Border(bottom: BorderSide(color: Colors.grey[700]!, width: 1)),
-      ),
-      child: Row(
-        children: [
-          Icon(
-            _mode == PromptMode.cli ? Icons.terminal : Icons.psychology,
-            color: _mode == PromptMode.cli
-                ? Colors.green[400]
-                : Colors.purple[300],
-            size: 16,
-          ),
-          const SizedBox(width: 8),
-
-          // Mode toggle
-          Container(
-            decoration: BoxDecoration(
-              color: Colors.grey[800],
-              borderRadius: BorderRadius.circular(4),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                _buildModeButton(PromptMode.cli, 'CLI', Icons.terminal),
-                _buildModeButton(PromptMode.ai, 'AI', Icons.psychology),
-              ],
-            ),
-          ),
-
-          const Spacer(),
-
-          // Clear button
-          IconButton(
-            icon: const Icon(Icons.clear_all, size: 16),
-            color: Colors.grey[400],
-            tooltip: 'Clear',
-            onPressed: () {
-              setState(() {
-                if (_mode == PromptMode.cli) {
-                  _cliOutput.clear();
-                } else {
-                  _generatedCommands = null;
-                  _aiError = null;
-                  _executionLog.clear();
-                }
-                _controller.clear();
-              });
-            },
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildModeButton(PromptMode mode, String label, IconData icon) {
+  Widget _buildModeButton(
+    ThemeData theme,
+    Color accent,
+    Color onSurface,
+    PromptMode mode,
+    String label,
+    IconData icon,
+  ) {
     final isActive = _mode == mode;
+    final inactiveColor = onSurface.withOpacity(0.6);
     return InkWell(
+      borderRadius: BorderRadius.circular(6),
       onTap: () {
         setState(() {
           _mode = mode;
@@ -144,27 +118,99 @@ class _UnifiedPromptPanelState extends State<UnifiedPromptPanel> {
           _focusNode.requestFocus();
         });
       },
-      child: Container(
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(
-          color: isActive ? Colors.grey[700] : Colors.transparent,
-          borderRadius: BorderRadius.circular(4),
+          color: isActive ? accent.withOpacity(0.18) : Colors.transparent,
+
+            Widget _buildHeaderBar(
+              ThemeData theme,
+              Color accent,
+              Color onSurface,
+              Color surfaceVariant,
+              Color borderColor,
+            ) {
+              final canClearCLI = _mode == PromptMode.cli && _cliOutput.isNotEmpty;
+              final canClearAI = _mode == PromptMode.ai &&
+                  (_generatedCommands != null ||
+                      _executionLog.isNotEmpty ||
+                      _aiError != null);
+              final inactiveAccent = onSurface.withOpacity(0.6);
+
+              return Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: surfaceVariant,
+                  border: Border(bottom: BorderSide(color: borderColor, width: 1)),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.surface,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: borderColor),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          _buildModeButton(
+                            theme,
+                            accent,
+                            onSurface,
+                            PromptMode.cli,
+                            'CLI',
+                            Icons.terminal,
+                          ),
+                          _buildModeButton(
+                            theme,
+                            accent,
+                            onSurface,
+                            PromptMode.ai,
+                            'AI',
+                            Icons.psychology,
+                          ),
+                        ],
+                      ),
+                    ),
+                    const Spacer(),
+                    IconButton(
+                      icon: const Icon(Icons.clear_all, size: 18),
+                      color: canClearCLI || canClearAI ? accent : inactiveAccent,
+                      tooltip: 'Clear',
+                      onPressed: canClearCLI || canClearAI
+                          ? () {
+                              setState(() {
+                                if (_mode == PromptMode.cli) {
+                                  _cliOutput.clear();
+                                } else {
+                                  _generatedCommands = null;
+                                  _aiError = null;
+                                  _executionLog.clear();
+                                }
+                                _controller.clear();
+                              });
+                            }
+                          : null,
+                    ),
+                  ],
+                ),
+              );
+            }
+          borderRadius: BorderRadius.circular(6),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              icon,
-              size: 14,
-              color: isActive ? Colors.white : Colors.grey[500],
-            ),
-            const SizedBox(width: 4),
+            Icon(icon, size: 14, color: isActive ? accent : inactiveColor),
+            const SizedBox(width: 6),
             Text(
               label,
               style: TextStyle(
                 fontSize: 12,
-                fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
-                color: isActive ? Colors.white : Colors.grey[500],
+                fontWeight: isActive ? FontWeight.bold : FontWeight.w500,
+                color: isActive ? accent : inactiveColor,
               ),
             ),
           ],
@@ -173,13 +219,17 @@ class _UnifiedPromptPanelState extends State<UnifiedPromptPanel> {
     );
   }
 
-  Widget _buildCLIView() {
+  Widget _buildCLIView(ThemeData theme, Color onSurface, Color accent) {
+    final muted = onSurface.withOpacity(0.6);
+    final success = accent;
+    final error = theme.colorScheme.error;
+
     if (_cliOutput.isEmpty) {
       return Center(
         child: Text(
           'Enter a command below (e.g., point(0, 0), line(A, B))',
           style: TextStyle(
-            color: Colors.grey[600],
+            color: muted,
             fontSize: 12,
             fontStyle: FontStyle.italic,
           ),
@@ -204,10 +254,10 @@ class _UnifiedPromptPanelState extends State<UnifiedPromptPanel> {
               fontFamily: 'monospace',
               fontSize: 12,
               color: isError
-                  ? Colors.red[300]
+                  ? error.withOpacity(0.75)
                   : isSuccess
-                  ? Colors.green[300]
-                  : Colors.grey[300],
+                  ? success
+                  : onSurface.withOpacity(0.85),
             ),
           ),
         );
@@ -215,7 +265,14 @@ class _UnifiedPromptPanelState extends State<UnifiedPromptPanel> {
     );
   }
 
-  Widget _buildAIView() {
+  Widget _buildAIView(
+    ThemeData theme,
+    Color onSurface,
+    Color accent,
+    Color borderColor,
+  ) {
+    final muted = onSurface.withOpacity(0.6);
+
     if (_aiError != null) {
       return Center(
         child: Padding(
@@ -223,11 +280,15 @@ class _UnifiedPromptPanelState extends State<UnifiedPromptPanel> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(Icons.error_outline, color: Colors.red[300], size: 32),
+              Icon(
+                Icons.error_outline,
+                color: theme.colorScheme.error,
+                size: 32,
+              ),
               const SizedBox(height: 8),
               Text(
                 _aiError!,
-                style: TextStyle(color: Colors.red[300], fontSize: 12),
+                style: TextStyle(color: theme.colorScheme.error, fontSize: 12),
                 textAlign: TextAlign.center,
               ),
             ],
@@ -241,7 +302,7 @@ class _UnifiedPromptPanelState extends State<UnifiedPromptPanel> {
         child: Text(
           'Describe your construction in natural language\n(e.g., "Draw an equilateral triangle with side 5")',
           style: TextStyle(
-            color: Colors.grey[600],
+            color: muted,
             fontSize: 12,
             fontStyle: FontStyle.italic,
           ),
@@ -265,7 +326,7 @@ class _UnifiedPromptPanelState extends State<UnifiedPromptPanel> {
               style: TextStyle(
                 fontFamily: 'monospace',
                 fontSize: 12,
-                color: Colors.grey[300],
+                color: onSurface.withOpacity(0.85),
               ),
             ),
           );
@@ -274,7 +335,7 @@ class _UnifiedPromptPanelState extends State<UnifiedPromptPanel> {
           if (logIndex < 0) {
             return Padding(
               padding: const EdgeInsets.symmetric(vertical: 8),
-              child: Divider(color: Colors.grey[700]),
+              child: Divider(color: borderColor),
             );
           }
           return Padding(
@@ -284,7 +345,7 @@ class _UnifiedPromptPanelState extends State<UnifiedPromptPanel> {
               style: TextStyle(
                 fontFamily: 'monospace',
                 fontSize: 11,
-                color: Colors.grey[400],
+                color: muted,
               ),
             ),
           );
@@ -293,40 +354,82 @@ class _UnifiedPromptPanelState extends State<UnifiedPromptPanel> {
     );
   }
 
-  Widget _buildInputArea() {
+  Widget _buildControlPanel(
+    ThemeData theme,
+    Color accent,
+    Color surface,
+    Color surfaceVariant,
+    Color borderColor,
+  ) {
+    final onSurface = theme.colorScheme.onSurface;
+    final hintColor = onSurface.withOpacity(0.5);
+    final inactiveAccent = onSurface.withOpacity(0.6);
+    final sendIcon = _mode == PromptMode.cli ? Icons.send : Icons.auto_fix_high;
+
     return Container(
-      padding: const EdgeInsets.all(8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-        color: Colors.grey[850],
-        border: Border(top: BorderSide(color: Colors.grey[700]!, width: 1)),
+        color: surfaceVariant,
+        border: Border(top: BorderSide(color: borderColor, width: 1)),
       ),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
+          Container(
+            decoration: BoxDecoration(
+              color: surface,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: borderColor),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _buildModeButton(
+                  theme,
+                  accent,
+                  onSurface,
+                  PromptMode.cli,
+                  'CLI',
+                  Icons.terminal,
+                ),
+                _buildModeButton(
+                  theme,
+                  accent,
+                  onSurface,
+                  PromptMode.ai,
+                  'AI',
+                  Icons.psychology,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
           Text(
-            _mode == PromptMode.cli ? '> ' : '✨ ',
+            _mode == PromptMode.cli ? '> ' : 'AI',
             style: TextStyle(
               fontFamily: _mode == PromptMode.cli ? 'monospace' : null,
-              color: _mode == PromptMode.cli
-                  ? Colors.green[400]
-                  : Colors.purple[300],
+              color: _mode == PromptMode.cli ? accent : inactiveAccent,
               fontSize: 14,
             ),
           ),
+          const SizedBox(width: 8),
           Expanded(
             child: TextField(
               controller: _controller,
               focusNode: _focusNode,
-              style: const TextStyle(
-                fontFamily: 'monospace',
-                color: Colors.white,
+              style: TextStyle(
+                fontFamily: _mode == PromptMode.cli ? 'monospace' : null,
+                color: onSurface,
                 fontSize: 14,
               ),
               decoration: InputDecoration(
+                isDense: true,
                 border: InputBorder.none,
                 hintText: _mode == PromptMode.cli
                     ? 'Enter command... (e.g., point(0, 0))'
                     : 'Describe construction... (e.g., equilateral triangle)',
-                hintStyle: TextStyle(color: Colors.grey[600], fontSize: 12),
+                hintStyle: TextStyle(color: hintColor, fontSize: 12),
+                contentPadding: const EdgeInsets.symmetric(vertical: 6),
               ),
               maxLines: _mode == PromptMode.ai ? 2 : 1,
               onSubmitted: _mode == PromptMode.cli ? _executeCLICommand : null,
@@ -334,23 +437,21 @@ class _UnifiedPromptPanelState extends State<UnifiedPromptPanel> {
             ),
           ),
           if (_isLoadingAI || _isExecuting)
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 8),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
               child: SizedBox(
-                width: 16,
-                height: 16,
-                child: CircularProgressIndicator(strokeWidth: 2),
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  valueColor: AlwaysStoppedAnimation<Color>(accent),
+                ),
               ),
             )
           else
             IconButton(
-              icon: Icon(
-                _mode == PromptMode.cli ? Icons.send : Icons.auto_fix_high,
-                size: 18,
-              ),
-              color: _mode == PromptMode.cli
-                  ? Colors.green[400]
-                  : Colors.purple[300],
+              icon: Icon(sendIcon, size: 18),
+              color: accent,
               tooltip: _mode == PromptMode.cli ? 'Execute' : 'Generate',
               onPressed: _controller.text.trim().isEmpty
                   ? null
@@ -363,10 +464,35 @@ class _UnifiedPromptPanelState extends State<UnifiedPromptPanel> {
               !_isExecuting)
             IconButton(
               icon: const Icon(Icons.play_arrow, size: 18),
-              color: Colors.green[400],
+              color: accent,
               tooltip: 'Execute commands',
               onPressed: _executeAICommands,
             ),
+          IconButton(
+            icon: const Icon(Icons.clear_all, size: 18),
+            color: inactiveAccent,
+            tooltip: 'Clear',
+            onPressed:
+                _controller.text.trim().isEmpty &&
+                    (_mode == PromptMode.cli
+                        ? _cliOutput.isEmpty
+                        : _generatedCommands == null &&
+                              _executionLog.isEmpty &&
+                              _aiError == null)
+                ? null
+                : () {
+                    setState(() {
+                      if (_mode == PromptMode.cli) {
+                        _cliOutput.clear();
+                      } else {
+                        _generatedCommands = null;
+                        _aiError = null;
+                        _executionLog.clear();
+                      }
+                      _controller.clear();
+                    });
+                  },
+          ),
         ],
       ),
     );

@@ -124,33 +124,72 @@ class _ToolCategoryPanel extends StatelessWidget {
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(group.name, style: theme.textTheme.titleSmall),
-          const SizedBox(height: 4),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            direction: wrapDirection,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final maxWidth = constraints.maxWidth;
+          const spacing = 6.0;
+          const desiredMinTileWidth = 96.0;
+
+          final availableWidth = maxWidth.isFinite && maxWidth > 0
+              ? maxWidth
+              : desiredMinTileWidth;
+
+          int columns = (availableWidth / (desiredMinTileWidth + spacing))
+              .floor();
+          if (columns < 1) {
+            columns = 1;
+          } else if (columns > 6) {
+            columns = 6;
+          }
+
+          final totalSpacing = spacing * (columns - 1);
+          final rawTileWidth = (availableWidth - totalSpacing) / columns;
+          double tileWidth = rawTileWidth;
+          if (availableWidth >= 80 && tileWidth < 80) {
+            tileWidth = 80;
+          }
+          if (tileWidth > 140) {
+            tileWidth = 140;
+          }
+          if (tileWidth > availableWidth) {
+            tileWidth = availableWidth;
+          }
+          if (tileWidth < 56) {
+            tileWidth = availableWidth; // avoid zero/negative when very narrow
+          }
+
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              for (final entry in group.tools)
-                _ToolButton(
-                  entry: entry,
-                  isActive:
-                      entry.toolType != null &&
-                      toolManager.activeToolType == entry.toolType,
-                  enabled:
-                      entry.toolType != null &&
-                      entry.implemented &&
-                      toolManager.isToolAvailable(entry.toolType!),
-                  onPressed: entry.toolType != null
-                      ? () => onToolSelected(entry.toolType!)
-                      : null,
-                ),
+              Text(group.name, style: theme.textTheme.titleSmall),
+              const SizedBox(height: 4),
+              Wrap(
+                spacing: spacing,
+                runSpacing: spacing,
+                direction: wrapDirection,
+                children: [
+                  for (final entry in group.tools)
+                    SizedBox(
+                      width: tileWidth,
+                      child: _ToolButton(
+                        entry: entry,
+                        isActive:
+                            entry.toolType != null &&
+                            toolManager.activeToolType == entry.toolType,
+                        enabled:
+                            entry.toolType != null &&
+                            entry.implemented &&
+                            toolManager.isToolAvailable(entry.toolType!),
+                        onPressed: entry.toolType != null
+                            ? () => onToolSelected(entry.toolType!)
+                            : null,
+                      ),
+                    ),
+                ],
+              ),
             ],
-          ),
-        ],
+          );
+        },
       ),
     );
   }
@@ -182,47 +221,79 @@ class _ToolButton extends StatelessWidget {
 
     final tooltip = tooltipParts.join(' • ');
 
-    final foreground = isActive
-        ? theme.colorScheme.primary
+    final Color accent = theme.colorScheme.secondary;
+    final Color fallbackAccent = Colors.deepOrange.shade400;
+    final Color activeColor = accent.opacity == 0 ? fallbackAccent : accent;
+    final Color baseColor = activeColor.withOpacity(0.9);
+    final Color disabledColor = activeColor.withOpacity(0.35);
+
+    final Color iconColor = isActive
+        ? activeColor
         : enabled
-        ? Colors.grey[800]
-        : Colors.grey;
+        ? baseColor
+        : disabledColor;
+
+    final Color borderColor = isActive
+        ? activeColor
+        : enabled
+        ? activeColor.withOpacity(0.55)
+        : disabledColor;
+
+    final Color backgroundColor = isActive
+        ? activeColor.withOpacity(0.22)
+        : enabled
+        ? activeColor.withOpacity(0.12)
+        : activeColor.withOpacity(0.06);
 
     return Tooltip(
       message: tooltip,
       waitDuration: const Duration(milliseconds: 300),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-        decoration: BoxDecoration(
-          color: isActive ? theme.colorScheme.primary.withOpacity(0.12) : null,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(
-            color: isActive
-                ? theme.colorScheme.primary
-                : theme.dividerColor.withOpacity(0.4),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: enabled ? onPressed : null,
+          borderRadius: BorderRadius.circular(12),
+          overlayColor: MaterialStateProperty.resolveWith(
+            (states) => states.contains(MaterialState.pressed)
+                ? activeColor.withOpacity(0.1)
+                : null,
           ),
-        ),
-        child: TextButton(
-          onPressed: enabled ? onPressed : null,
-          style: TextButton.styleFrom(
-            foregroundColor: foreground,
-            minimumSize: const Size(72, 64),
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(entry.icon, size: 24, color: foreground),
-              const SizedBox(height: 4),
-              Text(
-                entry.label,
-                textAlign: TextAlign.center,
-                style: theme.textTheme.labelSmall?.copyWith(
-                  color: foreground,
-                  fontSize: 11,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 2),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 160),
+                  width: 54,
+                  height: 54,
+                  decoration: BoxDecoration(
+                    color: backgroundColor,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: borderColor, width: 1.1),
+                  ),
+                  child: Icon(entry.icon, size: 26, color: iconColor),
                 ),
-              ),
-            ],
+                const SizedBox(height: 6),
+                AnimatedDefaultTextStyle(
+                  duration: const Duration(milliseconds: 160),
+                  style: (theme.textTheme.labelSmall ?? const TextStyle())
+                      .copyWith(
+                        color: iconColor,
+                        fontSize: 11,
+                        fontWeight: isActive
+                            ? FontWeight.w600
+                            : FontWeight.w500,
+                      ),
+                  child: Text(
+                    entry.label,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),

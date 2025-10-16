@@ -551,27 +551,7 @@ class _MetadataPreviewCard extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: metadata == null
-            ? Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    'Add problem details',
-                    style: theme.textTheme.titleMedium,
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'You can capture title, description, and difficulty when you are ready to publish.',
-                    style: theme.textTheme.bodyMedium,
-                  ),
-                  const SizedBox(height: 12),
-                  OutlinedButton.icon(
-                    onPressed: onEdit,
-                    icon: const Icon(Icons.description_outlined),
-                    label: const Text('Add details'),
-                  ),
-                ],
-              )
+            ? const SizedBox.shrink()
             : Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
