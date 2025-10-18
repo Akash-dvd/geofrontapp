@@ -118,6 +118,8 @@ abstract class SimpleGeometryObject extends GeometryObject {
   /// The Multivector representing this geometric object's equation
   final Multivector multivector;
 
+  static const String multivectorKey = 'mv';
+
   SimpleGeometryObject({
     required super.id,
     required super.label,
@@ -132,6 +134,44 @@ abstract class SimpleGeometryObject extends GeometryObject {
 
   @override
   List<Object?> get props => [...super.props, multivector];
+
+  /// Serialize the multivector to a compact list representation.
+  static List<double> encodeMultivector(Multivector mv) {
+    return <double>[mv.o, mv.e1, mv.e2, mv.O];
+  }
+
+  /// Decode a multivector from a serialized representation.
+  static Multivector decodeMultivector(dynamic raw) {
+    if (raw is! List) {
+      return Multivector.zero();
+    }
+
+    double readComponent(int index) {
+      if (index >= raw.length) return 0.0;
+      final value = raw[index];
+      if (value is num) {
+        return value.toDouble();
+      }
+      if (value is String) {
+        return double.tryParse(value) ?? 0.0;
+      }
+      return 0.0;
+    }
+
+    return Multivector(
+      o: readComponent(0),
+      e1: readComponent(1),
+      e2: readComponent(2),
+      O: readComponent(3),
+    );
+  }
+
+  @override
+  Map<String, dynamic> toJson() {
+    final json = super.toJson();
+    json[multivectorKey] = encodeMultivector(multivector);
+    return json;
+  }
 }
 
 /// Base class for lists of simple geometry objects
@@ -187,6 +227,13 @@ abstract class SimpleGeometryObjectList<T extends SimpleGeometryObject>
 
   @override
   List<Object?> get props => [...super.props, objects];
+
+  @override
+  Map<String, dynamic> toJson() {
+    final json = super.toJson();
+    json['objects'] = objects.map((obj) => obj.toJson()).toList();
+    return json;
+  }
 }
 
 /// Base class for objects requiring boundary points + underlying simple object
@@ -221,6 +268,17 @@ abstract class ComplexGeometryObject extends GeometryObject {
     endPointId,
     underlyingObjectId,
   ];
+
+  @override
+  Map<String, dynamic> toJson() {
+    final json = super.toJson();
+    json['properties'] = {
+      'startPointId': startPointId,
+      'endPointId': endPointId,
+      'underlyingObjectId': underlyingObjectId,
+    };
+    return json;
+  }
 }
 
 /// Base class for collections forming composite shapes
@@ -279,4 +337,11 @@ abstract class ComplexGeometryObjectList<T extends ComplexGeometryObject>
 
   @override
   List<Object?> get props => [...super.props, elements];
+
+  @override
+  Map<String, dynamic> toJson() {
+    final json = super.toJson();
+    json['elements'] = elements.map((element) => element.toJson()).toList();
+    return json;
+  }
 }

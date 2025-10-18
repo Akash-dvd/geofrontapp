@@ -39,7 +39,8 @@ class _UnifiedPromptPanelState extends State<UnifiedPromptPanel> {
   final ScrollController _scrollController = ScrollController();
 
   // CLI state
-  final List<String> _cliOutput = [];
+  String? _lastCliMessage;
+  bool _lastCliSuccess = false;
 
   // AI state
   List<String>? _generatedCommands;
@@ -58,8 +59,10 @@ class _UnifiedPromptPanelState extends State<UnifiedPromptPanel> {
 
   @override
   Widget build(BuildContext context) {
+    final isAiMode = _mode == PromptMode.ai;
+
     return Container(
-      height: widget.height,
+      height: isAiMode ? widget.height : null,
       decoration: BoxDecoration(
         color: Colors.grey[900],
         border: Border(top: BorderSide(color: Colors.grey[700]!, width: 1)),
@@ -67,9 +70,8 @@ class _UnifiedPromptPanelState extends State<UnifiedPromptPanel> {
       child: Column(
         children: [
           _buildHeader(),
-          Expanded(
-            child: _mode == PromptMode.cli ? _buildCLIView() : _buildAIView(),
-          ),
+          if (isAiMode)
+            Expanded(child: _buildAIView()),
           _buildInputArea(),
         ],
       ),
@@ -128,7 +130,7 @@ class _UnifiedPromptPanelState extends State<UnifiedPromptPanel> {
             onPressed: () {
               setState(() {
                 if (_mode == PromptMode.cli) {
-                  _cliOutput.clear();
+                  _lastCliMessage = null;
                 } else {
                   _generatedCommands = null;
                   _aiError = null;
@@ -138,6 +140,22 @@ class _UnifiedPromptPanelState extends State<UnifiedPromptPanel> {
               });
             },
           ),
+
+          if (_mode == PromptMode.cli && _lastCliMessage != null)
+            Padding(
+              padding: const EdgeInsets.only(right: 4),
+              child: Tooltip(
+                message: _lastCliMessage!,
+                preferBelow: false,
+                child: Icon(
+                  _lastCliSuccess ? Icons.check_circle : Icons.error,
+                  color: _lastCliSuccess
+                      ? Colors.green[400]
+                      : Colors.red[300],
+                  size: 16,
+                ),
+              ),
+            ),
         ],
       ),
     );
@@ -179,48 +197,6 @@ class _UnifiedPromptPanelState extends State<UnifiedPromptPanel> {
           ],
         ),
       ),
-    );
-  }
-
-  Widget _buildCLIView() {
-    if (_cliOutput.isEmpty) {
-      return Center(
-        child: Text(
-          'Enter a command below (e.g., point(0, 0), line(A, B))',
-          style: TextStyle(
-            color: Colors.grey[600],
-            fontSize: 12,
-            fontStyle: FontStyle.italic,
-          ),
-        ),
-      );
-    }
-
-    return ListView.builder(
-      controller: _scrollController,
-      padding: const EdgeInsets.all(8),
-      itemCount: _cliOutput.length,
-      itemBuilder: (context, index) {
-        final line = _cliOutput[index];
-        final isError = line.startsWith('[ERROR]');
-        final isSuccess = line.startsWith('[OK]');
-
-        return Padding(
-          padding: const EdgeInsets.only(bottom: 4),
-          child: Text(
-            line,
-            style: TextStyle(
-              fontFamily: 'monospace',
-              fontSize: 12,
-              color: isError
-                  ? Colors.red[300]
-                  : isSuccess
-                  ? Colors.green[300]
-                  : Colors.grey[300],
-            ),
-          ),
-        );
-      },
     );
   }
 
@@ -374,33 +350,30 @@ class _UnifiedPromptPanelState extends State<UnifiedPromptPanel> {
   Future<void> _executeCLICommand(String command) async {
     if (command.trim().isEmpty || widget.cliExecutor == null) return;
 
-    setState(() {
-      _cliOutput.add('> $command');
-    });
-
     try {
       // Use executeString which directly parses and executes
       final result = await widget.cliExecutor!.executeString(command);
 
       setState(() {
-        if (result.success) {
-          _cliOutput.add('[OK] ${result.message}');
-          if (result.objectId != null) {
-            _cliOutput.add('    Created: ${result.objectId}');
-          }
-        } else {
-          _cliOutput.add('[ERROR] ${result.message}');
-        }
+        final suffix = result.objectId != null
+            ? ' (Created: ${result.objectId})'
+            : '';
+        _lastCliMessage = '${result.message}$suffix';
+        _lastCliSuccess = result.success;
       });
+
+      if (result.success) {
+        widget.onConstructionComplete?.call();
+      }
     } catch (e) {
       setState(() {
-        _cliOutput.add('[ERROR] $e');
+        _lastCliMessage = 'Error: $e';
+        _lastCliSuccess = false;
       });
     }
 
     _controller.clear();
     _focusNode.requestFocus();
-    _scrollToBottom();
   }
 
   Future<void> _generateAICommands() async {

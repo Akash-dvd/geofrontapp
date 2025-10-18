@@ -166,12 +166,17 @@ class GeoPointer extends GeoPoint {
           .resolveForType(GeoPointer)
           .strokeColor,
     );
+    final mv = SimpleGeometryObject.decodeMultivector(
+      json[SimpleGeometryObject.multivectorKey],
+    );
+    final x = (props['x'] as num?)?.toDouble() ?? mv.e1;
+    final y = (props['y'] as num?)?.toDouble() ?? mv.e2;
 
     return GeoPointer(
       id: json['id'] as String,
       label: json['label'] as String,
-      x: (props['x'] as num).toDouble(),
-      y: (props['y'] as num).toDouble(),
+      x: x,
+      y: y,
       visible: json['visible'] as bool? ?? true,
       styleOverrides: styleOverrides,
     );
@@ -284,6 +289,9 @@ class GeoMidpoint extends GeoPoint {
 
   static GeoMidpoint fromJson(Map<String, dynamic> json) {
     final props = json['properties'] as Map<String, dynamic>;
+    final mv = SimpleGeometryObject.decodeMultivector(
+      json[SimpleGeometryObject.multivectorKey],
+    );
     final deps = (json['dependencies'] as List).cast<String>();
     final defaults = CanvasStyleDefaults.instance.resolveForType(GeoMidpoint);
     final styleOverrides = _pointStyleOverridesFromJson(
@@ -296,8 +304,7 @@ class GeoMidpoint extends GeoPoint {
       id: json['id'] as String,
       label: json['label'] as String,
       dependencies: deps,
-      multivector:
-          Multivector.zero(), // Will be recalculated during DAG reconstruction
+      multivector: mv,
       visible: json['visible'] as bool? ?? true,
       styleOverrides: styleOverrides,
     );
@@ -369,6 +376,9 @@ class GeoInvPoint extends GeoPoint {
   static GeoInvPoint fromJson(Map<String, dynamic> json) {
     final props = json['properties'] as Map<String, dynamic>;
     final deps = (json['dependencies'] as List).cast<String>();
+    final mv = SimpleGeometryObject.decodeMultivector(
+      json[SimpleGeometryObject.multivectorKey],
+    );
     final defaults = CanvasStyleDefaults.instance.resolveForType(GeoInvPoint);
     final styleOverrides = _pointStyleOverridesFromJson(
       json,
@@ -380,8 +390,7 @@ class GeoInvPoint extends GeoPoint {
       id: json['id'] as String,
       label: json['label'] as String,
       dependencies: deps,
-      multivector:
-          Multivector.zero(), // Will be recalculated during DAG reconstruction
+      multivector: mv,
       visible: json['visible'] as bool? ?? true,
       styleOverrides: styleOverrides,
     );

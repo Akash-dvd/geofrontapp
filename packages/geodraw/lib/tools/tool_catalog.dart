@@ -144,6 +144,7 @@ const ToolCatalogEntry _perpendicularTool = ToolCatalogEntry(
   icon: Icons.rotate_90_degrees_ccw,
   command: 'Perpendicular[]',
   toolType: ToolType.perpendicular,
+  implemented: true,
 );
 
 const ToolCatalogEntry _parallelTool = ToolCatalogEntry(
@@ -152,6 +153,7 @@ const ToolCatalogEntry _parallelTool = ToolCatalogEntry(
   icon: Icons.swap_calls,
   command: 'Parallel[]',
   toolType: ToolType.parallel,
+  implemented: true,
 );
 
 const ToolCatalogEntry _angleBisectorTool = ToolCatalogEntry(
@@ -167,6 +169,7 @@ const ToolCatalogEntry _midpointTool = ToolCatalogEntry(
   icon: Icons.adjust,
   command: 'Midpoint[]',
   toolType: ToolType.midpoint,
+  implemented: true,
 );
 
 const ToolCatalogEntry _tangentTool = ToolCatalogEntry(
@@ -223,8 +226,18 @@ const ToolCatalogEntry _circleThreePointsTool = ToolCatalogEntry(
   id: 'circle_three_points',
   label: 'Circle (3 Points)',
   icon: Icons.circle,
-  command: 'Circle[]',
+  command: 'Circle3[]',
   toolType: ToolType.circleThreePoints,
+  implemented: true,
+);
+
+const ToolCatalogEntry _perpBisectorTool = ToolCatalogEntry(
+  id: 'perp_bisector',
+  label: 'Perp. Bisector',
+  icon: Icons.straighten,
+  command: 'PerpBisector[]',
+  toolType: ToolType.perpBisector,
+  implemented: true,
 );
 
 const ToolCatalogEntry _circularArcTool = ToolCatalogEntry(
@@ -253,7 +266,6 @@ const ToolCatalogEntry _reflectLineTool = ToolCatalogEntry(
   label: 'Reflect Line',
   icon: Icons.flip,
   command: 'Reflect[]',
-  toolType: ToolType.perpBisector,
 );
 
 const ToolCatalogEntry _rotateTool = ToolCatalogEntry(
@@ -440,6 +452,7 @@ const List<ToolCategoryGroup> level2ToolGroups = [
     tools: [
       _perpendicularTool,
       _parallelTool,
+      _perpBisectorTool,
       _angleBisectorTool,
       _midpointTool,
       _tangentTool,
@@ -491,6 +504,7 @@ const List<ToolCategoryGroup> level3ToolGroups = [
       _intersectTool,
       _perpendicularTool,
       _parallelTool,
+      _perpBisectorTool,
       _tangentTool,
       _locusTool,
     ],
@@ -518,6 +532,7 @@ const List<ToolCategoryGroup> level3ToolGroups = [
       _vectorTool,
       _perpendicularTool,
       _parallelTool,
+      _perpBisectorTool,
       _angleBisectorTool,
     ],
   ),

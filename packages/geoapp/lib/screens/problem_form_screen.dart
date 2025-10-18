@@ -259,12 +259,13 @@ class _ProblemFormScreenState extends State<ProblemFormScreen> {
                   ],
                   const SizedBox(height: 12),
                   SizedBox(
-                    height: 220,
+                    height: 130,
                     child: UnifiedPromptPanel(
                       dagManager: _dagManager,
                       cliExecutor: _commandExecutor,
                       aiService: _aiService,
                       aiAdapter: AIAdapter(dagManager: _dagManager),
+                      onConstructionComplete: () => setState(() {}),
                     ),
                   ),
                 ],

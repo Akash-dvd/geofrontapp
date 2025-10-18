@@ -98,12 +98,15 @@ class GeoInverse extends GeoTrans {
     final props = json['properties'] as Map<String, dynamic>;
     final deps = (json['dependencies'] as List).cast<String>();
     final styleOverrides = _transformStyleOverridesFromJson(json, GeoInverse);
+    final mv = SimpleGeometryObject.decodeMultivector(
+      json[SimpleGeometryObject.multivectorKey],
+    );
 
     return GeoInverse(
       id: json['id'] as String,
       label: json['label'] as String,
       dependencies: deps,
-      multivector: Multivector.zero(),
+      multivector: mv,
       centerPointId: props['centerPointId'] as String,
       power: (props['power'] as num).toDouble(),
       visible: json['visible'] as bool? ?? true,
@@ -175,12 +178,15 @@ class GeoRotate extends GeoTrans {
     final props = json['properties'] as Map<String, dynamic>;
     final deps = (json['dependencies'] as List).cast<String>();
     final styleOverrides = _transformStyleOverridesFromJson(json, GeoRotate);
+    final mv = SimpleGeometryObject.decodeMultivector(
+      json[SimpleGeometryObject.multivectorKey],
+    );
 
     return GeoRotate(
       id: json['id'] as String,
       label: json['label'] as String,
       dependencies: deps,
-      multivector: Multivector.zero(),
+      multivector: mv,
       centerPointId: props['centerPointId'] as String,
       angle: (props['angle'] as num).toDouble(),
       visible: json['visible'] as bool? ?? true,
@@ -252,12 +258,15 @@ class GeoDilate extends GeoTrans {
     final props = json['properties'] as Map<String, dynamic>;
     final deps = (json['dependencies'] as List).cast<String>();
     final styleOverrides = _transformStyleOverridesFromJson(json, GeoDilate);
+    final mv = SimpleGeometryObject.decodeMultivector(
+      json[SimpleGeometryObject.multivectorKey],
+    );
 
     return GeoDilate(
       id: json['id'] as String,
       label: json['label'] as String,
       dependencies: deps,
-      multivector: Multivector.zero(),
+      multivector: mv,
       centerPointId: props['centerPointId'] as String,
       factor: (props['factor'] as num).toDouble(),
       visible: json['visible'] as bool? ?? true,

@@ -86,16 +86,18 @@ class _GeoDrawCanvasState extends State<GeoDrawCanvas> {
       onPanEnd: _handlePanEnd,
       child: Listener(
         onPointerSignal: _handlePointerSignal,
-        child: CustomPaint(
-          painter: GeoDrawCanvasPainter(
-            dagManager: widget.dagManager,
-            viewport: _viewport!,
-            selectedIds: widget.selectedIds,
-            showGrid: widget.showGrid,
-            backgroundColor: widget.backgroundColor,
-            gridColor: widget.gridColor,
+        child: ClipRect(
+          child: CustomPaint(
+            painter: GeoDrawCanvasPainter(
+              dagManager: widget.dagManager,
+              viewport: _viewport!,
+              selectedIds: widget.selectedIds,
+              showGrid: widget.showGrid,
+              backgroundColor: widget.backgroundColor,
+              gridColor: widget.gridColor,
+            ),
+            child: const SizedBox.expand(),
           ),
-          child: Container(),
         ),
       ),
     );

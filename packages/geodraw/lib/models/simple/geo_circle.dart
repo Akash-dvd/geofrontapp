@@ -183,9 +183,6 @@ class GeoCircle2P extends GeoCircle {
     String? label,
     List<String>? dependencies,
     Multivector? multivector,
-    double? centerX,
-    double? centerY,
-    double? radius,
     bool? visible,
     CanvasStyle? style,
     Map<String, dynamic>? styleOverrides,
@@ -218,7 +215,10 @@ class GeoCircle2P extends GeoCircle {
   }
 
   static GeoCircle2P fromJson(Map<String, dynamic> json) {
-    final props = json['properties'] as Map<String, dynamic>;
+    final props = (json['properties'] as Map<String, dynamic>?) ?? const {};
+    final mv = SimpleGeometryObject.decodeMultivector(
+      json[SimpleGeometryObject.multivectorKey],
+    );
     final styleOverrides = _styleOverridesFromJson(
       json,
       legacyProps: props,
@@ -232,14 +232,12 @@ class GeoCircle2P extends GeoCircle {
       id: json['id'] as String,
       label: json['label'] as String,
       dependencies: deps,
-      multivector:
-          Multivector.zero(), // Will be recalculated during DAG reconstruction
+      multivector: mv,
       visible: json['visible'] as bool? ?? true,
       styleOverrides: styleOverrides,
     );
   }
 
-  @override
   GeometryObject? rebuildFromParents(List<GeometryObject> parents) {
     final points = parents.whereType<GeoPoint>().toList(growable: false);
     if (points.length != 2) {
@@ -344,9 +342,6 @@ class GeoCircle3P extends GeoCircle {
     String? label,
     List<String>? dependencies,
     Multivector? multivector,
-    double? centerX,
-    double? centerY,
-    double? radius,
     bool? visible,
     CanvasStyle? style,
     Map<String, dynamic>? styleOverrides,
@@ -379,7 +374,10 @@ class GeoCircle3P extends GeoCircle {
   }
 
   static GeoCircle3P fromJson(Map<String, dynamic> json) {
-    final props = json['properties'] as Map<String, dynamic>;
+    final props = (json['properties'] as Map<String, dynamic>?) ?? const {};
+    final mv = SimpleGeometryObject.decodeMultivector(
+      json[SimpleGeometryObject.multivectorKey],
+    );
     final styleOverrides = _styleOverridesFromJson(
       json,
       legacyProps: props,
@@ -393,14 +391,12 @@ class GeoCircle3P extends GeoCircle {
       id: json['id'] as String,
       label: json['label'] as String,
       dependencies: deps,
-      multivector:
-          Multivector.zero(), // Will be recalculated during DAG reconstruction
+      multivector: mv,
       visible: json['visible'] as bool? ?? true,
       styleOverrides: styleOverrides,
     );
   }
 
-  @override
   GeometryObject? rebuildFromParents(List<GeometryObject> parents) {
     final points = parents.whereType<GeoPoint>().toList(growable: false);
     if (points.length != 3) {
@@ -434,9 +430,6 @@ class GeoInvCircle extends GeoCircle {
     String? label,
     List<String>? dependencies,
     Multivector? multivector,
-    double? centerX,
-    double? centerY,
-    double? radius,
     bool? visible,
     CanvasStyle? style,
     Map<String, dynamic>? styleOverrides,
@@ -469,7 +462,10 @@ class GeoInvCircle extends GeoCircle {
   }
 
   static GeoInvCircle fromJson(Map<String, dynamic> json) {
-    final props = json['properties'] as Map<String, dynamic>;
+    final props = (json['properties'] as Map<String, dynamic>?) ?? const {};
+    final mv = SimpleGeometryObject.decodeMultivector(
+      json[SimpleGeometryObject.multivectorKey],
+    );
     final styleOverrides = _styleOverridesFromJson(
       json,
       legacyProps: props,
@@ -483,8 +479,7 @@ class GeoInvCircle extends GeoCircle {
       id: json['id'] as String,
       label: json['label'] as String,
       dependencies: deps,
-      multivector:
-          Multivector.zero(), // Will be recalculated during DAG reconstruction
+      multivector: mv,
       visible: json['visible'] as bool? ?? true,
       styleOverrides: styleOverrides,
     );

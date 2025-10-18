@@ -49,25 +49,38 @@ class _ToolPaletteState extends State<ToolPalette> {
       ),
     ];
 
-    if (widget.direction == Axis.horizontal) {
-      return SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.all(8),
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(minWidth: 560),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: paletteContent,
-          ),
-        ),
-      );
-    }
+    final bool isHorizontal = widget.direction == Axis.horizontal;
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: paletteContent,
+    final Widget scrollable = isHorizontal
+        ? SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.all(8),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(minWidth: 560),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: paletteContent,
+              ),
+            ),
+          )
+        : SingleChildScrollView(
+            padding: const EdgeInsets.all(8),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: paletteContent,
+            ),
+          );
+
+    final Color background = theme.colorScheme.surfaceVariant.withOpacity(0.92);
+
+    return Material(
+      elevation: 4,
+      color: background,
+      child: ConstrainedBox(
+        constraints: isHorizontal
+            ? const BoxConstraints(minHeight: 180)
+            : const BoxConstraints(minWidth: 220),
+        child: scrollable,
       ),
     );
   }

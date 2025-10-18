@@ -14,6 +14,8 @@ class ToolManager {
   ToolType _activeToolType = ToolType.select;
   Tool? _activeTool;
 
+  final _PointLabelGenerator _pointLabelGenerator = _PointLabelGenerator();
+
   final OnObjectCreated? onObjectCreated;
   final OnObjectSelected? onObjectSelected;
   final OnToolStateChanged? onToolStateChanged;
@@ -65,6 +67,7 @@ class ToolManager {
           onObjectCreated: onObjectCreated,
           onObjectSelected: onObjectSelected,
           onToolStateChanged: onToolStateChanged,
+          labelGenerator: _pointLabelGenerator,
         );
 
       case ToolType.line:
@@ -74,6 +77,7 @@ class ToolManager {
           onObjectCreated: onObjectCreated,
           onObjectSelected: onObjectSelected,
           onToolStateChanged: onToolStateChanged,
+          createFreePoint: _createFreePoint,
         );
 
       case ToolType.circle:
@@ -83,6 +87,57 @@ class ToolManager {
           onObjectCreated: onObjectCreated,
           onObjectSelected: onObjectSelected,
           onToolStateChanged: onToolStateChanged,
+          createFreePoint: _createFreePoint,
+        );
+
+      case ToolType.circleThreePoints:
+        return _CircleThreePointsTool(
+          dagManager: dagManager,
+          commandHistory: commandHistory,
+          onObjectCreated: onObjectCreated,
+          onObjectSelected: onObjectSelected,
+          onToolStateChanged: onToolStateChanged,
+          createFreePoint: _createFreePoint,
+        );
+
+      case ToolType.midpoint:
+        return _MidpointTool(
+          dagManager: dagManager,
+          commandHistory: commandHistory,
+          onObjectCreated: onObjectCreated,
+          onObjectSelected: onObjectSelected,
+          onToolStateChanged: onToolStateChanged,
+          createFreePoint: _createFreePoint,
+        );
+
+      case ToolType.perpendicular:
+        return _PerpendicularTool(
+          dagManager: dagManager,
+          commandHistory: commandHistory,
+          onObjectCreated: onObjectCreated,
+          onObjectSelected: onObjectSelected,
+          onToolStateChanged: onToolStateChanged,
+          createFreePoint: _createFreePoint,
+        );
+
+      case ToolType.parallel:
+        return _ParallelTool(
+          dagManager: dagManager,
+          commandHistory: commandHistory,
+          onObjectCreated: onObjectCreated,
+          onObjectSelected: onObjectSelected,
+          onToolStateChanged: onToolStateChanged,
+          createFreePoint: _createFreePoint,
+        );
+
+      case ToolType.perpBisector:
+        return _PerpBisectorTool(
+          dagManager: dagManager,
+          commandHistory: commandHistory,
+          onObjectCreated: onObjectCreated,
+          onObjectSelected: onObjectSelected,
+          onToolStateChanged: onToolStateChanged,
+          createFreePoint: _createFreePoint,
         );
 
       case ToolType.select:
@@ -96,6 +151,19 @@ class ToolManager {
     }
   }
 
+  GeoPointer _createFreePoint(Offset position) {
+    final point = GeoPointer(
+      id: dagManager.generateId('point'),
+      label: _pointLabelGenerator.next(),
+      x: position.dx,
+      y: position.dy,
+    );
+
+    dagManager.addObject(point, const <String>[]);
+    onObjectCreated?.call(point, const <String>[]);
+    return point;
+  }
+
   /// Get list of all available tools
   List<ToolType> get availableTools => [
     ToolType.select,
@@ -103,6 +171,11 @@ class ToolManager {
     ToolType.point,
     ToolType.line,
     ToolType.circle,
+    ToolType.circleThreePoints,
+    ToolType.midpoint,
+    ToolType.perpendicular,
+    ToolType.parallel,
+    ToolType.perpBisector,
   ];
 
   /// Check if a tool type is available
@@ -143,6 +216,36 @@ class ToolManager {
           icon: Icons.circle_outlined,
           tooltip: 'Create a circle',
         );
+      case ToolType.circleThreePoints:
+        return const ToolMetadata(
+          name: 'Circle (3 Points)',
+          icon: Icons.circle,
+          tooltip: 'Create a circle through three points',
+        );
+      case ToolType.midpoint:
+        return const ToolMetadata(
+          name: 'Midpoint',
+          icon: Icons.adjust,
+          tooltip: 'Create midpoint of two points',
+        );
+      case ToolType.perpendicular:
+        return const ToolMetadata(
+          name: 'Perpendicular Line',
+          icon: Icons.rotate_90_degrees_ccw,
+          tooltip: 'Create a line perpendicular to another line',
+        );
+      case ToolType.parallel:
+        return const ToolMetadata(
+          name: 'Parallel Line',
+          icon: Icons.swap_calls,
+          tooltip: 'Create a line parallel to another line',
+        );
+      case ToolType.perpBisector:
+        return const ToolMetadata(
+          name: 'Perpendicular Bisector',
+          icon: Icons.straighten,
+          tooltip: 'Create the perpendicular bisector of two points',
+        );
       default:
         return const ToolMetadata(
           name: 'Unknown',
@@ -172,12 +275,15 @@ class ToolMetadata {
 
 /// Point tool - creates points immediately on click
 class _PointTool extends UnifiedTool {
+  final _PointLabelGenerator labelGenerator;
+
   _PointTool({
     required super.dagManager,
     super.commandHistory,
     super.onObjectCreated,
     super.onObjectSelected,
     super.onToolStateChanged,
+    required this.labelGenerator,
   });
 
   @override
@@ -204,9 +310,11 @@ class _PointTool extends UnifiedTool {
 
   Future<void> _createPointAt(Offset position) async {
     try {
+      final label = labelGenerator.next();
       final result = await executor.execute(
         commandName: commandName,
         arguments: [position.dx, position.dy],
+        customLabel: label,
       );
 
       if (result.success && result.object is GeometryObject) {
@@ -238,7 +346,7 @@ class _PointTool extends UnifiedTool {
 
 /// Line tool - creates lines through two points
 class _LineTool extends UnifiedTool {
-  int _labelCounter = 0;
+  final GeoPointer Function(Offset position) createFreePoint;
 
   _LineTool({
     required super.dagManager,
@@ -246,6 +354,7 @@ class _LineTool extends UnifiedTool {
     super.onObjectCreated,
     super.onObjectSelected,
     super.onToolStateChanged,
+    required this.createFreePoint,
   });
 
   @override
@@ -267,26 +376,9 @@ class _LineTool extends UnifiedTool {
   GeometryObject? createObjectAtPosition(Offset position) {
     final nextType = verifier.schema.nextConstraint(verifier.arguments);
     if (nextType?.accepts(GeoPointer) ?? false) {
-      final point = GeoPointer(
-        id: 'point_${DateTime.now().millisecondsSinceEpoch}',
-        label: _generatePointLabel(),
-        x: position.dx,
-        y: position.dy,
-      );
-
-      dagManager.addObject(point, []);
-      onObjectCreated?.call(point, []);
-      return point;
+      return createFreePoint(position);
     }
     return null;
-  }
-
-  String _generatePointLabel() {
-    const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-    if (_labelCounter < 26) {
-      return letters[_labelCounter++];
-    }
-    return 'P${_labelCounter++}';
   }
 
   @override
@@ -298,7 +390,7 @@ class _LineTool extends UnifiedTool {
 
 /// Circle tool - creates circles with center and point
 class _CircleTool extends UnifiedTool {
-  int _labelCounter = 0;
+  final GeoPointer Function(Offset position) createFreePoint;
 
   _CircleTool({
     required super.dagManager,
@@ -306,6 +398,7 @@ class _CircleTool extends UnifiedTool {
     super.onObjectCreated,
     super.onObjectSelected,
     super.onToolStateChanged,
+    required this.createFreePoint,
   });
 
   @override
@@ -327,31 +420,246 @@ class _CircleTool extends UnifiedTool {
   GeometryObject? createObjectAtPosition(Offset position) {
     final nextType = verifier.schema.nextConstraint(verifier.arguments);
     if (nextType?.accepts(GeoPointer) ?? false) {
-      final point = GeoPointer(
-        id: 'point_${DateTime.now().millisecondsSinceEpoch}',
-        label: _generatePointLabel(),
-        x: position.dx,
-        y: position.dy,
-      );
-
-      dagManager.addObject(point, []);
-      onObjectCreated?.call(point, []);
-      return point;
+      return createFreePoint(position);
     }
     return null;
-  }
-
-  String _generatePointLabel() {
-    const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-    if (_labelCounter < 26) {
-      return letters[_labelCounter++];
-    }
-    return 'P${_labelCounter++}';
   }
 
   @override
   void reset() {
     super.reset();
     notifyStateChanged('Click center point for circle');
+  }
+}
+
+/// Circle through three points tool
+class _CircleThreePointsTool extends UnifiedTool {
+  final GeoPointer Function(Offset position) createFreePoint;
+
+  _CircleThreePointsTool({
+    required super.dagManager,
+    super.commandHistory,
+    super.onObjectCreated,
+    super.onObjectSelected,
+    super.onToolStateChanged,
+    required this.createFreePoint,
+  });
+
+  @override
+  ToolType get type => ToolType.circleThreePoints;
+
+  @override
+  String get commandName => 'circle3';
+
+  @override
+  String get name => 'Circle (3 Points)';
+
+  @override
+  IconData get icon => Icons.circle;
+
+  @override
+  String get tooltip => 'Create a circle through three points';
+
+  @override
+  GeometryObject? createObjectAtPosition(Offset position) {
+    final nextType = verifier.schema.nextConstraint(verifier.arguments);
+    if (nextType?.accepts(GeoPointer) ?? false) {
+      return createFreePoint(position);
+    }
+    return null;
+  }
+
+  @override
+  void reset() {
+    super.reset();
+    notifyStateChanged('Select three points for circle');
+  }
+}
+
+/// Midpoint tool - constructs midpoint between two points
+class _MidpointTool extends UnifiedTool {
+  final GeoPointer Function(Offset position) createFreePoint;
+
+  _MidpointTool({
+    required super.dagManager,
+    super.commandHistory,
+    super.onObjectCreated,
+    super.onObjectSelected,
+    super.onToolStateChanged,
+    required this.createFreePoint,
+  });
+
+  @override
+  ToolType get type => ToolType.midpoint;
+
+  @override
+  String get commandName => 'midpoint';
+
+  @override
+  String get name => 'Midpoint';
+
+  @override
+  IconData get icon => Icons.adjust;
+
+  @override
+  String get tooltip => 'Create midpoint of two points';
+
+  @override
+  GeometryObject? createObjectAtPosition(Offset position) {
+    final nextType = verifier.schema.nextConstraint(verifier.arguments);
+    if (nextType?.accepts(GeoPointer) ?? false) {
+      return createFreePoint(position);
+    }
+    return null;
+  }
+
+  @override
+  void reset() {
+    super.reset();
+    notifyStateChanged('Select two points for midpoint');
+  }
+}
+
+/// Perpendicular line tool - builds a line perpendicular to a reference line
+class _PerpendicularTool extends UnifiedTool {
+  final GeoPointer Function(Offset position) createFreePoint;
+
+  _PerpendicularTool({
+    required super.dagManager,
+    super.commandHistory,
+    super.onObjectCreated,
+    super.onObjectSelected,
+    super.onToolStateChanged,
+    required this.createFreePoint,
+  });
+
+  @override
+  ToolType get type => ToolType.perpendicular;
+
+  @override
+  String get commandName => 'perpendicular';
+
+  @override
+  String get name => 'Perpendicular Line';
+
+  @override
+  IconData get icon => Icons.rotate_90_degrees_ccw;
+
+  @override
+  String get tooltip => 'Create a line perpendicular to another line';
+
+  @override
+  GeometryObject? createObjectAtPosition(Offset position) {
+    final nextType = verifier.schema.nextConstraint(verifier.arguments);
+    if (nextType?.accepts(GeoPointer) ?? false) {
+      return createFreePoint(position);
+    }
+    return null;
+  }
+
+  @override
+  void reset() {
+    super.reset();
+    notifyStateChanged('Select a line and a point for perpendicular');
+  }
+}
+
+/// Parallel line tool - builds a line parallel to a reference line
+class _ParallelTool extends UnifiedTool {
+  final GeoPointer Function(Offset position) createFreePoint;
+
+  _ParallelTool({
+    required super.dagManager,
+    super.commandHistory,
+    super.onObjectCreated,
+    super.onObjectSelected,
+    super.onToolStateChanged,
+    required this.createFreePoint,
+  });
+
+  @override
+  ToolType get type => ToolType.parallel;
+
+  @override
+  String get commandName => 'parallel';
+
+  @override
+  String get name => 'Parallel Line';
+
+  @override
+  IconData get icon => Icons.swap_calls;
+
+  @override
+  String get tooltip => 'Create a line parallel to another line';
+
+  @override
+  GeometryObject? createObjectAtPosition(Offset position) {
+    final nextType = verifier.schema.nextConstraint(verifier.arguments);
+    if (nextType?.accepts(GeoPointer) ?? false) {
+      return createFreePoint(position);
+    }
+    return null;
+  }
+
+  @override
+  void reset() {
+    super.reset();
+    notifyStateChanged('Select a line and a point for parallel line');
+  }
+}
+
+/// Perpendicular bisector tool - constructs bisector of segment formed by two points
+class _PerpBisectorTool extends UnifiedTool {
+  final GeoPointer Function(Offset position) createFreePoint;
+
+  _PerpBisectorTool({
+    required super.dagManager,
+    super.commandHistory,
+    super.onObjectCreated,
+    super.onObjectSelected,
+    super.onToolStateChanged,
+    required this.createFreePoint,
+  });
+
+  @override
+  ToolType get type => ToolType.perpBisector;
+
+  @override
+  String get commandName => 'perpbisector';
+
+  @override
+  String get name => 'Perpendicular Bisector';
+
+  @override
+  IconData get icon => Icons.straighten;
+
+  @override
+  String get tooltip => 'Create the perpendicular bisector of two points';
+
+  @override
+  GeometryObject? createObjectAtPosition(Offset position) {
+    final nextType = verifier.schema.nextConstraint(verifier.arguments);
+    if (nextType?.accepts(GeoPointer) ?? false) {
+      return createFreePoint(position);
+    }
+    return null;
+  }
+
+  @override
+  void reset() {
+    super.reset();
+    notifyStateChanged('Select two points for perpendicular bisector');
+  }
+}
+
+class _PointLabelGenerator {
+  int _counter = 0;
+
+  String next() {
+    const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    if (_counter < letters.length) {
+      return letters[_counter++];
+    }
+    return 'P${_counter++}';
   }
 }

@@ -50,7 +50,7 @@ abstract class GeoLine extends SimpleGeometryObject {
 
     // Draw line across canvas bounds (approximate as large segment)
     // This will be clipped by the viewport
-    final points = _getLinePoints();
+    final points = _getLinePoints(canvas);
     if (points != null) {
       if (resolvedLineStyle == LineStyle.dashed) {
         _drawDashedLine(canvas, linePaint, points.$1, points.$2);
@@ -83,20 +83,67 @@ abstract class GeoLine extends SimpleGeometryObject {
   }
 
   /// Get two points on the line for drawing (extends far in both directions)
-  (Offset, Offset)? _getLinePoints() {
+  (Offset, Offset)? _getLinePoints(Canvas canvas) {
+    final clipBounds = canvas.getLocalClipBounds();
+    if (clipBounds.isEmpty) {
+      return _fallbackLinePoints();
+    }
+
+    final intersections = <Offset>[];
+    Rect expandedBounds = clipBounds;
+
+    // Inflate slightly to account for floating point inaccuracies.
+    const double tolerance = 0.001;
+    expandedBounds = expandedBounds.inflate(tolerance);
+
+    void addIfInside(double x, double y) {
+      if (!x.isFinite || !y.isFinite) {
+        return;
+      }
+      final candidate = Offset(x, y);
+      if (!expandedBounds.contains(candidate)) {
+        return;
+      }
+      for (final existing in intersections) {
+        if (_almostEqual(existing.dx, candidate.dx) &&
+            _almostEqual(existing.dy, candidate.dy)) {
+          return;
+        }
+      }
+      intersections.add(candidate);
+    }
+
+    if (b.abs() > tolerance) {
+      addIfInside(clipBounds.left, -(a * clipBounds.left + c) / b);
+      addIfInside(clipBounds.right, -(a * clipBounds.right + c) / b);
+    }
+
+    if (a.abs() > tolerance) {
+      addIfInside(-(b * clipBounds.top + c) / a, clipBounds.top);
+      addIfInside(-(b * clipBounds.bottom + c) / a, clipBounds.bottom);
+    }
+
+    if (intersections.length >= 2) {
+      return (intersections[0], intersections[1]);
+    }
+
+    // Fallback to the old large-bounds approach when we cannot find two
+    // distinct intersections (e.g. nearly degenerate lines).
+    return _fallbackLinePoints();
+  }
+
+  (Offset, Offset)? _fallbackLinePoints() {
     if (b.abs() > 0.001) {
-      // Non-vertical line
       final x1 = -10000.0;
       final y1 = -(a * x1 + c) / b;
       final x2 = 10000.0;
       final y2 = -(a * x2 + c) / b;
       return (Offset(x1, y1), Offset(x2, y2));
     } else if (a.abs() > 0.001) {
-      // Vertical line
       final x = -c / a;
       return (Offset(x, -10000.0), Offset(x, 10000.0));
     }
-    return null; // Invalid line
+    return null;
   }
 
   void _drawDashedLine(Canvas canvas, Paint paint, Offset p1, Offset p2) {
@@ -281,9 +328,6 @@ class GeoLine2P extends GeoLine {
     String? label,
     List<String>? dependencies,
     Multivector? multivector,
-    double? a,
-    double? b,
-    double? c,
     bool? visible,
     CanvasStyle? style,
     Map<String, dynamic>? styleOverrides,
@@ -307,12 +351,23 @@ class GeoLine2P extends GeoLine {
   @override
   Map<String, dynamic> toJson() {
     final json = super.toJson();
-    json['properties'] = {'a': a, 'b': b, 'c': c};
+    final properties = <String, dynamic>{
+      'a': a,
+      'b': b,
+      'c': c,
+      'linePattern': style.linePattern,
+      'strokeWidth': style.strokeWidth,
+    };
+    properties.removeWhere((_, value) => value == null);
+    json['properties'] = properties;
     return json;
   }
 
   static GeoLine2P fromJson(Map<String, dynamic> json) {
-    final props = json['properties'] as Map<String, dynamic>;
+    final props = (json['properties'] as Map<String, dynamic>?) ?? const {};
+    final mv = SimpleGeometryObject.decodeMultivector(
+      json[SimpleGeometryObject.multivectorKey],
+    );
     final deps = (json['dependencies'] as List).cast<String>();
     final defaults = CanvasStyleDefaults.instance.resolveForType(GeoLine2P);
     final styleOverrides = _lineStyleOverridesFromJson(
@@ -325,7 +380,7 @@ class GeoLine2P extends GeoLine {
       id: json['id'] as String,
       label: json['label'] as String,
       dependencies: deps,
-      multivector: Multivector.zero(),
+      multivector: mv,
       visible: json['visible'] as bool? ?? true,
       styleOverrides: styleOverrides,
     );
@@ -431,9 +486,6 @@ class GeoPerpendicularBisector extends GeoLine {
     String? label,
     List<String>? dependencies,
     Multivector? multivector,
-    double? a,
-    double? b,
-    double? c,
     bool? visible,
     CanvasStyle? style,
     Map<String, dynamic>? styleOverrides,
@@ -457,12 +509,23 @@ class GeoPerpendicularBisector extends GeoLine {
   @override
   Map<String, dynamic> toJson() {
     final json = super.toJson();
-    json['properties'] = {'a': a, 'b': b, 'c': c};
+    final properties = <String, dynamic>{
+      'a': a,
+      'b': b,
+      'c': c,
+      'linePattern': style.linePattern,
+      'strokeWidth': style.strokeWidth,
+    };
+    properties.removeWhere((_, value) => value == null);
+    json['properties'] = properties;
     return json;
   }
 
   static GeoPerpendicularBisector fromJson(Map<String, dynamic> json) {
-    final props = json['properties'] as Map<String, dynamic>;
+    final props = (json['properties'] as Map<String, dynamic>?) ?? const {};
+    final mv = SimpleGeometryObject.decodeMultivector(
+      json[SimpleGeometryObject.multivectorKey],
+    );
     final deps = (json['dependencies'] as List).cast<String>();
     final defaults = CanvasStyleDefaults.instance.resolveForType(
       GeoPerpendicularBisector,
@@ -477,7 +540,7 @@ class GeoPerpendicularBisector extends GeoLine {
       id: json['id'] as String,
       label: json['label'] as String,
       dependencies: deps,
-      multivector: Multivector.zero(),
+      multivector: mv,
       visible: json['visible'] as bool? ?? true,
       styleOverrides: styleOverrides,
     );
@@ -588,9 +651,6 @@ class GeoPerpendicularLine extends GeoLine {
     String? label,
     List<String>? dependencies,
     Multivector? multivector,
-    double? a,
-    double? b,
-    double? c,
     bool? visible,
     CanvasStyle? style,
     Map<String, dynamic>? styleOverrides,
@@ -614,12 +674,23 @@ class GeoPerpendicularLine extends GeoLine {
   @override
   Map<String, dynamic> toJson() {
     final json = super.toJson();
-    json['properties'] = {'a': a, 'b': b, 'c': c};
+    final properties = <String, dynamic>{
+      'a': a,
+      'b': b,
+      'c': c,
+      'linePattern': style.linePattern,
+      'strokeWidth': style.strokeWidth,
+    };
+    properties.removeWhere((_, value) => value == null);
+    json['properties'] = properties;
     return json;
   }
 
   static GeoPerpendicularLine fromJson(Map<String, dynamic> json) {
-    final props = json['properties'] as Map<String, dynamic>;
+    final props = (json['properties'] as Map<String, dynamic>?) ?? const {};
+    final mv = SimpleGeometryObject.decodeMultivector(
+      json[SimpleGeometryObject.multivectorKey],
+    );
     final deps = (json['dependencies'] as List).cast<String>();
     final defaults = CanvasStyleDefaults.instance.resolveForType(
       GeoPerpendicularLine,
@@ -634,7 +705,7 @@ class GeoPerpendicularLine extends GeoLine {
       id: json['id'] as String,
       label: json['label'] as String,
       dependencies: deps,
-      multivector: Multivector.zero(),
+      multivector: mv,
       visible: json['visible'] as bool? ?? true,
       styleOverrides: styleOverrides,
     );
@@ -751,9 +822,6 @@ class GeoParallelLine extends GeoLine {
     String? label,
     List<String>? dependencies,
     Multivector? multivector,
-    double? a,
-    double? b,
-    double? c,
     bool? visible,
     CanvasStyle? style,
     Map<String, dynamic>? styleOverrides,
@@ -777,12 +845,23 @@ class GeoParallelLine extends GeoLine {
   @override
   Map<String, dynamic> toJson() {
     final json = super.toJson();
-    json['properties'] = {'a': a, 'b': b, 'c': c};
+    final properties = <String, dynamic>{
+      'a': a,
+      'b': b,
+      'c': c,
+      'linePattern': style.linePattern,
+      'strokeWidth': style.strokeWidth,
+    };
+    properties.removeWhere((_, value) => value == null);
+    json['properties'] = properties;
     return json;
   }
 
   static GeoParallelLine fromJson(Map<String, dynamic> json) {
-    final props = json['properties'] as Map<String, dynamic>;
+    final props = (json['properties'] as Map<String, dynamic>?) ?? const {};
+    final mv = SimpleGeometryObject.decodeMultivector(
+      json[SimpleGeometryObject.multivectorKey],
+    );
     final deps = (json['dependencies'] as List).cast<String>();
     final defaults = CanvasStyleDefaults.instance.resolveForType(
       GeoParallelLine,
@@ -797,7 +876,7 @@ class GeoParallelLine extends GeoLine {
       id: json['id'] as String,
       label: json['label'] as String,
       dependencies: deps,
-      multivector: Multivector.zero(),
+      multivector: mv,
       visible: json['visible'] as bool? ?? true,
       styleOverrides: styleOverrides,
     );
