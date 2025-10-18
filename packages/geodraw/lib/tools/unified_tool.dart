@@ -4,7 +4,6 @@ library;
 import 'package:flutter/material.dart';
 
 import '../core/command/simple_executor.dart';
-// import '../core/command/tool_verifier.dart';
 import 'tool_verifier.dart';
 import '../core/command/command_history.dart';
 import '../core/command/command_history_entry.dart';
@@ -136,8 +135,9 @@ abstract class UnifiedTool implements Tool {
       );
 
       if (result.success) {
-        if (result.object != null) {
-          onObjectCreated?.call(result.object!, result.object!.dependencies);
+        if (result.object is GeometryObject) {
+          final geometry = result.object as GeometryObject;
+          onObjectCreated?.call(geometry, geometry.dependencies);
         }
         notifyStateChanged(result.message);
         _recordHistory(entry, result);

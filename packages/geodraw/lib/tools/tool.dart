@@ -15,6 +15,7 @@ enum ToolType {
   parallel,
   perpBisector,
   intersection,
+  text,
 }
 
 /// Abstract base class for all construction tools
@@ -45,7 +46,8 @@ abstract class Tool {
 }
 
 /// Callback types for tool events
-typedef OnObjectCreated = void Function(GeometryObject object, List<String> dependencies);
+typedef OnObjectCreated =
+    void Function(GeometryObject object, List<String> dependencies);
 typedef OnObjectSelected = void Function(String objectId);
 typedef OnToolStateChanged = void Function(String state);
 

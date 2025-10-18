@@ -1,11 +1,12 @@
 import 'package:equatable/equatable.dart';
 
+import '../../models/canvas_object.dart';
 import '../../models/geometry_object.dart';
 
 /// Represents a node in the Directed Acyclic Graph (DAG)
 class DAGNode with EquatableMixin {
   final String id;
-  final GeometryObject object;
+  final CanvasObject object;
   final List<String> parentIds;
   final List<String> childIds;
   final int depth;
@@ -27,7 +28,7 @@ class DAGNode with EquatableMixin {
 
   DAGNode copyWith({
     String? id,
-    GeometryObject? object,
+    CanvasObject? object,
     List<String>? parentIds,
     List<String>? childIds,
     int? depth,
@@ -54,7 +55,10 @@ class DAGNode with EquatableMixin {
 
   @override
   String toString() {
-    return 'DAGNode{id: $id, label: ${object.label}, depth: $depth, '
+    final label = object is GeometryObject
+        ? (object as GeometryObject).label
+        : object.id;
+    return 'DAGNode{id: $id, label: $label, depth: $depth, '
         'parents: ${parentIds.length}, children: ${childIds.length}, dirty: $isDirty}';
   }
 }

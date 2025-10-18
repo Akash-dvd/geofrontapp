@@ -5,9 +5,11 @@ import 'package:flutter/material.dart';
 import 'canvas_object.dart';
 import 'canvas_style.dart';
 import 'geometry_object.dart';
+import 'simple/geo_circle.dart';
 import 'simple/geo_line.dart';
 import 'simple/geo_point.dart';
 import 'text/canvas_text.dart';
+import 'type_hierarchy.dart';
 
 /// Maintains default style presets for every [CanvasObject] type.
 class CanvasStyleDefaults {
@@ -19,11 +21,9 @@ class CanvasStyleDefaults {
   static final CanvasStyleDefaults instance = CanvasStyleDefaults._internal();
 
   final Map<Type, CanvasStyle> _overrides = HashMap<Type, CanvasStyle>();
-  final Map<Type, Set<Type>> _parents = HashMap<Type, Set<Type>>();
 
   void _registerBuiltIns() {
     registerStyle(CanvasObject, CanvasStyle.baseDefaults);
-    registerInheritance(CanvasObject, {Object});
 
     registerStyle(
       GeometryObject,
@@ -59,12 +59,15 @@ class CanvasStyleDefaults {
         strokeWidth: 2.0,
       ),
     );
-  }
 
-  /// Register explicit inheritance information for a [type].
-  void registerInheritance(Type type, Set<Type> parents) {
-    if (parents.isEmpty) return;
-    _parents[type] = {...parents};
+    registerStyle(
+      GeoCircle,
+      CanvasStyle.baseDefaults.copyWith(
+        pointRadius: 0,
+        filled: false,
+        strokeWidth: 2.0,
+      ),
+    );
   }
 
   /// Register a style override for a specific [type].
@@ -84,26 +87,10 @@ class CanvasStyleDefaults {
 
   /// Resolve the default style for a runtime [type].
   CanvasStyle resolve(Type type) {
-    final visited = <Type>{};
-    final queue = Queue<Type>()..add(type);
-
-    while (queue.isNotEmpty) {
-      final current = queue.removeFirst();
-      final style = _overrides[current];
+    for (final candidate in TypeHierarchy.instance.ancestorsOf(type)) {
+      final style = _overrides[candidate];
       if (style != null) {
         return style;
-      }
-
-      visited.add(current);
-      final parents = _parents[current];
-      if (parents == null) {
-        continue;
-      }
-
-      for (final parent in parents) {
-        if (!visited.contains(parent)) {
-          queue.add(parent);
-        }
       }
     }
 

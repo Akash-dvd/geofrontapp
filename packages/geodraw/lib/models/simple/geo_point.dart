@@ -2,20 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:geocalc/Multivector.dart';
 
 import '../canvas_style.dart';
+import '../canvas_style_defaults.dart';
 import '../geometry_object.dart';
 
 /// Abstract base class for all point types
 abstract class GeoPoint extends SimpleGeometryObject {
-  /// Rendering size in pixels
-  final double size;
-
   GeoPoint({
     required super.id,
     required super.label,
     required super.dependencies,
     required super.multivector,
-    this.size = 5.0,
-    super.color = Colors.red,
     super.visible,
     super.styleOverrides,
   });
@@ -32,20 +28,38 @@ abstract class GeoPoint extends SimpleGeometryObject {
   void draw(Canvas canvas, Paint paint) {
     if (!visible) return;
 
-    final pointPaint = Paint()
-      ..color = color
-      ..style = PaintingStyle.fill;
+    final effectiveStyle = style;
+    final radius = effectiveStyle.pointRadius;
 
-    canvas.drawCircle(position, size, pointPaint);
+    if (effectiveStyle.filled) {
+      final fillPaint = Paint()
+        ..color = effectiveStyle.fillColor
+        ..style = PaintingStyle.fill;
+      canvas.drawCircle(position, radius, fillPaint);
+
+      final strokePaint = Paint()
+        ..color = effectiveStyle.strokeColor
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = effectiveStyle.strokeWidth;
+      canvas.drawCircle(position, radius, strokePaint);
+    } else {
+      final strokePaint = Paint()
+        ..color = effectiveStyle.strokeColor
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = effectiveStyle.strokeWidth;
+      canvas.drawCircle(position, radius, strokePaint);
+    }
 
     // Draw label
     if (label.isNotEmpty) {
+      final labelColor = effectiveStyle.labelColor;
+      final labelFontSize = effectiveStyle.labelFontSize;
       final textPainter = TextPainter(
         text: TextSpan(
           text: label,
           style: TextStyle(
-            color: color,
-            fontSize: 14,
+            color: labelColor,
+            fontSize: labelFontSize,
             fontWeight: FontWeight.bold,
           ),
         ),
@@ -54,19 +68,19 @@ abstract class GeoPoint extends SimpleGeometryObject {
       textPainter.layout();
       textPainter.paint(
         canvas,
-        Offset(x + size + 2, y - textPainter.height / 2),
+        Offset(x + radius + 2, y - textPainter.height / 2),
       );
     }
   }
 
   @override
   bool contains(Offset position) {
-    return distanceTo(position) <= size;
+    return distanceTo(position) <= style.pointRadius;
   }
 
   @override
   Rect getBounds() {
-    return Rect.fromCircle(center: position, radius: size);
+    return Rect.fromCircle(center: position, radius: style.pointRadius);
   }
 
   @override
@@ -86,7 +100,8 @@ abstract class GeoPoint extends SimpleGeometryObject {
   }
 
   @override
-  List<Object?> get props => [...super.props, size];
+  @override
+  List<Object?> get props => [...super.props];
 }
 
 /// Free point that can be moved by the user
@@ -96,8 +111,6 @@ class GeoPointer extends GeoPoint {
     required super.label,
     required double x,
     required double y,
-    super.size,
-    super.color,
     super.visible,
     Map<String, dynamic>? styleOverrides,
   }) : super(
@@ -114,23 +127,21 @@ class GeoPointer extends GeoPoint {
     Multivector? multivector,
     double? x,
     double? y,
-    double? size,
-    Color? color,
     bool? visible,
     CanvasStyle? style,
+    Map<String, dynamic>? styleOverrides,
   }) {
     // Recalculate multivector from x, y if provided
     final newX = x ?? this.x;
     final newY = y ?? this.y;
-    final overrides = resolveStyleOverrides(style);
-    final resolvedColor = resolveColor(color, style);
+    final overrides =
+        styleOverrides ??
+        (style == null ? this.styleOverrides : resolveStyleOverrides(style));
     return GeoPointer(
       id: id ?? this.id,
       label: label ?? this.label,
       x: newX,
       y: newY,
-      size: size ?? this.size,
-      color: resolvedColor,
       visible: visible ?? this.visible,
       styleOverrides: overrides,
     );
@@ -142,22 +153,25 @@ class GeoPointer extends GeoPoint {
   @override
   Map<String, dynamic> toJson() {
     final json = super.toJson();
-    json['properties'] = {'x': x, 'y': y, 'size': size};
+    json['properties'] = {'x': x, 'y': y};
     return json;
   }
 
   static GeoPointer fromJson(Map<String, dynamic> json) {
     final props = json['properties'] as Map<String, dynamic>;
-    final styleOverrides = GeometryObject.extractStyleOverrides(json);
-    final color = GeometryObject.colorFromJson(json, Colors.red);
+    final styleOverrides = _pointStyleOverridesFromJson(
+      json,
+      legacyProps: props,
+      fallbackColor: CanvasStyleDefaults.instance
+          .resolveForType(GeoPointer)
+          .strokeColor,
+    );
 
     return GeoPointer(
       id: json['id'] as String,
       label: json['label'] as String,
       x: (props['x'] as num).toDouble(),
       y: (props['y'] as num).toDouble(),
-      size: (props['size'] as num?)?.toDouble() ?? 5.0,
-      color: color,
       visible: json['visible'] as bool? ?? true,
       styleOverrides: styleOverrides,
     );
@@ -171,8 +185,6 @@ class GeoMidpoint extends GeoPoint {
     required super.label,
     required super.dependencies, // Should have exactly 2 dependencies
     required super.multivector,
-    super.size,
-    super.color = Colors.green,
     super.visible,
     super.styleOverrides,
   }) : assert(dependencies.length == 2, 'Midpoint requires exactly 2 points');
@@ -187,23 +199,51 @@ class GeoMidpoint extends GeoPoint {
     Color color = Colors.green,
     bool visible = true,
     CanvasStyle? style,
+    Map<String, dynamic>? styleOverrides,
   }) {
-    final mv = constructMidpoint(p1.multivector, p2.multivector);
-    final resolveOverrides = style != null
-        ? Map<String, dynamic>.unmodifiable(
-            style.diff(CanvasStyle.baseDefaults),
-          )
-        : null;
+    return fromDependencies(
+      id: id,
+      label: label,
+      points: [p1, p2],
+      visible: visible,
+      style: style,
+      styleOverrides: styleOverrides,
+      fallbackColor: color,
+      fallbackRadius: size,
+    );
+  }
+
+  /// Construct a midpoint from a list of dependent points.
+  static GeoMidpoint fromDependencies({
+    required String id,
+    required String label,
+    required List<GeoPoint> points,
+    bool visible = true,
+    CanvasStyle? style,
+    Map<String, dynamic>? styleOverrides,
+    double fallbackRadius = 5.0,
+    Color fallbackColor = Colors.green,
+  }) {
+    if (points.length != 2) {
+      throw ArgumentError('GeoMidpoint requires exactly 2 point dependencies');
+    }
+
+    final mv = constructMidpoint(points[0].multivector, points[1].multivector);
+    final normalizedOverrides = _pointStyleOverridesFromStyle(
+      type: GeoMidpoint,
+      style: style,
+      overrides: styleOverrides,
+      fallbackColor: fallbackColor,
+      fallbackRadius: fallbackRadius,
+    );
 
     return GeoMidpoint(
       id: id,
       label: label,
-      dependencies: [p1.id, p2.id],
+      dependencies: points.map((p) => p.id).toList(growable: false),
       multivector: mv,
-      size: size,
-      color: style?.strokeColor ?? color,
       visible: visible,
-      styleOverrides: resolveOverrides,
+      styleOverrides: normalizedOverrides,
     );
   }
 
@@ -215,20 +255,18 @@ class GeoMidpoint extends GeoPoint {
     Multivector? multivector,
     double? x,
     double? y,
-    double? size,
-    Color? color,
     bool? visible,
     CanvasStyle? style,
+    Map<String, dynamic>? styleOverrides,
   }) {
-    final overrides = resolveStyleOverrides(style);
-    final resolvedColor = resolveColor(color, style);
+    final overrides =
+        styleOverrides ??
+        (style == null ? this.styleOverrides : resolveStyleOverrides(style));
     return GeoMidpoint(
       id: id ?? this.id,
       label: label ?? this.label,
       dependencies: dependencies ?? this.dependencies,
       multivector: multivector ?? this.multivector,
-      size: size ?? this.size,
-      color: resolvedColor,
       visible: visible ?? this.visible,
       styleOverrides: overrides,
     );
@@ -240,15 +278,19 @@ class GeoMidpoint extends GeoPoint {
   @override
   Map<String, dynamic> toJson() {
     final json = super.toJson();
-    json['properties'] = {'x': x, 'y': y, 'size': size};
+    json['properties'] = {'x': x, 'y': y};
     return json;
   }
 
   static GeoMidpoint fromJson(Map<String, dynamic> json) {
     final props = json['properties'] as Map<String, dynamic>;
-    final styleOverrides = GeometryObject.extractStyleOverrides(json);
-    final color = GeometryObject.colorFromJson(json, Colors.green);
     final deps = (json['dependencies'] as List).cast<String>();
+    final defaults = CanvasStyleDefaults.instance.resolveForType(GeoMidpoint);
+    final styleOverrides = _pointStyleOverridesFromJson(
+      json,
+      legacyProps: props,
+      fallbackColor: defaults.strokeColor,
+    );
 
     return GeoMidpoint(
       id: json['id'] as String,
@@ -256,9 +298,23 @@ class GeoMidpoint extends GeoPoint {
       dependencies: deps,
       multivector:
           Multivector.zero(), // Will be recalculated during DAG reconstruction
-      size: (props['size'] as num?)?.toDouble() ?? 5.0,
-      color: color,
       visible: json['visible'] as bool? ?? true,
+      styleOverrides: styleOverrides,
+    );
+  }
+
+  @override
+  GeometryObject? rebuildFromParents(List<GeometryObject> parents) {
+    final points = parents.whereType<GeoPoint>().toList(growable: false);
+    if (points.length != 2) {
+      return null;
+    }
+
+    return GeoMidpoint.fromDependencies(
+      id: id,
+      label: label,
+      points: points,
+      visible: visible,
       styleOverrides: styleOverrides,
     );
   }
@@ -271,8 +327,6 @@ class GeoInvPoint extends GeoPoint {
     required super.label,
     required super.dependencies,
     required super.multivector,
-    super.size,
-    super.color = Colors.purple,
     super.visible,
     super.styleOverrides,
   });
@@ -285,20 +339,18 @@ class GeoInvPoint extends GeoPoint {
     Multivector? multivector,
     double? x,
     double? y,
-    double? size,
-    Color? color,
     bool? visible,
     CanvasStyle? style,
+    Map<String, dynamic>? styleOverrides,
   }) {
-    final overrides = resolveStyleOverrides(style);
-    final resolvedColor = resolveColor(color, style);
+    final overrides =
+        styleOverrides ??
+        (style == null ? this.styleOverrides : resolveStyleOverrides(style));
     return GeoInvPoint(
       id: id ?? this.id,
       label: label ?? this.label,
       dependencies: dependencies ?? this.dependencies,
       multivector: multivector ?? this.multivector,
-      size: size ?? this.size,
-      color: resolvedColor,
       visible: visible ?? this.visible,
       styleOverrides: overrides,
     );
@@ -310,15 +362,19 @@ class GeoInvPoint extends GeoPoint {
   @override
   Map<String, dynamic> toJson() {
     final json = super.toJson();
-    json['properties'] = {'x': x, 'y': y, 'size': size};
+    json['properties'] = {'x': x, 'y': y};
     return json;
   }
 
   static GeoInvPoint fromJson(Map<String, dynamic> json) {
     final props = json['properties'] as Map<String, dynamic>;
-    final styleOverrides = GeometryObject.extractStyleOverrides(json);
-    final color = GeometryObject.colorFromJson(json, Colors.purple);
     final deps = (json['dependencies'] as List).cast<String>();
+    final defaults = CanvasStyleDefaults.instance.resolveForType(GeoInvPoint);
+    final styleOverrides = _pointStyleOverridesFromJson(
+      json,
+      legacyProps: props,
+      fallbackColor: defaults.strokeColor,
+    );
 
     return GeoInvPoint(
       id: json['id'] as String,
@@ -326,10 +382,71 @@ class GeoInvPoint extends GeoPoint {
       dependencies: deps,
       multivector:
           Multivector.zero(), // Will be recalculated during DAG reconstruction
-      size: (props['size'] as num?)?.toDouble() ?? 5.0,
-      color: color,
       visible: json['visible'] as bool? ?? true,
       styleOverrides: styleOverrides,
     );
   }
+}
+
+Map<String, dynamic>? _pointStyleOverridesFromStyle({
+  required Type type,
+  CanvasStyle? style,
+  Map<String, dynamic>? overrides,
+  Color? fallbackColor,
+  double? fallbackRadius,
+}) {
+  if (overrides != null) {
+    return Map<String, dynamic>.unmodifiable(overrides);
+  }
+  if (style != null) {
+    final defaults = CanvasStyleDefaults.instance.resolveForType(type);
+    return Map<String, dynamic>.unmodifiable(style.diff(defaults));
+  }
+
+  final inferred = <String, dynamic>{};
+
+  if (fallbackColor != null) {
+    inferred['strokeColor'] = CanvasStyle.colorToHex(fallbackColor);
+  }
+  if (fallbackRadius != null) {
+    inferred['pointRadius'] = fallbackRadius;
+  }
+
+  if (inferred.isEmpty) {
+    return null;
+  }
+
+  return Map<String, dynamic>.unmodifiable(inferred);
+}
+
+Map<String, dynamic>? _pointStyleOverridesFromJson(
+  Map<String, dynamic> json, {
+  Map<String, dynamic>? legacyProps,
+  Color? fallbackColor,
+}) {
+  final existing = GeometryObject.extractStyleOverrides(json);
+  if (existing != null) {
+    return Map<String, dynamic>.unmodifiable(existing);
+  }
+
+  final overrides = <String, dynamic>{};
+
+  final rawColor = json.containsKey('color') ? json['color'] : null;
+  final parsedColor = GeometryObject.parseColor(rawColor) ?? fallbackColor;
+  if (parsedColor != null) {
+    overrides['strokeColor'] = CanvasStyle.colorToHex(parsedColor);
+  }
+
+  if (legacyProps != null) {
+    final size = legacyProps['size'];
+    if (size is num) {
+      overrides['pointRadius'] = size.toDouble();
+    }
+  }
+
+  if (overrides.isEmpty) {
+    return null;
+  }
+
+  return Map<String, dynamic>.unmodifiable(overrides);
 }

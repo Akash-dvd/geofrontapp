@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:geocalc/Multivector.dart';
 
 import '../canvas_style.dart';
+import '../canvas_style_defaults.dart';
 import '../geometry_object.dart';
 
 /// Abstract base class for geometric transformations
@@ -11,7 +12,6 @@ abstract class GeoTrans extends SimpleGeometryObject {
     required super.label,
     required super.dependencies,
     required super.multivector,
-    super.color,
     super.visible,
     super.styleOverrides,
   });
@@ -50,7 +50,6 @@ class GeoInverse extends GeoTrans {
     required super.multivector,
     required this.centerPointId,
     required this.power,
-    super.color,
     super.visible,
     super.styleOverrides,
   });
@@ -63,12 +62,13 @@ class GeoInverse extends GeoTrans {
     Multivector? multivector,
     String? centerPointId,
     double? power,
-    Color? color,
     bool? visible,
     CanvasStyle? style,
+    Map<String, dynamic>? styleOverrides,
   }) {
-    final overrides = resolveStyleOverrides(style);
-    final resolvedColor = resolveColor(color, style);
+    final overrides =
+        styleOverrides ??
+        (style == null ? this.styleOverrides : resolveStyleOverrides(style));
     return GeoInverse(
       id: id ?? this.id,
       label: label ?? this.label,
@@ -76,7 +76,6 @@ class GeoInverse extends GeoTrans {
       multivector: multivector ?? this.multivector,
       centerPointId: centerPointId ?? this.centerPointId,
       power: power ?? this.power,
-      color: resolvedColor,
       visible: visible ?? this.visible,
       styleOverrides: overrides,
     );
@@ -97,12 +96,8 @@ class GeoInverse extends GeoTrans {
 
   static GeoInverse fromJson(Map<String, dynamic> json) {
     final props = json['properties'] as Map<String, dynamic>;
-    final styleOverrides = GeometryObject.extractStyleOverrides(json);
-    final color = GeometryObject.colorFromJson(
-      json,
-      CanvasStyle.baseDefaults.strokeColor,
-    );
     final deps = (json['dependencies'] as List).cast<String>();
+    final styleOverrides = _transformStyleOverridesFromJson(json, GeoInverse);
 
     return GeoInverse(
       id: json['id'] as String,
@@ -111,7 +106,6 @@ class GeoInverse extends GeoTrans {
       multivector: Multivector.zero(),
       centerPointId: props['centerPointId'] as String,
       power: (props['power'] as num).toDouble(),
-      color: color,
       visible: json['visible'] as bool? ?? true,
       styleOverrides: styleOverrides,
     );
@@ -133,7 +127,6 @@ class GeoRotate extends GeoTrans {
     required super.multivector,
     required this.centerPointId,
     required this.angle,
-    super.color,
     super.visible,
     super.styleOverrides,
   });
@@ -146,12 +139,13 @@ class GeoRotate extends GeoTrans {
     Multivector? multivector,
     String? centerPointId,
     double? angle,
-    Color? color,
     bool? visible,
     CanvasStyle? style,
+    Map<String, dynamic>? styleOverrides,
   }) {
-    final overrides = resolveStyleOverrides(style);
-    final resolvedColor = resolveColor(color, style);
+    final overrides =
+        styleOverrides ??
+        (style == null ? this.styleOverrides : resolveStyleOverrides(style));
     return GeoRotate(
       id: id ?? this.id,
       label: label ?? this.label,
@@ -159,7 +153,6 @@ class GeoRotate extends GeoTrans {
       multivector: multivector ?? this.multivector,
       centerPointId: centerPointId ?? this.centerPointId,
       angle: angle ?? this.angle,
-      color: resolvedColor,
       visible: visible ?? this.visible,
       styleOverrides: overrides,
     );
@@ -180,12 +173,8 @@ class GeoRotate extends GeoTrans {
 
   static GeoRotate fromJson(Map<String, dynamic> json) {
     final props = json['properties'] as Map<String, dynamic>;
-    final styleOverrides = GeometryObject.extractStyleOverrides(json);
-    final color = GeometryObject.colorFromJson(
-      json,
-      CanvasStyle.baseDefaults.strokeColor,
-    );
     final deps = (json['dependencies'] as List).cast<String>();
+    final styleOverrides = _transformStyleOverridesFromJson(json, GeoRotate);
 
     return GeoRotate(
       id: json['id'] as String,
@@ -194,7 +183,6 @@ class GeoRotate extends GeoTrans {
       multivector: Multivector.zero(),
       centerPointId: props['centerPointId'] as String,
       angle: (props['angle'] as num).toDouble(),
-      color: color,
       visible: json['visible'] as bool? ?? true,
       styleOverrides: styleOverrides,
     );
@@ -216,7 +204,6 @@ class GeoDilate extends GeoTrans {
     required super.multivector,
     required this.centerPointId,
     required this.factor,
-    super.color,
     super.visible,
     super.styleOverrides,
   });
@@ -229,12 +216,13 @@ class GeoDilate extends GeoTrans {
     Multivector? multivector,
     String? centerPointId,
     double? factor,
-    Color? color,
     bool? visible,
     CanvasStyle? style,
+    Map<String, dynamic>? styleOverrides,
   }) {
-    final overrides = resolveStyleOverrides(style);
-    final resolvedColor = resolveColor(color, style);
+    final overrides =
+        styleOverrides ??
+        (style == null ? this.styleOverrides : resolveStyleOverrides(style));
     return GeoDilate(
       id: id ?? this.id,
       label: label ?? this.label,
@@ -242,7 +230,6 @@ class GeoDilate extends GeoTrans {
       multivector: multivector ?? this.multivector,
       centerPointId: centerPointId ?? this.centerPointId,
       factor: factor ?? this.factor,
-      color: resolvedColor,
       visible: visible ?? this.visible,
       styleOverrides: overrides,
     );
@@ -263,12 +250,8 @@ class GeoDilate extends GeoTrans {
 
   static GeoDilate fromJson(Map<String, dynamic> json) {
     final props = json['properties'] as Map<String, dynamic>;
-    final styleOverrides = GeometryObject.extractStyleOverrides(json);
-    final color = GeometryObject.colorFromJson(
-      json,
-      CanvasStyle.baseDefaults.strokeColor,
-    );
     final deps = (json['dependencies'] as List).cast<String>();
+    final styleOverrides = _transformStyleOverridesFromJson(json, GeoDilate);
 
     return GeoDilate(
       id: json['id'] as String,
@@ -277,9 +260,31 @@ class GeoDilate extends GeoTrans {
       multivector: Multivector.zero(),
       centerPointId: props['centerPointId'] as String,
       factor: (props['factor'] as num).toDouble(),
-      color: color,
       visible: json['visible'] as bool? ?? true,
       styleOverrides: styleOverrides,
     );
   }
+}
+
+Map<String, dynamic>? _transformStyleOverridesFromJson(
+  Map<String, dynamic> json,
+  Type type,
+) {
+  final existing = GeometryObject.extractStyleOverrides(json);
+  if (existing != null) {
+    return Map<String, dynamic>.unmodifiable(existing);
+  }
+
+  final parsedColor = GeometryObject.parseColor(json['color']);
+  if (parsedColor == null) {
+    return null;
+  }
+
+  final defaults = CanvasStyleDefaults.instance.resolveForType(type);
+  final diff = defaults.copyWith(strokeColor: parsedColor).diff(defaults);
+  if (diff.isEmpty) {
+    return null;
+  }
+
+  return Map<String, dynamic>.unmodifiable(diff);
 }

@@ -1,6 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
-import '../models/geometry_object.dart';
+import '../models/canvas_object.dart';
 import '../models/simple/geo_point.dart';
 import '../models/simple/geo_line.dart';
 import '../models/simple/geo_circle.dart';
@@ -72,7 +72,7 @@ class GeoDrawDecoder {
         }
 
         // Call the appropriate fromJson factory
-        final object = factory(objJson) as GeometryObject;
+        final object = factory(objJson) as CanvasObject;
         final dependencies = (objJson['dependencies'] as List).cast<String>();
         dagManager.addObject(object, dependencies);
       } catch (e) {

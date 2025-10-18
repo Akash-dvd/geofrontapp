@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'dart:math' as math;
 
 import '../canvas_style.dart';
+import '../canvas_style_defaults.dart';
 import '../geometry_object.dart';
 import '../simple/geo_point.dart';
 import '../simple/geo_line.dart';
@@ -10,16 +11,30 @@ import '../simple/geo_circle.dart';
 /// List of intersection points between two objects
 class GeoIntersection extends SimpleGeometryObjectList<GeoPoint> {
   GeoIntersection({
-    required super.id,
-    required super.label,
-    required super.dependencies, // Should have exactly 2 dependencies
-    required super.objects,
-    super.color = Colors.orange,
-    super.visible,
-    super.styleOverrides,
+    required String id,
+    required String label,
+    required List<String> dependencies, // Should have exactly 2 dependencies
+    required List<GeoPoint> objects,
+    Color color = Colors.orange,
+    bool visible = true,
+    CanvasStyle? style,
+    Map<String, dynamic>? styleOverrides,
   }) : assert(
          dependencies.length == 2,
          'Intersection requires exactly 2 object dependencies',
+       ),
+       super(
+         id: id,
+         label: label,
+         dependencies: dependencies,
+         objects: objects,
+         visible: visible,
+         styleOverrides: _styleOverridesForType(
+           type: GeoIntersection,
+           style: style,
+           overrides: styleOverrides,
+           fallbackColor: color,
+         ),
        );
 
   @override
@@ -50,8 +65,11 @@ class GeoIntersection extends SimpleGeometryObjectList<GeoPoint> {
       label: label,
       x: x,
       y: y,
-      color: color,
       visible: visible,
+      styleOverrides: _styleOverridesForType(
+        type: GeoPointer,
+        fallbackColor: color,
+      ),
     );
 
     return GeoIntersection(
@@ -142,8 +160,11 @@ class GeoIntersection extends SimpleGeometryObjectList<GeoPoint> {
         label: '${label}_1',
         x: x1,
         y: y1,
-        color: color,
         visible: visible,
+        styleOverrides: _styleOverridesForType(
+          type: GeoPointer,
+          fallbackColor: color,
+        ),
       ),
     );
 
@@ -154,8 +175,11 @@ class GeoIntersection extends SimpleGeometryObjectList<GeoPoint> {
           label: '${label}_2',
           x: x2,
           y: y2,
-          color: color,
           visible: visible,
+          styleOverrides: _styleOverridesForType(
+            type: GeoPointer,
+            fallbackColor: color,
+          ),
         ),
       );
     }
@@ -179,17 +203,26 @@ class GeoIntersection extends SimpleGeometryObjectList<GeoPoint> {
     Color? color,
     bool? visible,
     CanvasStyle? style,
+    Map<String, dynamic>? styleOverrides,
   }) {
-    final overrides = resolveStyleOverrides(style);
-    final resolvedColor = resolveColor(color, style);
+    final candidateOverrides =
+        styleOverrides ??
+        (style != null
+            ? _styleOverridesForType(type: GeoIntersection, style: style)
+            : color != null
+            ? _styleOverridesForType(
+                type: GeoIntersection,
+                fallbackColor: color,
+              )
+            : null);
+    final resolvedOverrides = candidateOverrides ?? this.styleOverrides;
     return GeoIntersection(
       id: id ?? this.id,
       label: label ?? this.label,
       dependencies: dependencies ?? this.dependencies,
       objects: objects ?? this.objects,
-      color: resolvedColor,
       visible: visible ?? this.visible,
-      styleOverrides: overrides,
+      styleOverrides: resolvedOverrides,
     );
   }
 }
@@ -197,14 +230,27 @@ class GeoIntersection extends SimpleGeometryObjectList<GeoPoint> {
 /// List of tangent lines from a point to a circle or between circles
 class GeoTangent extends SimpleGeometryObjectList<GeoLine> {
   GeoTangent({
-    required super.id,
-    required super.label,
-    required super.dependencies,
-    required super.objects,
-    super.color = Colors.pink,
-    super.visible,
-    super.styleOverrides,
-  });
+    required String id,
+    required String label,
+    required List<String> dependencies,
+    required List<GeoLine> objects,
+    Color color = Colors.pink,
+    bool visible = true,
+    CanvasStyle? style,
+    Map<String, dynamic>? styleOverrides,
+  }) : super(
+         id: id,
+         label: label,
+         dependencies: dependencies,
+         objects: objects,
+         visible: visible,
+         styleOverrides: _styleOverridesForType(
+           type: GeoTangent,
+           style: style,
+           overrides: styleOverrides,
+           fallbackColor: color,
+         ),
+       );
 
   @override
   String get type => 'tangent';
@@ -218,17 +264,55 @@ class GeoTangent extends SimpleGeometryObjectList<GeoLine> {
     Color? color,
     bool? visible,
     CanvasStyle? style,
+    Map<String, dynamic>? styleOverrides,
   }) {
-    final overrides = resolveStyleOverrides(style);
-    final resolvedColor = resolveColor(color, style);
+    final candidateOverrides =
+        styleOverrides ??
+        (style != null
+            ? _styleOverridesForType(type: GeoTangent, style: style)
+            : color != null
+            ? _styleOverridesForType(type: GeoTangent, fallbackColor: color)
+            : null);
+    final resolvedOverrides = candidateOverrides ?? this.styleOverrides;
     return GeoTangent(
       id: id ?? this.id,
       label: label ?? this.label,
       dependencies: dependencies ?? this.dependencies,
       objects: objects ?? this.objects,
-      color: resolvedColor,
       visible: visible ?? this.visible,
-      styleOverrides: overrides,
+      styleOverrides: resolvedOverrides,
     );
   }
+}
+
+Map<String, dynamic>? _styleOverridesForType({
+  required Type type,
+  CanvasStyle? style,
+  Map<String, dynamic>? overrides,
+  Color? fallbackColor,
+}) {
+  if (overrides != null) {
+    return Map<String, dynamic>.unmodifiable(overrides);
+  }
+
+  if (style != null) {
+    final defaults = CanvasStyleDefaults.instance.resolveForType(type);
+    final diff = style.diff(defaults);
+    if (diff.isEmpty) {
+      return null;
+    }
+    return Map<String, dynamic>.unmodifiable(diff);
+  }
+
+  if (fallbackColor != null) {
+    final defaults = CanvasStyleDefaults.instance.resolveForType(type);
+    if (fallbackColor.value == defaults.strokeColor.value) {
+      return null;
+    }
+    return Map<String, dynamic>.unmodifiable({
+      'strokeColor': CanvasStyle.colorToHex(fallbackColor),
+    });
+  }
+
+  return null;
 }

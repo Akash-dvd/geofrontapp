@@ -3,12 +3,15 @@ library;
 
 import 'dart:collection';
 
+import 'package:flutter/material.dart';
+
 import 'command_definition.dart';
 import 'command_schema.dart';
 import 'command_runtime.dart';
 import '../../models/simple/geo_point.dart';
 import '../../models/simple/geo_line.dart';
 import '../../models/simple/geo_circle.dart';
+import '../../models/text/canvas_text.dart';
 
 /// Stores command definitions and provides lookup by name
 class CommandRegistry {
@@ -31,6 +34,7 @@ class CommandRegistry {
   int _perpendicularLabelCounter = 0;
   int _parallelLabelCounter = 0;
   int _perpBisectorLabelCounter = 0;
+  int _textLabelCounter = 0;
 
   void _registerDefaults() {
     // Register core geometry constructors
@@ -69,6 +73,50 @@ class CommandRegistry {
 
     _register(
       CommandDefinition(
+        name: 'text',
+        description: 'Place a text annotation on the canvas',
+        schema: CommandSchema(
+          description: 'Text annotation',
+          argumentTypes: [
+            TypeConstraint.numeric(description: 'x-coordinate'),
+            TypeConstraint.numeric(description: 'y-coordinate'),
+            TypeConstraint.text(description: 'Text content', optional: true),
+          ],
+          argumentHints: [
+            'Enter x-coordinate',
+            'Enter y-coordinate',
+            'Enter text to display (optional)',
+          ],
+        ),
+        executor: (context, arguments) async {
+          final x = (arguments[0] as num).toDouble();
+          final y = (arguments[1] as num).toDouble();
+          final providedText = arguments.length >= 3 && arguments[2] is String
+              ? (arguments[2] as String).trim()
+              : '';
+          final textContent = providedText.isNotEmpty
+              ? providedText
+              : context.resolveLabel(_nextTextContent);
+
+          final text = CanvasText(
+            id: context.generateId('text'),
+            text: textContent,
+            position: Offset(x, y),
+          );
+
+          context.dagManager.addObject(text, []);
+
+          return ExecutionResult.successful(
+            objectId: text.id,
+            message: 'Placed "$textContent"',
+            object: text,
+          );
+        },
+      ),
+    );
+
+    _register(
+      CommandDefinition(
         name: 'line',
         description: 'Create a line through two points',
         schema: CommandSchema(
@@ -89,11 +137,10 @@ class CommandRegistry {
         executor: (context, arguments) async {
           final p1 = arguments[0] as GeoPoint;
           final p2 = arguments[1] as GeoPoint;
-          final line = GeoLine2P.fromPoints(
+          final line = GeoLine2P.fromDependencies(
             id: context.generateId('line'),
             label: context.resolveLabel(_nextLineLabel),
-            p1: p1,
-            p2: p2,
+            points: [p1, p2],
           );
 
           context.dagManager.addObject(line, [p1.id, p2.id]);
@@ -128,11 +175,10 @@ class CommandRegistry {
         executor: (context, arguments) async {
           final center = arguments[0] as GeoPoint;
           final pointOnCircle = arguments[1] as GeoPoint;
-          final circle = GeoCircle2P.fromPoints(
+          final circle = GeoCircle2P.fromDependencies(
             id: context.generateId('circle'),
             label: context.resolveLabel(_nextCircleLabel),
-            center: center,
-            pointOnCircle: pointOnCircle,
+            points: [center, pointOnCircle],
           );
 
           context.dagManager.addObject(circle, [center.id, pointOnCircle.id]);
@@ -177,12 +223,10 @@ class CommandRegistry {
           final p1 = arguments[0] as GeoPoint;
           final p2 = arguments[1] as GeoPoint;
           final p3 = arguments[2] as GeoPoint;
-          final circle = GeoCircle3P.fromPoints(
+          final circle = GeoCircle3P.fromDependencies(
             id: context.generateId('circle'),
             label: context.resolveLabel(_nextCircleThreeLabel),
-            p1: p1,
-            p2: p2,
-            p3: p3,
+            points: [p1, p2, p3],
           );
 
           if (circle == null) {
@@ -223,11 +267,10 @@ class CommandRegistry {
         executor: (context, arguments) async {
           final p1 = arguments[0] as GeoPoint;
           final p2 = arguments[1] as GeoPoint;
-          final midpoint = GeoMidpoint.fromPoints(
+          final midpoint = GeoMidpoint.fromDependencies(
             id: context.generateId('midpoint'),
             label: context.resolveLabel(_nextMidpointLabel),
-            p1: p1,
-            p2: p2,
+            points: [p1, p2],
           );
 
           context.dagManager.addObject(midpoint, [p1.id, p2.id]);
@@ -263,11 +306,10 @@ class CommandRegistry {
         executor: (context, arguments) async {
           final reference = arguments[0] as GeoLine;
           final point = arguments[1] as GeoPoint;
-          final perpendicular = GeoPerpendicularLine.fromLine(
+          final perpendicular = GeoPerpendicularLine.fromDependencies(
             id: context.generateId('line'),
             label: context.resolveLabel(_nextPerpendicularLabel),
-            line: reference,
-            point: point,
+            dependencies: [reference, point],
           );
 
           context.dagManager.addObject(perpendicular, [reference.id, point.id]);
@@ -303,11 +345,10 @@ class CommandRegistry {
         executor: (context, arguments) async {
           final reference = arguments[0] as GeoLine;
           final point = arguments[1] as GeoPoint;
-          final parallel = GeoParallelLine.fromLine(
+          final parallel = GeoParallelLine.fromDependencies(
             id: context.generateId('line'),
             label: context.resolveLabel(_nextParallelLabel),
-            line: reference,
-            point: point,
+            dependencies: [reference, point],
           );
 
           context.dagManager.addObject(parallel, [reference.id, point.id]);
@@ -343,11 +384,10 @@ class CommandRegistry {
         executor: (context, arguments) async {
           final p1 = arguments[0] as GeoPoint;
           final p2 = arguments[1] as GeoPoint;
-          final bisector = GeoPerpendicularBisector.fromPoints(
+          final bisector = GeoPerpendicularBisector.fromDependencies(
             id: context.generateId('line'),
             label: context.resolveLabel(_nextPerpBisectorLabel),
-            p1: p1,
-            p2: p2,
+            points: [p1, p2],
           );
 
           context.dagManager.addObject(bisector, [p1.id, p2.id]);
@@ -418,4 +458,5 @@ class CommandRegistry {
   String _nextPerpendicularLabel() => 'Perp${++_perpendicularLabelCounter}';
   String _nextParallelLabel() => 'Par${++_parallelLabelCounter}';
   String _nextPerpBisectorLabel() => 'Bis${++_perpBisectorLabelCounter}';
+  String _nextTextContent() => 'Text ${++_textLabelCounter}';
 }

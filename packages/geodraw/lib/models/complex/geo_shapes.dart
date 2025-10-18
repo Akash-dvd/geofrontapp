@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../canvas_style.dart';
+import '../canvas_style_defaults.dart';
 import '../geometry_object.dart';
 
 /// Segment between two points
@@ -12,10 +13,18 @@ class GeoSegment extends ComplexGeometryObject {
     required super.startPointId,
     required super.endPointId,
     required super.underlyingObjectId,
-    super.color = Colors.blue,
     super.visible,
-    super.styleOverrides,
-  });
+    CanvasStyle? style,
+    Map<String, dynamic>? styleOverrides,
+    Color color = Colors.blue,
+  }) : super(
+         styleOverrides: _shapeStyleOverrides(
+           type: GeoSegment,
+           style: style,
+           overrides: styleOverrides,
+           fallbackColor: color,
+         ),
+       );
 
   @override
   String get type => 'segment';
@@ -56,12 +65,22 @@ class GeoSegment extends ComplexGeometryObject {
     String? startPointId,
     String? endPointId,
     String? underlyingObjectId,
-    Color? color,
     bool? visible,
     CanvasStyle? style,
+    Map<String, dynamic>? styleOverrides,
+    Color? color,
   }) {
-    final overrides = resolveStyleOverrides(style);
-    final resolvedColor = resolveColor(color, style);
+    final candidateOverrides =
+        styleOverrides ??
+        (style != null
+            ? _shapeStyleOverrides(type: GeoSegment, style: style)
+            : color != null
+            ? _shapeStyleOverrides(
+                type: GeoSegment,
+                fallbackColor: color,
+              )
+            : null);
+    final resolvedOverrides = candidateOverrides ?? this.styleOverrides;
     return GeoSegment(
       id: id ?? this.id,
       label: label ?? this.label,
@@ -69,9 +88,10 @@ class GeoSegment extends ComplexGeometryObject {
       startPointId: startPointId ?? this.startPointId,
       endPointId: endPointId ?? this.endPointId,
       underlyingObjectId: underlyingObjectId ?? this.underlyingObjectId,
-      color: resolvedColor,
       visible: visible ?? this.visible,
-      styleOverrides: overrides,
+      style: style,
+      styleOverrides: resolvedOverrides,
+      color: color ?? Colors.blue,
     );
   }
 }
@@ -83,10 +103,19 @@ class GeoTriangle extends ComplexGeometryObjectList<GeoSegment> {
     required super.label,
     required super.dependencies,
     required super.elements,
-    super.color = Colors.purple,
     super.visible,
-    super.styleOverrides,
-  }) : assert(elements.length == 3, 'Triangle requires exactly 3 segments');
+    CanvasStyle? style,
+    Map<String, dynamic>? styleOverrides,
+    Color color = Colors.purple,
+  }) : assert(elements.length == 3, 'Triangle requires exactly 3 segments'),
+       super(
+         styleOverrides: _shapeStyleOverrides(
+           type: GeoTriangle,
+           style: style,
+           overrides: styleOverrides,
+           fallbackColor: color,
+         ),
+       );
 
   @override
   String get type => 'triangle';
@@ -112,20 +141,31 @@ class GeoTriangle extends ComplexGeometryObjectList<GeoSegment> {
     String? label,
     List<String>? dependencies,
     List<GeoSegment>? elements,
-    Color? color,
     bool? visible,
     CanvasStyle? style,
+    Map<String, dynamic>? styleOverrides,
+    Color? color,
   }) {
-    final overrides = resolveStyleOverrides(style);
-    final resolvedColor = resolveColor(color, style);
+    final candidateOverrides =
+        styleOverrides ??
+        (style != null
+            ? _shapeStyleOverrides(type: GeoTriangle, style: style)
+            : color != null
+            ? _shapeStyleOverrides(
+                type: GeoTriangle,
+                fallbackColor: color,
+              )
+            : null);
+    final resolvedOverrides = candidateOverrides ?? this.styleOverrides;
     return GeoTriangle(
       id: id ?? this.id,
       label: label ?? this.label,
       dependencies: dependencies ?? this.dependencies,
       elements: elements ?? this.elements,
-      color: resolvedColor,
       visible: visible ?? this.visible,
-      styleOverrides: overrides,
+      style: style,
+      styleOverrides: resolvedOverrides,
+      color: color ?? Colors.purple,
     );
   }
 }
@@ -137,10 +177,18 @@ class GeoPolygon extends ComplexGeometryObjectList<GeoSegment> {
     required super.label,
     required super.dependencies,
     required super.elements,
-    super.color = Colors.brown,
     super.visible,
-    super.styleOverrides,
-  });
+    CanvasStyle? style,
+    Map<String, dynamic>? styleOverrides,
+    Color color = Colors.brown,
+  }) : super(
+         styleOverrides: _shapeStyleOverrides(
+           type: GeoPolygon,
+           style: style,
+           overrides: styleOverrides,
+           fallbackColor: color,
+         ),
+       );
 
   @override
   String get type => 'polygon';
@@ -176,20 +224,62 @@ class GeoPolygon extends ComplexGeometryObjectList<GeoSegment> {
     String? label,
     List<String>? dependencies,
     List<GeoSegment>? elements,
-    Color? color,
     bool? visible,
     CanvasStyle? style,
+    Map<String, dynamic>? styleOverrides,
+    Color? color,
   }) {
-    final overrides = resolveStyleOverrides(style);
-    final resolvedColor = resolveColor(color, style);
+    final candidateOverrides =
+        styleOverrides ??
+        (style != null
+            ? _shapeStyleOverrides(type: GeoPolygon, style: style)
+            : color != null
+            ? _shapeStyleOverrides(
+                type: GeoPolygon,
+                fallbackColor: color,
+              )
+            : null);
+    final resolvedOverrides = candidateOverrides ?? this.styleOverrides;
     return GeoPolygon(
       id: id ?? this.id,
       label: label ?? this.label,
       dependencies: dependencies ?? this.dependencies,
       elements: elements ?? this.elements,
-      color: resolvedColor,
       visible: visible ?? this.visible,
-      styleOverrides: overrides,
+      style: style,
+      styleOverrides: resolvedOverrides,
+      color: color ?? Colors.brown,
     );
   }
+}
+
+Map<String, dynamic>? _shapeStyleOverrides({
+  required Type type,
+  CanvasStyle? style,
+  Map<String, dynamic>? overrides,
+  Color? fallbackColor,
+}) {
+  if (overrides != null) {
+    return Map<String, dynamic>.unmodifiable(overrides);
+  }
+
+  if (style != null) {
+    final defaults = CanvasStyleDefaults.instance.resolveForType(type);
+    final diff = style.diff(defaults);
+    if (diff.isEmpty) {
+      return null;
+    }
+    return Map<String, dynamic>.unmodifiable(diff);
+  }
+
+  if (fallbackColor != null) {
+    final defaults = CanvasStyleDefaults.instance.resolveForType(type);
+    if (fallbackColor.value != defaults.strokeColor.value) {
+      return Map<String, dynamic>.unmodifiable({
+        'strokeColor': CanvasStyle.colorToHex(fallbackColor),
+      });
+    }
+  }
+
+  return null;
 }

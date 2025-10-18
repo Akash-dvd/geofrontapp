@@ -2,6 +2,7 @@
 library;
 
 import '../dag/dag_manager.dart';
+import '../../models/geometry_object.dart';
 
 /// Simple resolver for converting string IDs/labels to objects
 class ObjectResolver {
@@ -17,8 +18,9 @@ class ObjectResolver {
     if (byId != null) return byId;
 
     for (final node in dagManager.nodes.values) {
-      if (node.object.label == trimmed) {
-        return node.object;
+      final object = node.object;
+      if (object is GeometryObject && object.label == trimmed) {
+        return object;
       }
     }
 

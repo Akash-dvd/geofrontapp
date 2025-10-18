@@ -3,10 +3,9 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../../models/canvas_object.dart';
 import '../../models/geometry_object.dart';
 import '../../models/simple/geo_point.dart';
-import '../../models/simple/geo_line.dart';
-import '../../models/simple/geo_circle.dart';
 import 'dag_node.dart';
 import '../command/command_registry.dart';
 
@@ -33,9 +32,9 @@ class DAGManager {
 
   DAGNode? getNode(String id) => _nodes[id];
 
-  GeometryObject? getObject(String id) => _nodes[id]?.object;
+  CanvasObject? getObject(String id) => _nodes[id]?.object;
 
-  String addObject(GeometryObject object, List<String> dependencies) {
+  String addObject(CanvasObject object, List<String> dependencies) {
     history.record();
 
     for (final depId in dependencies) {
@@ -72,7 +71,7 @@ class DAGManager {
     return object.id;
   }
 
-  void updateObject(String id, GeometryObject updatedObject) {
+  void updateObject(String id, CanvasObject updatedObject) {
     final node = _nodes[id];
     if (node == null) {
       throw ArgumentError('Object not found: $id');
@@ -175,6 +174,12 @@ class DAGManager {
         continue;
       }
 
+      final obj = node.object;
+      if (obj is! GeometryObject) {
+        _nodes[node.id] = node.copyWith(isDirty: false);
+        continue;
+      }
+
       final parents = node.parentIds
           .map((id) => _nodes[id]?.object)
           .whereType<GeometryObject>()
@@ -184,7 +189,7 @@ class DAGManager {
         continue;
       }
 
-      final rebuilt = _reconstructObject(node.object, parents);
+      final rebuilt = _reconstructObject(obj, parents);
 
       if (rebuilt != null) {
         _nodes[node.id] = node.copyWith(
@@ -202,48 +207,7 @@ class DAGManager {
     GeometryObject obj,
     List<GeometryObject> parents,
   ) {
-    final points = parents.whereType<GeoPoint>().toList();
-    if (points.length != parents.length) return null;
-
-    if (obj is GeoLine2P && points.length == 2) {
-      return GeoLine2P.fromPoints(
-        id: obj.id,
-        label: obj.label,
-        p1: points[0],
-        p2: points[1],
-        thickness: obj.thickness,
-        style: obj.style,
-        color: obj.color,
-        visible: obj.visible,
-      );
-    }
-
-    if (obj is GeoCircle2P && points.length == 2) {
-      return GeoCircle2P.fromPoints(
-        id: obj.id,
-        label: obj.label,
-        center: points[0],
-        pointOnCircle: points[1],
-        thickness: obj.thickness,
-        filled: obj.filled,
-        color: obj.color,
-        visible: obj.visible,
-      );
-    }
-
-    if (obj is GeoMidpoint && points.length == 2) {
-      return GeoMidpoint.fromPoints(
-        id: obj.id,
-        label: obj.label,
-        p1: points[0],
-        p2: points[1],
-        size: obj.size,
-        color: obj.color,
-        visible: obj.visible,
-      );
-    }
-
-    return null;
+    return obj.rebuildFromParents(List<GeometryObject>.from(parents));
   }
 
   List<DAGNode> topologicalSort([List<DAGNode>? nodesToSort]) {
@@ -262,19 +226,38 @@ class DAGManager {
     Offset position, {
     double threshold = 10.0,
   }) {
-    final candidates = <(GeometryObject, double)>[];
+    final pointCandidates = <(GeometryObject, double)>[];
+    final otherCandidates = <(GeometryObject, double)>[];
 
     for (final node in _nodes.values) {
-      if (!node.object.visible) continue;
+      final obj = node.object;
+      if (obj is! GeometryObject) continue;
+      if (!obj.visible) continue;
 
-      final distance = node.object.distanceTo(position);
+      final distance = obj.distanceTo(position);
       if (distance < threshold) {
-        candidates.add((node.object, distance));
+        if (obj is GeoPoint) {
+          pointCandidates.add((obj, distance));
+        } else {
+          otherCandidates.add((obj, distance));
+        }
       }
     }
 
-    candidates.sort((a, b) => a.$2.compareTo(b.$2));
-    return candidates.map((c) => c.$1).toList();
+    int compareDistance(
+      (GeometryObject, double) a,
+      (GeometryObject, double) b,
+    ) {
+      return a.$2.compareTo(b.$2);
+    }
+
+    pointCandidates.sort(compareDistance);
+    otherCandidates.sort(compareDistance);
+
+    return [
+      ...pointCandidates.map((c) => c.$1),
+      ...otherCandidates.map((c) => c.$1),
+    ];
   }
 
   void clear() {
@@ -389,7 +372,7 @@ class Viewport {
   }
 
   void pan(Offset delta) {
-    center -= delta / zoom;
+    center += delta / zoom;
   }
 
   void zoomAt(Offset screenPoint, double factor) {

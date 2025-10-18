@@ -1,7 +1,7 @@
 /// Unified command schema and type validation system
 library;
 
-import 'type_hierarchy.dart';
+import '../../models/type_hierarchy.dart';
 import '../../models/geometry_object.dart';
 
 /// High level categories of argument values supported by the command system
@@ -108,18 +108,11 @@ class TypeConstraint {
   bool accepts(dynamic value) {
     switch (category) {
       case ValueCategory.geometry:
-        if (value is! GeometryObject) return false;
-        if (allowedTypes.isEmpty && allowedTypeLabels.isEmpty) {
-          return true;
+        if (value is GeometryObject) {
+          return _matchesGeometryType(value.runtimeType, value.type);
         }
-        final runtimeType = value.runtimeType;
-        for (final type in allowedTypes) {
-          if (TypeHierarchy.instance.isSubtypeOf(runtimeType, type)) {
-            return true;
-          }
-        }
-        if (allowedTypeLabels.contains(value.type)) {
-          return true;
+        if (value is Type) {
+          return _matchesGeometryType(value, null);
         }
         return false;
       case ValueCategory.numeric:
@@ -131,6 +124,25 @@ class TypeConstraint {
       case ValueCategory.any:
         return true;
     }
+  }
+
+  bool _matchesGeometryType(Type candidate, String? explicitLabel) {
+    if (allowedTypes.isEmpty && allowedTypeLabels.isEmpty) {
+      return true;
+    }
+
+    for (final type in allowedTypes) {
+      if (TypeHierarchy.instance.isSubtypeOf(candidate, type)) {
+        return true;
+      }
+    }
+
+    if (allowedTypeLabels.isEmpty) {
+      return false;
+    }
+
+    final label = explicitLabel ?? candidate.toString();
+    return allowedTypeLabels.contains(label);
   }
 }
 

@@ -209,8 +209,9 @@ class _PointTool extends UnifiedTool {
         arguments: [position.dx, position.dy],
       );
 
-      if (result.success && result.object != null) {
-        onObjectCreated?.call(result.object!, []);
+      if (result.success && result.object is GeometryObject) {
+        final geometry = result.object as GeometryObject;
+        onObjectCreated?.call(geometry, geometry.dependencies);
         notifyStateChanged(result.message);
       } else {
         notifyStateChanged('Error: ${result.message}');
@@ -265,7 +266,7 @@ class _LineTool extends UnifiedTool {
   @override
   GeometryObject? createObjectAtPosition(Offset position) {
     final nextType = verifier.schema.nextConstraint(verifier.arguments);
-    if (nextType != null && nextType.accepts(GeoPointer)) {
+    if (nextType?.accepts(GeoPointer) ?? false) {
       final point = GeoPointer(
         id: 'point_${DateTime.now().millisecondsSinceEpoch}',
         label: _generatePointLabel(),
@@ -325,7 +326,7 @@ class _CircleTool extends UnifiedTool {
   @override
   GeometryObject? createObjectAtPosition(Offset position) {
     final nextType = verifier.schema.nextConstraint(verifier.arguments);
-    if (nextType != null && nextType.accepts(GeoPointer)) {
+    if (nextType?.accepts(GeoPointer) ?? false) {
       final point = GeoPointer(
         id: 'point_${DateTime.now().millisecondsSinceEpoch}',
         label: _generatePointLabel(),

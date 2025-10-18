@@ -23,7 +23,10 @@ class ObjectBrowser extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final sortedNodes = dagManager.topologicalSort();
+    final sortedNodes = dagManager
+        .topologicalSort()
+        .where((node) => node.object is GeometryObject)
+        .toList();
 
     Future<void> handleEdit(GeometryObject object) async {
       final updated = await _showEditDialog(context, object);
@@ -77,7 +80,7 @@ class ObjectBrowser extends StatelessWidget {
                     itemCount: sortedNodes.length,
                     itemBuilder: (context, index) {
                       final node = sortedNodes[index];
-                      final geometry = node.object;
+                      final geometry = node.object as GeometryObject;
                       return _ObjectListTile(
                         node: node,
                         object: geometry,
@@ -280,7 +283,6 @@ class ObjectBrowser extends StatelessWidget {
                     final updatedLabel = labelController.text.trim();
                     final updatedObject = object.copyWith(
                       label: updatedLabel,
-                      color: newStrokeColor,
                       style: updatedStyle,
                     );
 
@@ -327,9 +329,9 @@ class _ObjectListTile extends StatelessWidget {
           width: 24,
           height: 24,
           decoration: BoxDecoration(
-            color: object.color.withOpacity(0.3),
+            color: object.style.strokeColor.withOpacity(0.3),
             shape: BoxShape.circle,
-            border: Border.all(color: object.color, width: 2),
+            border: Border.all(color: object.style.strokeColor, width: 2),
           ),
         ),
         title: Text(

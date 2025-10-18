@@ -92,6 +92,15 @@ const ToolCatalogEntry _circleCenterTool = ToolCatalogEntry(
   implemented: true,
 );
 
+const ToolCatalogEntry _textTool = ToolCatalogEntry(
+  id: 'text',
+  label: 'Text',
+  icon: Icons.text_fields,
+  command: 'Text(x, y, "Label")',
+  toolType: ToolType.text,
+  implemented: true,
+);
+
 const ToolCatalogEntry _eraserTool = ToolCatalogEntry(
   id: 'eraser',
   label: 'Eraser',
@@ -401,6 +410,7 @@ const List<ToolCategoryGroup> level1ToolGroups = [
       _lineTool,
       _polygonTool,
       _circleCenterTool,
+      _textTool,
       _eraserTool,
     ],
   ),
@@ -417,6 +427,7 @@ const List<ToolCategoryGroup> level2ToolGroups = [
       _lineTool,
       _polygonTool,
       _circleCenterTool,
+      _textTool,
       _eraserTool,
     ],
   ),
@@ -466,6 +477,7 @@ const List<ToolCategoryGroup> level3ToolGroups = [
       _lineTool,
       _polygonTool,
       _circleCenterTool,
+      _textTool,
     ],
   ),
   ToolCategoryGroup(

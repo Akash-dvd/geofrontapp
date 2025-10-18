@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
 import '../core/dag/dag_manager.dart' hide Viewport;
 import '../core/dag/dag_manager.dart' as dag show Viewport;
-import '../models/geometry_object.dart';
+import '../models/canvas_object.dart';
 import '../models/simple/geo_point.dart';
 import '../tools/tool_manager.dart';
 import '../tools/tool.dart';
@@ -348,10 +348,16 @@ class GeoDrawCanvasPainter extends CustomPainter {
     canvas.translate(-viewport.center.dx, -viewport.center.dy);
   }
 
-  Paint _getPaintForObject(GeometryObject object, bool isSelected) {
+  Paint _getPaintForObject(CanvasObject object, bool isSelected) {
+    final baseStyle = object.style;
+    final strokeColor = isSelected ? Colors.orange : baseStyle.strokeColor;
+    final strokeWidth = isSelected
+        ? (baseStyle.strokeWidth + 1.0)
+        : baseStyle.strokeWidth;
+
     return Paint()
-      ..color = isSelected ? Colors.orange : object.color
-      ..strokeWidth = isSelected ? 3.0 : 2.0
+      ..color = strokeColor
+      ..strokeWidth = strokeWidth
       ..style = PaintingStyle.stroke;
   }
 

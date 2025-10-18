@@ -56,14 +56,17 @@ class CanvasCapture {
       // Draw all objects in topological order
       final sortedNodes = dagManager.topologicalSort();
       for (final node in sortedNodes) {
-        if (!node.object.visible) continue;
+        final object = node.object;
+        if (!object.visible) continue;
 
-        final paint = Paint()
-          ..color = node.object.color
-          ..strokeWidth = 2.0
-          ..style = PaintingStyle.stroke;
+        final paint = Paint();
+        final style = object.style;
+        paint
+          ..color = style.filled ? style.fillColor : style.strokeColor
+          ..strokeWidth = style.strokeWidth
+          ..style = style.filled ? PaintingStyle.fill : PaintingStyle.stroke;
 
-        node.object.draw(canvas, paint);
+        object.draw(canvas, paint);
       }
 
       canvas.restore();
@@ -137,11 +140,9 @@ class CanvasCapture {
     final offsetY = (viewport.center.dy * viewport.zoom) % spacing;
 
     // Draw vertical lines
-    for (
-      double x = size.width / 2 + offsetX % spacing;
-      x < size.width;
-      x += spacing
-    ) {
+    for (double x = size.width / 2 + offsetX % spacing;
+        x < size.width;
+        x += spacing) {
       canvas.drawLine(Offset(x, 0), Offset(x, size.height), gridPaint);
     }
     for (double x = size.width / 2 + offsetX % spacing; x > 0; x -= spacing) {
@@ -149,11 +150,9 @@ class CanvasCapture {
     }
 
     // Draw horizontal lines
-    for (
-      double y = size.height / 2 + offsetY % spacing;
-      y < size.height;
-      y += spacing
-    ) {
+    for (double y = size.height / 2 + offsetY % spacing;
+        y < size.height;
+        y += spacing) {
       canvas.drawLine(Offset(0, y), Offset(size.width, y), gridPaint);
     }
     for (double y = size.height / 2 + offsetY % spacing; y > 0; y -= spacing) {

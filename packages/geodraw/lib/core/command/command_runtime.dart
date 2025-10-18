@@ -2,14 +2,14 @@
 library;
 
 import '../dag/dag_manager.dart';
-import '../../models/geometry_object.dart';
+import '../../models/canvas_object.dart';
 
 /// Result of command execution across tools, CLI, and AI surfaces.
 class ExecutionResult {
   final bool success;
   final String? objectId;
   final String message;
-  final GeometryObject? object;
+  final CanvasObject? object;
 
   const ExecutionResult._({
     required this.success,
@@ -21,7 +21,7 @@ class ExecutionResult {
   factory ExecutionResult.successful({
     String? objectId,
     required String message,
-    GeometryObject? object,
+    CanvasObject? object,
   }) {
     return ExecutionResult._(
       success: true,

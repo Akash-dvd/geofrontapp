@@ -3,16 +3,15 @@ library;
 
 import 'dart:collection';
 
-import '../../models/canvas_object.dart';
-import '../../models/canvas_style_defaults.dart';
-import '../../models/geometry_object.dart';
-import '../../models/simple/geo_circle.dart';
-import '../../models/simple/geo_line.dart';
-import '../../models/simple/geo_point.dart';
-import '../../models/simple/geo_trans.dart';
-import '../../models/simple_lists/geo_intersection.dart';
-import '../../models/complex/geo_shapes.dart';
-import '../../models/text/canvas_text.dart';
+import 'canvas_object.dart';
+import 'geometry_object.dart';
+import 'simple/geo_circle.dart';
+import 'simple/geo_line.dart';
+import 'simple/geo_point.dart';
+import 'simple/geo_trans.dart';
+import 'simple_lists/geo_intersection.dart';
+import 'complex/geo_shapes.dart';
+import 'text/canvas_text.dart';
 
 /// Maintains runtime type relationships for canvas objects.
 class TypeHierarchy {
@@ -28,7 +27,6 @@ class TypeHierarchy {
   void _registerType(Type type, Set<Type> parents) {
     final normalized = {...parents};
     _parents[type] = normalized;
-    CanvasStyleDefaults.instance.registerInheritance(type, normalized);
   }
 
   void _registerBuiltIns() {
@@ -115,5 +113,31 @@ class TypeHierarchy {
       return;
     }
     _registerType(type, parents);
+  }
+
+  /// Return the type and all ancestor types in breadth-first order.
+  Iterable<Type> ancestorsOf(Type type) sync* {
+    final visited = <Type>{};
+    final queue = Queue<Type>()..add(type);
+
+    while (queue.isNotEmpty) {
+      final current = queue.removeFirst();
+      if (!visited.add(current)) {
+        continue;
+      }
+
+      yield current;
+
+      final parents = _parents[current];
+      if (parents == null) {
+        continue;
+      }
+
+      for (final parent in parents) {
+        if (!visited.contains(parent)) {
+          queue.add(parent);
+        }
+      }
+    }
   }
 }

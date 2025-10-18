@@ -4,12 +4,7 @@ import 'package:geodraw/geodraw.dart';
 void main() {
   group('GeoPoint Tests', () {
     test('GeoPointer creates free point correctly', () {
-      final point = GeoPointer(
-        id: 'p1',
-        label: 'A',
-        x: 10,
-        y: 20,
-      );
+      final point = GeoPointer(id: 'p1', label: 'A', x: 10, y: 20);
 
       expect(point.id, 'p1');
       expect(point.label, 'A');
@@ -20,12 +15,7 @@ void main() {
     });
 
     test('GeoPointer calculates distance correctly', () {
-      final point = GeoPointer(
-        id: 'p1',
-        label: 'A',
-        x: 0,
-        y: 0,
-      );
+      final point = GeoPointer(id: 'p1', label: 'A', x: 0, y: 0);
 
       final distance = point.distanceTo(const Offset(3, 4));
       expect(distance, 5.0);
@@ -48,13 +38,7 @@ void main() {
     });
 
     test('GeoPoint contains works correctly', () {
-      final point = GeoPointer(
-        id: 'p1',
-        label: 'A',
-        x: 10,
-        y: 10,
-        size: 5,
-      );
+      final point = GeoPointer(id: 'p1', label: 'A', x: 10, y: 10, size: 5);
 
       expect(point.contains(const Offset(10, 10)), true);
       expect(point.contains(const Offset(12, 12)), true);
@@ -67,12 +51,7 @@ void main() {
       final p1 = GeoPointer(id: 'p1', label: 'A', x: 0, y: 0);
       final p2 = GeoPointer(id: 'p2', label: 'B', x: 10, y: 10);
 
-      final line = GeoLine2P.fromPoints(
-        id: 'l1',
-        label: 'AB',
-        p1: p1,
-        p2: p2,
-      );
+      final line = GeoLine2P.fromPoints(id: 'l1', label: 'AB', p1: p1, p2: p2);
 
       expect(line.id, 'l1');
       expect(line.label, 'AB');
@@ -164,12 +143,7 @@ void main() {
       dag.addObject(p1, []);
       dag.addObject(p2, []);
 
-      final line = GeoLine2P.fromPoints(
-        id: 'l1',
-        label: 'AB',
-        p1: p1,
-        p2: p2,
-      );
+      final line = GeoLine2P.fromPoints(id: 'l1', label: 'AB', p1: p1, p2: p2);
       dag.addObject(line, ['p1', 'p2']);
 
       final lineNode = dag.getNode('l1');
@@ -189,10 +163,7 @@ void main() {
         c: 0,
       );
 
-      expect(
-        () => dag.addObject(line, ['p1', 'p2']),
-        throwsArgumentError,
-      );
+      expect(() => dag.addObject(line, ['p1', 'p2']), throwsArgumentError);
     });
 
     test('DAGManager deletes objects correctly', () {
@@ -214,12 +185,7 @@ void main() {
       dag.addObject(p1, []);
       dag.addObject(p2, []);
 
-      final line = GeoLine2P.fromPoints(
-        id: 'l1',
-        label: 'AB',
-        p1: p1,
-        p2: p2,
-      );
+      final line = GeoLine2P.fromPoints(id: 'l1', label: 'AB', p1: p1, p2: p2);
       dag.addObject(line, ['p1', 'p2']);
 
       expect(() => dag.deleteObject('p1'), throwsStateError);
@@ -233,12 +199,7 @@ void main() {
       dag.addObject(p1, []);
       dag.addObject(p2, []);
 
-      final line = GeoLine2P.fromPoints(
-        id: 'l1',
-        label: 'AB',
-        p1: p1,
-        p2: p2,
-      );
+      final line = GeoLine2P.fromPoints(id: 'l1', label: 'AB', p1: p1, p2: p2);
       dag.addObject(line, ['p1', 'p2']);
 
       expect(dag.nodeCount, 3);
@@ -267,12 +228,7 @@ void main() {
       dag.addObject(p1, []);
       dag.addObject(p2, []);
 
-      final line = GeoLine2P.fromPoints(
-        id: 'l1',
-        label: 'AB',
-        p1: p1,
-        p2: p2,
-      );
+      final line = GeoLine2P.fromPoints(id: 'l1', label: 'AB', p1: p1, p2: p2);
       dag.addObject(line, ['p1', 'p2']);
 
       final midpoint = GeoMidpoint.fromPoints(

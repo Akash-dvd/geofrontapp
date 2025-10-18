@@ -2,6 +2,7 @@
 library;
 
 import '../dag/dag_manager.dart';
+import '../../models/canvas_object.dart';
 import '../../models/geometry_object.dart';
 
 /// Captures canonical execution metadata for a command.
@@ -65,7 +66,10 @@ class CommandHistoryEntry {
 
   static String _formatArgument(dynamic argument) {
     if (argument is GeometryObject) {
-      return argument.label;
+      return argument.label.isEmpty ? argument.id : argument.label;
+    }
+    if (argument is CanvasObject) {
+      return argument.id;
     }
     if (argument is String) {
       return argument;
