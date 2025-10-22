@@ -300,17 +300,19 @@ void main() {
     });
 
     test('should correctly determine if there are more problems', () {
+      // When total > offset + fetchedCount, hasMore is true
       final problemListWithMore = ProblemList(
-        problems: const [],
+        problems: const [], // fetchedCount = 0
         total: 100,
         offset: 0,
         limit: 20,
       );
 
+      // When total == offset + fetchedCount, hasMore is false
       final problemListWithoutMore = ProblemList(
-        problems: const [],
+        problems: const [], // fetchedCount = 0
         total: 15,
-        offset: 0,
+        offset: 15,
         limit: 20,
       );
 

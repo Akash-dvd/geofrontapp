@@ -132,6 +132,10 @@ class AIService {
       'prompt': _buildPrompt(description),
     });
 
+    print(
+      'AIService: POST ${config.apiEndpoint} (desc length=${description.length})',
+    );
+
     final response = await _client
         .post(
           Uri.parse(config.apiEndpoint),
@@ -140,7 +144,10 @@ class AIService {
         )
         .timeout(config.timeout);
 
+    print('AIService: Response ${response.statusCode} (${response.body.length} bytes)');
+
     if (response.statusCode != 200) {
+      print('AIService: Non-200 response body => ${response.body}');
       throw http.ClientException(
         'Server returned ${response.statusCode}: ${response.body}',
       );
@@ -159,6 +166,7 @@ Available commands:
 - segment(p1, p2, label): Create a segment between two points
 - circle(center, point, label): Create a circle with center through point
 - circle(center, radius, label): Create a circle with center and radius
+- circle3(p1, p2, p3, label): Create circumcircle through three points
 - perpendicular(line, point, label): Create perpendicular line through point
 - parallel(line, point, label): Create parallel line through point
 - midpoint(p1, p2, label): Create midpoint between two points
@@ -179,7 +187,7 @@ Rules:
 3. Include all intermediate construction steps
 4. Order commands by dependencies (use objects only after they're created)
 5. Return ONLY a JSON array of command strings, no explanation
-6. Each command must be a valid string that can be parsed
+6. Each command must be a valid string that can be parsed. Prefer direct labels over nested expressions (e.g., supply `circle3(A, B, C, circumcircle)` instead of using midpoint expressions).
 
 User description: $description
 
@@ -213,11 +221,15 @@ Return only the JSON array:
       }
 
       if (commands.isEmpty) {
+        print('AIService: Parsed empty command list');
         return AIResponse.error('No commands generated');
       }
 
+      print('AIService: Parsed ${commands.length} commands successfully');
+
       return AIResponse.success(commands);
     } catch (e) {
+      print('AIService: Failed to parse response => $e');
       return AIResponse.error('Failed to parse response: $e');
     }
   }

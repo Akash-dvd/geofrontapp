@@ -47,15 +47,26 @@ class CommandRegistry {
           argumentTypes: [
             TypeConstraint.numeric(description: 'x-coordinate'),
             TypeConstraint.numeric(description: 'y-coordinate'),
+            TypeConstraint.text(description: 'Label', optional: true),
           ],
-          argumentHints: ['Enter x-coordinate', 'Enter y-coordinate'],
+          argumentHints: [
+            'Enter x-coordinate',
+            'Enter y-coordinate',
+            'Enter label (optional)',
+          ],
         ),
         executor: (context, arguments) async {
           final x = (arguments[0] as num).toDouble();
           final y = (arguments[1] as num).toDouble();
+          final providedLabel =
+              arguments.length >= 3 && arguments[2] is String
+                  ? (arguments[2] as String).trim()
+                  : '';
           final point = GeoPointer(
             id: context.generateId('point'),
-            label: context.resolveLabel(_nextPointLabel),
+            label: providedLabel.isNotEmpty
+                ? providedLabel
+                : context.resolveLabel(_nextPointLabel),
             x: x,
             y: y,
           );
@@ -130,16 +141,27 @@ class CommandRegistry {
               allowedTypes: {GeoPoint},
               description: 'Second point',
             ),
+            TypeConstraint.text(description: 'Label', optional: true),
           ],
-          argumentHints: ['Select first point', 'Select second point'],
+          argumentHints: [
+            'Select first point',
+            'Select second point',
+            'Enter label (optional)',
+          ],
         ),
         aliases: const ['segment', 'lineSegment'],
         executor: (context, arguments) async {
           final p1 = arguments[0] as GeoPoint;
           final p2 = arguments[1] as GeoPoint;
+          final providedLabel =
+              arguments.length >= 3 && arguments[2] is String
+                  ? (arguments[2] as String).trim()
+                  : '';
           final line = GeoLine2P.fromDependencies(
             id: context.generateId('line'),
-            label: context.resolveLabel(_nextLineLabel),
+            label: providedLabel.isNotEmpty
+                ? providedLabel
+                : context.resolveLabel(_nextLineLabel),
             points: [p1, p2],
           );
 
@@ -169,15 +191,26 @@ class CommandRegistry {
               allowedTypes: {GeoPoint},
               description: 'Point on circumference',
             ),
+            TypeConstraint.text(description: 'Label', optional: true),
           ],
-          argumentHints: ['Select center point', 'Select point on circle'],
+          argumentHints: [
+            'Select center point',
+            'Select point on circle',
+            'Enter label (optional)',
+          ],
         ),
         executor: (context, arguments) async {
           final center = arguments[0] as GeoPoint;
           final pointOnCircle = arguments[1] as GeoPoint;
+          final providedLabel =
+              arguments.length >= 3 && arguments[2] is String
+                  ? (arguments[2] as String).trim()
+                  : '';
           final circle = GeoCircle2P.fromDependencies(
             id: context.generateId('circle'),
-            label: context.resolveLabel(_nextCircleLabel),
+            label: providedLabel.isNotEmpty
+                ? providedLabel
+                : context.resolveLabel(_nextCircleLabel),
             points: [center, pointOnCircle],
           );
 
@@ -212,20 +245,28 @@ class CommandRegistry {
               allowedTypes: {GeoPoint},
               description: 'Third point',
             ),
+            TypeConstraint.text(description: 'Label', optional: true),
           ],
           argumentHints: [
             'Select first point',
             'Select second point',
             'Select third point',
+            'Enter label (optional)',
           ],
         ),
         executor: (context, arguments) async {
           final p1 = arguments[0] as GeoPoint;
           final p2 = arguments[1] as GeoPoint;
           final p3 = arguments[2] as GeoPoint;
+          final providedLabel =
+              arguments.length >= 4 && arguments[3] is String
+                  ? (arguments[3] as String).trim()
+                  : '';
           final circle = GeoCircle3P.fromDependencies(
             id: context.generateId('circle'),
-            label: context.resolveLabel(_nextCircleThreeLabel),
+            label: providedLabel.isNotEmpty
+                ? providedLabel
+                : context.resolveLabel(_nextCircleThreeLabel),
             points: [p1, p2, p3],
           );
 
@@ -261,15 +302,26 @@ class CommandRegistry {
               allowedTypes: {GeoPoint},
               description: 'Second point',
             ),
+            TypeConstraint.text(description: 'Label', optional: true),
           ],
-          argumentHints: ['Select first point', 'Select second point'],
+          argumentHints: [
+            'Select first point',
+            'Select second point',
+            'Enter label (optional)',
+          ],
         ),
         executor: (context, arguments) async {
           final p1 = arguments[0] as GeoPoint;
           final p2 = arguments[1] as GeoPoint;
+          final providedLabel =
+              arguments.length >= 3 && arguments[2] is String
+                  ? (arguments[2] as String).trim()
+                  : '';
           final midpoint = GeoMidpoint.fromDependencies(
             id: context.generateId('midpoint'),
-            label: context.resolveLabel(_nextMidpointLabel),
+            label: providedLabel.isNotEmpty
+                ? providedLabel
+                : context.resolveLabel(_nextMidpointLabel),
             points: [p1, p2],
           );
 
@@ -300,15 +352,26 @@ class CommandRegistry {
               allowedTypes: {GeoPoint},
               description: 'Point on perpendicular line',
             ),
+            TypeConstraint.text(description: 'Label', optional: true),
           ],
-          argumentHints: ['Select reference line', 'Select point'],
+          argumentHints: [
+            'Select reference line',
+            'Select point',
+            'Enter label (optional)',
+          ],
         ),
         executor: (context, arguments) async {
           final reference = arguments[0] as GeoLine;
           final point = arguments[1] as GeoPoint;
+          final providedLabel =
+              arguments.length >= 3 && arguments[2] is String
+                  ? (arguments[2] as String).trim()
+                  : '';
           final perpendicular = GeoPerpendicularLine.fromDependencies(
             id: context.generateId('line'),
-            label: context.resolveLabel(_nextPerpendicularLabel),
+            label: providedLabel.isNotEmpty
+                ? providedLabel
+                : context.resolveLabel(_nextPerpendicularLabel),
             dependencies: [reference, point],
           );
 
@@ -339,15 +402,26 @@ class CommandRegistry {
               allowedTypes: {GeoPoint},
               description: 'Point on parallel line',
             ),
+            TypeConstraint.text(description: 'Label', optional: true),
           ],
-          argumentHints: ['Select reference line', 'Select point'],
+          argumentHints: [
+            'Select reference line',
+            'Select point',
+            'Enter label (optional)',
+          ],
         ),
         executor: (context, arguments) async {
           final reference = arguments[0] as GeoLine;
           final point = arguments[1] as GeoPoint;
+          final providedLabel =
+              arguments.length >= 3 && arguments[2] is String
+                  ? (arguments[2] as String).trim()
+                  : '';
           final parallel = GeoParallelLine.fromDependencies(
             id: context.generateId('line'),
-            label: context.resolveLabel(_nextParallelLabel),
+            label: providedLabel.isNotEmpty
+                ? providedLabel
+                : context.resolveLabel(_nextParallelLabel),
             dependencies: [reference, point],
           );
 
@@ -378,15 +452,26 @@ class CommandRegistry {
               allowedTypes: {GeoPoint},
               description: 'Second point',
             ),
+            TypeConstraint.text(description: 'Label', optional: true),
           ],
-          argumentHints: ['Select first point', 'Select second point'],
+          argumentHints: [
+            'Select first point',
+            'Select second point',
+            'Enter label (optional)',
+          ],
         ),
         executor: (context, arguments) async {
           final p1 = arguments[0] as GeoPoint;
           final p2 = arguments[1] as GeoPoint;
+          final providedLabel =
+              arguments.length >= 3 && arguments[2] is String
+                  ? (arguments[2] as String).trim()
+                  : '';
           final bisector = GeoPerpendicularBisector.fromDependencies(
             id: context.generateId('line'),
-            label: context.resolveLabel(_nextPerpBisectorLabel),
+            label: providedLabel.isNotEmpty
+                ? providedLabel
+                : context.resolveLabel(_nextPerpBisectorLabel),
             points: [p1, p2],
           );
 

@@ -37,6 +37,9 @@ class _UnifiedPromptPanelState extends State<UnifiedPromptPanel> {
   final TextEditingController _controller = TextEditingController();
   final FocusNode _focusNode = FocusNode();
   final ScrollController _scrollController = ScrollController();
+  bool _hasInput = false;
+  String _cliDraft = '';
+  String _aiDraft = '';
 
   // CLI state
   String? _lastCliMessage;
@@ -50,7 +53,14 @@ class _UnifiedPromptPanelState extends State<UnifiedPromptPanel> {
   List<String> _executionLog = [];
 
   @override
+  void initState() {
+    super.initState();
+    _controller.addListener(_handleInputChanged);
+  }
+
+  @override
   void dispose() {
+    _controller.removeListener(_handleInputChanged);
     _controller.dispose();
     _focusNode.dispose();
     _scrollController.dispose();
@@ -131,12 +141,15 @@ class _UnifiedPromptPanelState extends State<UnifiedPromptPanel> {
               setState(() {
                 if (_mode == PromptMode.cli) {
                   _lastCliMessage = null;
+                  _cliDraft = '';
                 } else {
                   _generatedCommands = null;
                   _aiError = null;
                   _executionLog.clear();
+                  _aiDraft = '';
                 }
                 _controller.clear();
+                _hasInput = false;
               });
             },
           ),
@@ -165,11 +178,28 @@ class _UnifiedPromptPanelState extends State<UnifiedPromptPanel> {
     final isActive = _mode == mode;
     return InkWell(
       onTap: () {
-        setState(() {
-          _mode = mode;
-          _controller.clear();
+        if (_mode == mode) {
           _focusNode.requestFocus();
+          return;
+        }
+
+        setState(() {
+          final currentText = _controller.text;
+          if (_mode == PromptMode.cli) {
+            _cliDraft = currentText;
+          } else {
+            _aiDraft = currentText;
+          }
+
+          _mode = mode;
+
+          final nextText = mode == PromptMode.cli ? _cliDraft : _aiDraft;
+          _controller
+            ..text = nextText
+            ..selection = TextSelection.collapsed(offset: nextText.length);
         });
+
+        _focusNode.requestFocus();
       },
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -279,6 +309,8 @@ class _UnifiedPromptPanelState extends State<UnifiedPromptPanel> {
   }
 
   Widget _buildInputArea() {
+    final bool submitDisabled = !_hasInput || _isLoadingAI || _isExecuting;
+
     return Container(
       padding: const EdgeInsets.all(8),
       decoration: BoxDecoration(
@@ -327,11 +359,11 @@ class _UnifiedPromptPanelState extends State<UnifiedPromptPanel> {
                   ? Colors.green[400]
                   : Colors.purple[300],
               tooltip: _mode == PromptMode.cli ? 'Execute' : 'Generate',
-              onPressed: _controller.text.trim().isEmpty
+              onPressed: submitDisabled
                   ? null
                   : (_mode == PromptMode.cli
-                        ? () => _executeCLICommand(_controller.text)
-                        : _generateAICommands),
+                      ? () => _executeCLICommand(_controller.text)
+                      : _generateAICommands),
             ),
           if (_mode == PromptMode.ai &&
               _generatedCommands != null &&
@@ -348,7 +380,13 @@ class _UnifiedPromptPanelState extends State<UnifiedPromptPanel> {
   }
 
   Future<void> _executeCLICommand(String command) async {
-    if (command.trim().isEmpty || widget.cliExecutor == null) return;
+    if (command.trim().isEmpty || widget.cliExecutor == null || _isExecuting) {
+      return;
+    }
+
+    setState(() {
+      _isExecuting = true;
+    });
 
     try {
       // Use executeString which directly parses and executes
@@ -370,14 +408,32 @@ class _UnifiedPromptPanelState extends State<UnifiedPromptPanel> {
         _lastCliMessage = 'Error: $e';
         _lastCliSuccess = false;
       });
-    }
+    } finally {
+      setState(() {
+        _isExecuting = false;
+        _cliDraft = '';
 
-    _controller.clear();
-    _focusNode.requestFocus();
+        if (_mode == PromptMode.cli) {
+          _controller.clear();
+          _hasInput = false;
+        }
+      });
+      if (_mode == PromptMode.cli) {
+        _focusNode.requestFocus();
+      }
+    }
   }
 
   Future<void> _generateAICommands() async {
-    if (widget.aiService == null || widget.aiAdapter == null) return;
+    if (widget.aiService == null || widget.aiAdapter == null) {
+      debugPrint(
+        'UnifiedPromptPanel: AI service or adapter not configured; prompt ignored.',
+      );
+      return;
+    }
+
+    final prompt = _controller.text.trim();
+    debugPrint('UnifiedPromptPanel: Submitting AI prompt => "$prompt"');
 
     setState(() {
       _isLoadingAI = true;
@@ -388,10 +444,13 @@ class _UnifiedPromptPanelState extends State<UnifiedPromptPanel> {
 
     try {
       final response = await widget.aiService!.generateCommands(
-        _controller.text,
+        prompt,
       );
 
       if (!response.isSuccess) {
+        debugPrint(
+          'UnifiedPromptPanel: AI response error => ${response.error}',
+        );
         setState(() {
           _aiError = response.error ?? 'Failed to generate commands';
         });
@@ -402,8 +461,20 @@ class _UnifiedPromptPanelState extends State<UnifiedPromptPanel> {
         _generatedCommands = response.commands;
       });
 
+      debugPrint(
+        'UnifiedPromptPanel: AI generated ${response.commands?.length ?? 0} commands.',
+      );
+      if (response.commands != null && response.commands!.isNotEmpty) {
+        for (var i = 0; i < response.commands!.length; i++) {
+          debugPrint('UnifiedPromptPanel: [${i + 1}] ${response.commands![i]}');
+        }
+        debugPrint('UnifiedPromptPanel: Use the play button to execute these commands.');
+      }
+
       _scrollToBottom();
-    } catch (e) {
+    } catch (e, stackTrace) {
+      debugPrint('UnifiedPromptPanel: AI prompt execution threw $e');
+      debugPrint('UnifiedPromptPanel stack: $stackTrace');
       setState(() {
         _aiError = 'Error: $e';
       });
@@ -423,25 +494,46 @@ class _UnifiedPromptPanelState extends State<UnifiedPromptPanel> {
     });
 
     try {
+      debugPrint(
+        'UnifiedPromptPanel: Executing ${_generatedCommands!.length} AI commands...',
+      );
       final results = await widget.aiAdapter!.executeBatch(_generatedCommands!);
 
+      var allSucceeded = true;
       for (int i = 0; i < results.length; i++) {
         final result = results[i];
+        final commandText = _generatedCommands![i];
+
         setState(() {
           if (result.success) {
-            _executionLog.add('✓ ${_generatedCommands![i]}');
+            _executionLog.add('✓ $commandText');
           } else {
-            _executionLog.add('✗ ${_generatedCommands![i]}: ${result.message}');
+            _executionLog.add('✗ $commandText: ${result.message}');
           }
         });
+
+        debugPrint(
+          'UnifiedPromptPanel: Command ${i + 1}/${_generatedCommands!.length} ${result.success ? 'succeeded' : 'failed'} => $commandText',
+        );
+
+        if (!result.success) {
+          allSucceeded = false;
+          debugPrint('UnifiedPromptPanel: Failure message => ${result.message}');
+          debugPrint('UnifiedPromptPanel: Halting execution after failure.');
+          break;
+        }
       }
 
-      setState(() {
-        _executionLog.add('');
-        _executionLog.add('Construction complete!');
-      });
-
-      widget.onConstructionComplete?.call();
+      if (allSucceeded) {
+        setState(() {
+          _executionLog.add('');
+          _executionLog.add('Construction complete!');
+        });
+        debugPrint('UnifiedPromptPanel: AI execution complete.');
+        widget.onConstructionComplete?.call();
+      } else {
+        debugPrint('UnifiedPromptPanel: AI execution halted before completion.');
+      }
 
       // Clear after delay
       Future.delayed(const Duration(seconds: 2), () {
@@ -449,6 +541,8 @@ class _UnifiedPromptPanelState extends State<UnifiedPromptPanel> {
           setState(() {
             _controller.clear();
             _generatedCommands = null;
+            _aiDraft = '';
+            _hasInput = false;
           });
         }
       });
@@ -457,6 +551,7 @@ class _UnifiedPromptPanelState extends State<UnifiedPromptPanel> {
         _executionLog.add('');
         _executionLog.add('Error: $e');
       });
+      debugPrint('UnifiedPromptPanel: Executing AI commands failed => $e');
     } finally {
       setState(() {
         _isExecuting = false;
@@ -476,46 +571,22 @@ class _UnifiedPromptPanelState extends State<UnifiedPromptPanel> {
       }
     });
   }
-}
 
-/// Simple CommandParser for CLI mode
-class CommandParser {
-  Command? parse(String input) {
-    final trimmed = input.trim();
-    if (trimmed.isEmpty) return null;
-
-    final match = RegExp(r'^(\w+)\((.*)\)$').firstMatch(trimmed);
-    if (match == null) {
-      return Command(name: trimmed, arguments: [], originalInput: input);
+  void _handleInputChanged() {
+    final text = _controller.text;
+    if (_mode == PromptMode.cli) {
+      _cliDraft = text;
+    } else {
+      _aiDraft = text;
     }
 
-    final commandName = match.group(1)!;
-    final argsString = match.group(2)!;
-    final arguments = _parseArguments(argsString);
-
-    return Command(
-      name: commandName,
-      arguments: arguments,
-      originalInput: input,
-    );
-  }
-
-  List<dynamic> _parseArguments(String argsString) {
-    if (argsString.trim().isEmpty) return [];
-
-    final args = <dynamic>[];
-    final parts = argsString.split(',');
-
-    for (final part in parts) {
-      final trimmed = part.trim();
-      final number = num.tryParse(trimmed);
-      if (number != null) {
-        args.add(number);
-      } else {
-        args.add(trimmed);
-      }
+    final hasInput = text.trim().isNotEmpty;
+    if (hasInput == _hasInput) {
+      return;
     }
 
-    return args;
+    setState(() {
+      _hasInput = hasInput;
+    });
   }
 }

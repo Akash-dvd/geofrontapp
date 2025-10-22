@@ -38,7 +38,7 @@ void main() {
     });
 
     test('GeoPoint contains works correctly', () {
-      final point = GeoPointer(id: 'p1', label: 'A', x: 10, y: 10, size: 5);
+      final point = GeoPointer(id: 'p1', label: 'A', x: 10, y: 10);
 
       expect(point.contains(const Offset(10, 10)), true);
       expect(point.contains(const Offset(12, 12)), true);
@@ -60,13 +60,14 @@ void main() {
 
     test('GeoLine calculates distance to point correctly', () {
       // Horizontal line at y = 5
-      final line = GeoLine2P(
+      final p1 = GeoPointer(id: 'p1', label: 'A', x: -10, y: 5);
+      final p2 = GeoPointer(id: 'p2', label: 'B', x: 10, y: 5);
+
+      final line = GeoLine2P.fromPoints(
         id: 'l1',
         label: 'L',
-        dependencies: ['p1', 'p2'],
-        a: 0,
-        b: 1,
-        c: -5,
+        p1: p1,
+        p2: p2,
       );
 
       final distance = line.distanceTo(const Offset(10, 10));
@@ -109,13 +110,14 @@ void main() {
     });
 
     test('GeoCircle contains works correctly', () {
-      final circle = GeoCircle2P(
+      final center = GeoPointer(id: 'p1', label: 'C', x: 0, y: 0);
+      final pointOnCircle = GeoPointer(id: 'p2', label: 'P', x: 10, y: 0);
+
+      final circle = GeoCircle2P.fromPoints(
         id: 'c1',
         label: 'C',
-        dependencies: ['p1', 'p2'],
-        centerX: 0,
-        centerY: 0,
-        radius: 10,
+        center: center,
+        pointOnCircle: pointOnCircle,
       );
 
       expect(circle.contains(const Offset(0, 0)), false); // Not filled
@@ -154,13 +156,14 @@ void main() {
 
     test('DAGManager detects invalid dependencies', () {
       final dag = DAGManager();
-      final line = GeoLine2P(
+      final p1 = GeoPointer(id: 'p1', label: 'A', x: -5, y: 0);
+      final p2 = GeoPointer(id: 'p2', label: 'B', x: 5, y: 0);
+
+      final line = GeoLine2P.fromPoints(
         id: 'l1',
         label: 'L',
-        dependencies: ['p1', 'p2'],
-        a: 0,
-        b: 1,
-        c: 0,
+        p1: p1,
+        p2: p2,
       );
 
       expect(() => dag.addObject(line, ['p1', 'p2']), throwsArgumentError);
@@ -250,21 +253,17 @@ void main() {
   group('Intersection Tests', () {
     test('Line-Line intersection calculates correctly', () {
       // Horizontal and vertical lines intersecting at (5, 5)
-      final line1 = GeoLine2P(
+      final line1 = GeoLine2P.fromPoints(
         id: 'l1',
         label: 'L1',
-        dependencies: ['p1', 'p2'],
-        a: 0,
-        b: 1,
-        c: -5, // y = 5
+        p1: GeoPointer(id: 'p1', label: 'A', x: 0, y: 5),
+        p2: GeoPointer(id: 'p2', label: 'B', x: 10, y: 5),
       );
-      final line2 = GeoLine2P(
+      final line2 = GeoLine2P.fromPoints(
         id: 'l2',
         label: 'L2',
-        dependencies: ['p3', 'p4'],
-        a: 1,
-        b: 0,
-        c: -5, // x = 5
+        p1: GeoPointer(id: 'p3', label: 'C', x: 5, y: 0),
+        p2: GeoPointer(id: 'p4', label: 'D', x: 5, y: 10),
       );
 
       final intersection = GeoIntersection.lineLine(
@@ -281,21 +280,17 @@ void main() {
     });
 
     test('Parallel lines have no intersection', () {
-      final line1 = GeoLine2P(
+      final line1 = GeoLine2P.fromPoints(
         id: 'l1',
         label: 'L1',
-        dependencies: ['p1', 'p2'],
-        a: 1,
-        b: 1,
-        c: 0,
+        p1: GeoPointer(id: 'p1', label: 'A', x: 0, y: 0),
+        p2: GeoPointer(id: 'p2', label: 'B', x: 5, y: 5),
       );
-      final line2 = GeoLine2P(
+      final line2 = GeoLine2P.fromPoints(
         id: 'l2',
         label: 'L2',
-        dependencies: ['p3', 'p4'],
-        a: 1,
-        b: 1,
-        c: -5,
+        p1: GeoPointer(id: 'p3', label: 'C', x: 0, y: -5),
+        p2: GeoPointer(id: 'p4', label: 'D', x: 5, y: 0),
       );
 
       final intersection = GeoIntersection.lineLine(
@@ -309,21 +304,17 @@ void main() {
     });
 
     test('Circle-Circle intersection calculates correctly', () {
-      final circle1 = GeoCircle2P(
+      final circle1 = GeoCircle2P.fromPoints(
         id: 'c1',
         label: 'C1',
-        dependencies: ['p1', 'p2'],
-        centerX: 0,
-        centerY: 0,
-        radius: 5,
+        center: GeoPointer(id: 'p1', label: 'C1', x: 0, y: 0),
+        pointOnCircle: GeoPointer(id: 'p2', label: 'P1', x: 5, y: 0),
       );
-      final circle2 = GeoCircle2P(
+      final circle2 = GeoCircle2P.fromPoints(
         id: 'c2',
         label: 'C2',
-        dependencies: ['p3', 'p4'],
-        centerX: 5,
-        centerY: 0,
-        radius: 5,
+        center: GeoPointer(id: 'p3', label: 'C2', x: 5, y: 0),
+        pointOnCircle: GeoPointer(id: 'p4', label: 'P2', x: 10, y: 0),
       );
 
       final intersection = GeoIntersection.circleCircle(
