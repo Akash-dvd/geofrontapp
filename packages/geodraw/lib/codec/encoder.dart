@@ -1,4 +1,5 @@
 import 'dart:convert';
+
 import '../core/dag/dag_manager.dart';
 
 /// Encodes geometry objects and DAG to JSON format
@@ -45,5 +46,19 @@ class GeoDrawEncoder {
       return const JsonEncoder.withIndent('  ').convert(map);
     }
     return jsonEncode(map);
+  }
+
+  /// Encode DAG to a JSON string suitable for storage (optionally base64).
+  String encodeForStorage(
+    DAGManager dag, {
+    bool base64 = false,
+    bool pretty = false,
+  }) {
+    final jsonString = encodeToJson(dag, pretty: pretty);
+    if (!base64) {
+      return jsonString;
+    }
+    final bytes = utf8.encode(jsonString);
+    return base64Encode(bytes);
   }
 }

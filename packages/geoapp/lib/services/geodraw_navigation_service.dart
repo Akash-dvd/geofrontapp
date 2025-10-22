@@ -1,26 +1,27 @@
 import 'package:flutter/material.dart';
 import 'package:geodraw/geodraw.dart';
 
+import '../config/env_config.dart';
 import '../models/problem.dart';
 
 /// Service for navigating to GeoDraw functionality
 /// Follows constitutional requirement for clear API boundaries
 class GeoDrawNavigationService {
   /// Navigate to GeoDraw for creating a new problem
-  static Future<Map<String, dynamic>?> navigateToCreate(
+  static Future<String?> navigateToCreate(
     BuildContext context,
   ) async {
-    return await Navigator.of(context).push<Map<String, dynamic>>(
+    return await Navigator.of(context).push<String?>(
       MaterialPageRoute(builder: (context) => const GeoDrawCreateScreen()),
     );
   }
 
   /// Navigate to GeoDraw for editing an existing problem
-  static Future<Map<String, dynamic>?> navigateToEdit(
+  static Future<String?> navigateToEdit(
     BuildContext context,
     Problem problem,
   ) async {
-    return await Navigator.of(context).push<Map<String, dynamic>>(
+    return await Navigator.of(context).push<String?>(
       MaterialPageRoute(
         builder: (context) => GeoDrawEditScreen(problem: problem),
       ),
@@ -71,13 +72,19 @@ class _GeoDrawCreateScreenState extends State<GeoDrawCreateScreen> {
       },
     );
     _commandExecutor = UnifiedCLIExecutor(dagManager: _dagManager);
-    _aiService = AIService(config: AIServiceConfig.development());
+    _aiService = AIService(
+      config: AIServiceConfig.production(EnvConfig.edgeLlmEndpoint),
+    );
   }
 
   void _handleSave() {
     // Export construction to JSON using GeoDrawEncoder
     final encoder = GeoDrawEncoder();
-    final geometryData = encoder.encode(_dagManager);
+    final geometryData = encoder.encodeForStorage(
+      _dagManager,
+      base64: false,
+      pretty: false,
+    );
     Navigator.of(context).pop(geometryData);
   }
 
@@ -182,7 +189,9 @@ class _GeoDrawEditScreenState extends State<GeoDrawEditScreen> {
     if (widget.problem.geometryData != null) {
       try {
         final decoder = GeoDrawDecoder();
-        _dagManager = decoder.decode(widget.problem.geometryData!);
+        _dagManager = decoder.decodeFromStorage(
+          widget.problem.geometryData!,
+        );
       } catch (e) {
         // If decoding fails, start with empty canvas
         debugPrint('Failed to load geometry data: $e');
@@ -202,13 +211,19 @@ class _GeoDrawEditScreenState extends State<GeoDrawEditScreen> {
       },
     );
     _commandExecutor = UnifiedCLIExecutor(dagManager: _dagManager);
-    _aiService = AIService(config: AIServiceConfig.development());
+    _aiService = AIService(
+      config: AIServiceConfig.production(EnvConfig.edgeLlmEndpoint),
+    );
   }
 
   void _handleSave() {
     // Export construction to JSON
     final encoder = GeoDrawEncoder();
-    final geometryData = encoder.encode(_dagManager);
+    final geometryData = encoder.encodeForStorage(
+      _dagManager,
+      base64: false,
+      pretty: false,
+    );
     Navigator.of(context).pop(geometryData);
   }
 
@@ -310,7 +325,9 @@ class _GeoDrawViewScreenState extends State<GeoDrawViewScreen> {
     if (widget.problem.geometryData != null) {
       try {
         final decoder = GeoDrawDecoder();
-        _dagManager = decoder.decode(widget.problem.geometryData!);
+        _dagManager = decoder.decodeFromStorage(
+          widget.problem.geometryData!,
+        );
       } catch (e) {
         debugPrint('Failed to load geometry data: $e');
         _dagManager = DAGManager();

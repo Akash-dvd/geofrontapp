@@ -112,11 +112,10 @@ class GeoPointer extends GeoPoint {
     required double x,
     required double y,
     super.visible,
-    Map<String, dynamic>? styleOverrides,
+    super.styleOverrides,
   }) : super(
          dependencies: [], // Free points have no dependencies
          multivector: constructFreePoint(x, y),
-         styleOverrides: styleOverrides,
        );
 
   @override

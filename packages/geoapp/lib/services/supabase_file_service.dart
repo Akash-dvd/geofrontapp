@@ -1,7 +1,6 @@
 import 'dart:typed_data';
 import 'package:http/http.dart' as http;
-import 'dart:convert';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 /// Service for uploading files to Supabase Storage
 class SupabaseFileService {
@@ -15,30 +14,23 @@ class SupabaseFileService {
     this.bucketName = 'problem-images',
   });
 
-  /// Upload a thumbnail to Supabase Storage using Firebase authentication
+  /// Upload a thumbnail to Supabase Storage using optional Supabase authentication
   ///
   /// [bytes] - The image bytes to upload
   /// [problemId] - The problem ID (used in the file path)
-  /// [firebaseUid] - The Firebase user ID (used in the file path)
+  /// [userId] - The Supabase user ID (used in the file path)
   /// [filename] - Optional filename (defaults to problem_id.png)
   ///
   /// Returns the storage key (path) on success, null on failure
   Future<String?> uploadThumbnail({
     required Uint8List bytes,
     required String problemId,
-    required String firebaseUid,
+  required String userId,
     String? filename,
   }) async {
     try {
-      // Get Firebase ID token for authentication
-      final firebaseToken = await FirebaseAuth.instance.currentUser?.getIdToken();
-      if (firebaseToken == null) {
-        print('ERROR: No Firebase token available for Supabase upload');
-        return null;
-      }
-
       final actualFilename = filename ?? '$problemId.png';
-      final storagePath = '$firebaseUid/thumbnails/$actualFilename';
+      final storagePath = '$userId/thumbnails/$actualFilename';
 
       final url = Uri.parse(
         '$supabaseUrl/storage/v1/object/$bucketName/$storagePath',
@@ -46,15 +38,22 @@ class SupabaseFileService {
 
       print('DEBUG: Uploading to Supabase Storage: $storagePath');
 
+      final sessionToken =
+          Supabase.instance.client.auth.currentSession?.accessToken;
+
       // Use anon key for public bucket (RLS bypassed for public buckets)
+      final headers = {
+        'Authorization': 'Bearer $supabaseAnonKey',
+        'apikey': supabaseAnonKey,
+        'Content-Type': 'image/png',
+        'x-upsert': 'true', // Overwrite if exists
+        if (sessionToken != null && sessionToken.isNotEmpty)
+          'X-Supabase-Access-Token': sessionToken,
+      };
+
       final response = await http.post(
         url,
-        headers: {
-          'Authorization': 'Bearer $supabaseAnonKey',
-          'apikey': supabaseAnonKey,
-          'Content-Type': 'image/png',
-          'x-upsert': 'true', // Overwrite if exists
-        },
+        headers: headers,
         body: bytes,
       );
 

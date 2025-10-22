@@ -1,5 +1,7 @@
+import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
-import 'package:geofrontapp/models/problem.dart';
+import 'package:geoapp/models/problem.dart';
 
 void main() {
   group('Problem Model Tests', () {
@@ -9,21 +11,37 @@ void main() {
     setUp(() {
       testJson = {
         'id': '1',
-        'attributes': {
-          'title': 'Test Problem',
-          'description': 'This is a test problem description',
-          'difficulty': 'intermediate',
-          'category': 'geometry',
-          'geometryData': {
-            'points': [
-              {'x': 0, 'y': 0},
-              {'x': 1, 'y': 1}
+        'title': 'Test Problem',
+        'description': 'This is a test problem description',
+        'difficulty': 'intermediate',
+        'category': 'geometry',
+        'geometry_data': jsonEncode({
+          'points': [
+            {'x': 0, 'y': 0},
+            {'x': 1, 'y': 1},
+          ],
+        }),
+          'scalar_constraints': {
+            'distance': {'points': ['A', 'B'], 'value': 5}
+          },
+          'object_constraints': {
+            'collinear': {
+              'points': ['A', 'B', 'C'],
+            }
+          },
+          'scalar_proof': {
+            'steps': [
+              {'statement': 'AB = 5'}
             ]
           },
-          'solution': 'Test solution',
-          'createdAt': '2025-10-04T10:00:00.000Z',
-          'updatedAt': '2025-10-04T11:00:00.000Z',
-        },
+          'object_proof': {
+            'steps': [
+              {'statement': 'Points A, B, C are collinear'}
+            ]
+          },
+        'solution': 'Test solution',
+        'created_at': '2025-10-04T10:00:00.000Z',
+        'updated_at': '2025-10-04T11:00:00.000Z',
       };
 
       testProblem = Problem(
@@ -32,12 +50,30 @@ void main() {
         description: 'This is a test problem description',
         difficulty: ProblemDifficulty.intermediate,
         category: ProblemCategory.geometry,
-        geometryData: {
+        geometryData: jsonEncode({
           'points': [
             {'x': 0, 'y': 0},
-            {'x': 1, 'y': 1}
+            {'x': 1, 'y': 1},
+          ],
+        }),
+        scalarConstraints: jsonEncode({
+          'distance': {'points': ['A', 'B'], 'value': 5}
+        }),
+        objectConstraints: jsonEncode({
+          'collinear': {
+            'points': ['A', 'B', 'C'],
+          }
+        }),
+        scalarProof: jsonEncode({
+          'steps': [
+            {'statement': 'AB = 5'}
           ]
-        },
+        }),
+        objectProof: jsonEncode({
+          'steps': [
+            {'statement': 'Points A, B, C are collinear'}
+          ]
+        }),
         solution: 'Test solution',
         createdAt: DateTime.parse('2025-10-04T10:00:00.000Z'),
         updatedAt: DateTime.parse('2025-10-04T11:00:00.000Z'),
@@ -52,7 +88,11 @@ void main() {
       expect(problem.description, 'This is a test problem description');
       expect(problem.difficulty, ProblemDifficulty.intermediate);
       expect(problem.category, ProblemCategory.geometry);
-      expect(problem.geometryData, isA<Map<String, dynamic>>());
+      expect(problem.geometryData, isA<String>());
+  expect(problem.scalarConstraints, isA<String>());
+  expect(problem.objectConstraints, isA<String>());
+  expect(problem.scalarProof, isA<String>());
+  expect(problem.objectProof, isA<String>());
       expect(problem.solution, 'Test solution');
       expect(problem.createdAt, DateTime.parse('2025-10-04T10:00:00.000Z'));
       expect(problem.updatedAt, DateTime.parse('2025-10-04T11:00:00.000Z'));
@@ -65,29 +105,39 @@ void main() {
       expect(json['description'], 'This is a test problem description');
       expect(json['difficulty'], 'intermediate');
       expect(json['category'], 'geometry');
-      expect(json['geometryData'], isA<Map<String, dynamic>>());
+      expect(json['geometry_data'], isA<Map<String, dynamic>>());
+  expect(json['scalar_constraints'], isA<Map<String, dynamic>>());
+  expect(json['object_constraints'], isA<Map<String, dynamic>>());
+  expect(json['scalar_proof'], isA<Map<String, dynamic>>());
+  expect(json['object_proof'], isA<Map<String, dynamic>>());
       expect(json['solution'], 'Test solution');
     });
 
     test('should handle null optional fields correctly', () {
       final jsonWithNulls = {
         'id': '2',
-        'attributes': {
-          'title': 'Minimal Problem',
-          'description': 'Minimal description',
-          'difficulty': 'beginner',
-          'category': 'algebra',
-          'geometryData': null,
-          'solution': null,
-          'createdAt': '2025-10-04T10:00:00.000Z',
-          'updatedAt': '2025-10-04T10:00:00.000Z',
-        },
+        'title': 'Minimal Problem',
+        'description': 'Minimal description',
+        'difficulty': 'beginner',
+        'category': 'algebra',
+        'geometry_data': null,
+        'solution': null,
+        'scalar_constraints': null,
+        'object_constraints': null,
+        'scalar_proof': null,
+        'object_proof': null,
+        'created_at': '2025-10-04T10:00:00.000Z',
+        'updated_at': '2025-10-04T10:00:00.000Z',
       };
 
       final problem = Problem.fromJson(jsonWithNulls);
 
       expect(problem.geometryData, isNull);
       expect(problem.solution, isNull);
+      expect(problem.scalarConstraints, isNull);
+      expect(problem.objectConstraints, isNull);
+      expect(problem.scalarProof, isNull);
+      expect(problem.objectProof, isNull);
     });
 
     test('should create copy with updated fields', () {
@@ -136,10 +186,22 @@ void main() {
     });
 
     test('should parse from string correctly', () {
-      expect(ProblemDifficulty.fromString('beginner'), ProblemDifficulty.beginner);
-      expect(ProblemDifficulty.fromString('INTERMEDIATE'), ProblemDifficulty.intermediate);
-      expect(ProblemDifficulty.fromString('Advanced'), ProblemDifficulty.advanced);
-      expect(ProblemDifficulty.fromString('invalid'), ProblemDifficulty.beginner);
+      expect(
+        ProblemDifficulty.fromString('beginner'),
+        ProblemDifficulty.beginner,
+      );
+      expect(
+        ProblemDifficulty.fromString('INTERMEDIATE'),
+        ProblemDifficulty.intermediate,
+      );
+      expect(
+        ProblemDifficulty.fromString('Advanced'),
+        ProblemDifficulty.advanced,
+      );
+      expect(
+        ProblemDifficulty.fromString('invalid'),
+        ProblemDifficulty.beginner,
+      );
     });
   });
 
@@ -155,7 +217,10 @@ void main() {
     test('should parse from string correctly', () {
       expect(ProblemCategory.fromString('geometry'), ProblemCategory.geometry);
       expect(ProblemCategory.fromString('ALGEBRA'), ProblemCategory.algebra);
-      expect(ProblemCategory.fromString('Trigonometry'), ProblemCategory.trigonometry);
+      expect(
+        ProblemCategory.fromString('Trigonometry'),
+        ProblemCategory.trigonometry,
+      );
       expect(ProblemCategory.fromString('invalid'), ProblemCategory.geometry);
     });
   });
@@ -163,36 +228,32 @@ void main() {
   group('ProblemList Tests', () {
     test('should create ProblemList from JSON correctly', () {
       final testData = {
-        'data': [
-          {
-            'id': '1',
-            'attributes': {
-              'title': 'Problem 1',
-              'description': 'Description 1',
-              'difficulty': 'beginner',
-              'category': 'geometry',
-              'createdAt': '2025-10-04T10:00:00.000Z',
-              'updatedAt': '2025-10-04T10:00:00.000Z',
+        'problemsCollection': {
+          'edges': [
+            {
+              'node': {
+                'id': '1',
+                'title': 'Problem 1',
+                'description': 'Description 1',
+                'difficulty': 'beginner',
+                'category': 'geometry',
+                'created_at': '2025-10-04T10:00:00.000Z',
+                'updated_at': '2025-10-04T10:00:00.000Z',
+              },
             },
-          },
-          {
-            'id': '2',
-            'attributes': {
-              'title': 'Problem 2',
-              'description': 'Description 2',
-              'difficulty': 'intermediate',
-              'category': 'algebra',
-              'createdAt': '2025-10-04T10:00:00.000Z',
-              'updatedAt': '2025-10-04T10:00:00.000Z',
+            {
+              'node': {
+                'id': '2',
+                'title': 'Problem 2',
+                'description': 'Description 2',
+                'difficulty': 'intermediate',
+                'category': 'algebra',
+                'created_at': '2025-10-04T10:00:00.000Z',
+                'updated_at': '2025-10-04T10:00:00.000Z',
+              },
             },
-          },
-        ],
-        'meta': {
-          'pagination': {
-            'start': 0,
-            'limit': 20,
-            'total': 25,
-          },
+          ],
+          'totalCount': 25,
         },
       };
 
@@ -201,22 +262,55 @@ void main() {
       expect(problemList.problems.length, 2);
       expect(problemList.total, 25);
       expect(problemList.start, 0);
-      expect(problemList.limit, 20);
+      expect(problemList.limit, 2);
+      expect(problemList.hasMore, isTrue);
+    });
+
+    test('should infer pageInfo pagination when totalCount missing', () {
+      final testData = {
+        'problemsCollection': {
+          'edges': [
+            {
+              'node': {
+                'id': '1',
+                'title': 'Problem 1',
+                'description': 'Description 1',
+                'difficulty': 'beginner',
+                'category': 'geometry',
+                'created_at': '2025-10-04T10:00:00.000Z',
+                'updated_at': '2025-10-04T10:00:00.000Z',
+              },
+            },
+          ],
+          'pageInfo': {
+            'hasNextPage': true,
+            'hasPreviousPage': false,
+          },
+        },
+      };
+
+      final problemList = ProblemList.fromJson(
+        testData,
+        offsetHint: 0,
+        limitHint: 1,
+      );
+
+      expect(problemList.total, greaterThanOrEqualTo(2));
       expect(problemList.hasMore, isTrue);
     });
 
     test('should correctly determine if there are more problems', () {
       final problemListWithMore = ProblemList(
-        problems: [],
+        problems: const [],
         total: 100,
-        start: 0,
+        offset: 0,
         limit: 20,
       );
 
       final problemListWithoutMore = ProblemList(
-        problems: [],
+        problems: const [],
         total: 15,
-        start: 0,
+        offset: 0,
         limit: 20,
       );
 
@@ -226,16 +320,16 @@ void main() {
 
     test('should support equality comparison', () {
       final list1 = ProblemList(
-        problems: [],
+        problems: const [],
         total: 10,
-        start: 0,
+        offset: 0,
         limit: 20,
       );
 
       final list2 = ProblemList(
-        problems: [],
+        problems: const [],
         total: 10,
-        start: 0,
+        offset: 0,
         limit: 20,
       );
 

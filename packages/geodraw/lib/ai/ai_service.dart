@@ -54,10 +54,17 @@ class AIServiceConfig {
   }
 
   /// Production configuration
-  factory AIServiceConfig.production(String apiEndpoint, String apiKey) {
+  factory AIServiceConfig.production(
+    String apiEndpoint, {
+    String? apiKey,
+    Duration timeout = const Duration(seconds: 30),
+    int maxRetries = 3,
+  }) {
     return AIServiceConfig(
       apiEndpoint: apiEndpoint,
       apiKey: apiKey,
+      timeout: timeout,
+      maxRetries: maxRetries,
     );
   }
   

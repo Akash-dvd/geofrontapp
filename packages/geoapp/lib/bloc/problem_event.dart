@@ -38,20 +38,20 @@ class CreateProblem extends ProblemEvent {
   final String description;
   final ProblemDifficulty difficulty;
   final ProblemCategory category;
-  final Map<String, dynamic>? geometryData;
+  final String? geometryData;
   final String? solution;
   final String? thumbnailId;
 
   @override
   List<Object?> get props => [
-    title,
-    description,
-    difficulty,
-    category,
-    geometryData,
-    solution,
-    thumbnailId,
-  ];
+        title,
+        description,
+        difficulty,
+        category,
+        geometryData,
+        solution,
+        thumbnailId,
+      ];
 }
 
 /// Event to update an existing problem
@@ -72,21 +72,21 @@ class UpdateProblem extends ProblemEvent {
   final String description;
   final ProblemDifficulty difficulty;
   final ProblemCategory category;
-  final Map<String, dynamic>? geometryData;
+  final String? geometryData;
   final String? solution;
   final String? thumbnailId;
 
   @override
   List<Object?> get props => [
-    id,
-    title,
-    description,
-    difficulty,
-    category,
-    geometryData,
-    solution,
-    thumbnailId,
-  ];
+        id,
+        title,
+        description,
+        difficulty,
+        category,
+        geometryData,
+        solution,
+        thumbnailId,
+      ];
 }
 
 /// Event to delete a problem

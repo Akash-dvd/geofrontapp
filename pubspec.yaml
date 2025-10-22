@@ -42,12 +42,8 @@ dependencies:
   # GraphQL integration (Constitutional requirement)
   graphql_flutter: ^5.1.2
   
-  # Environment configuration
-  flutter_dotenv: ^5.1.0
-  
-  # Firebase - upgraded to latest compatible versions
-  firebase_core: ^3.6.0
-  firebase_auth: ^5.3.1
+  # Supabase Auth + Database client
+  supabase_flutter: ^2.5.10
   
   # Local packages
   geoapp:

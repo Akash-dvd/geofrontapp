@@ -282,14 +282,20 @@ void main() {
       expect(config.maxRetries, equals(3));
     });
 
-    test('production config requires API key', () {
-      final config = AIServiceConfig.production(
+    test('production config accepts optional API key', () {
+      final configWithKey = AIServiceConfig.production(
         'https://api.example.com',
-        'secret-key',
+        apiKey: 'secret-key',
+      );
+
+      final configWithoutKey = AIServiceConfig.production(
+        'https://api.example.com',
       );
       
-      expect(config.apiEndpoint, equals('https://api.example.com'));
-      expect(config.apiKey, equals('secret-key'));
+      expect(configWithKey.apiEndpoint, equals('https://api.example.com'));
+      expect(configWithKey.apiKey, equals('secret-key'));
+      expect(configWithoutKey.apiEndpoint, equals('https://api.example.com'));
+      expect(configWithoutKey.apiKey, isNull);
     });
   });
 

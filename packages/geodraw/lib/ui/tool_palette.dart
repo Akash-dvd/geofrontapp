@@ -71,7 +71,7 @@ class _ToolPaletteState extends State<ToolPalette> {
             ),
           );
 
-    final Color background = theme.colorScheme.surfaceVariant.withOpacity(0.92);
+    final Color background = theme.colorScheme.surfaceContainerHighest.withOpacity(0.92);
 
     return Material(
       elevation: 4,
@@ -266,8 +266,8 @@ class _ToolButton extends StatelessWidget {
         child: InkWell(
           onTap: enabled ? onPressed : null,
           borderRadius: BorderRadius.circular(12),
-          overlayColor: MaterialStateProperty.resolveWith(
-            (states) => states.contains(MaterialState.pressed)
+          overlayColor: WidgetStateProperty.resolveWith(
+            (states) => states.contains(WidgetState.pressed)
                 ? activeColor.withOpacity(0.1)
                 : null,
           ),

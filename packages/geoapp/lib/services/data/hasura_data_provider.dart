@@ -1,20 +1,19 @@
 import 'package:geoapp/geoapp.dart';
-import '../../config/env_config.dart';
-import 'data_provider.dart';
 
-/// Hasura + Supabase Data Provider for cloud/production
-/// Uses Firebase ID token for Hasura JWT authentication
-/// Uses Supabase for file storage
+/// Edge gateway + Supabase Data Provider for cloud/production
+/// Uses Supabase access tokens for authentication against the Worker gateway
+/// and Supabase Storage for media uploads.
 class HasuraDataProvider implements DataProvider {
-  final String _hasuraEndpoint;
+  // ignore: unused_field
+  final String _graphqlEndpoint;
   final String _supabaseUrl;
   final String _supabaseAnonKey;
-  final String _idToken;
+  final String _accessToken;
 
   HasuraDataProvider({
-    required String idToken,
-  })  : _idToken = idToken,
-        _hasuraEndpoint = EnvConfig.hasuraEndpoint,
+    required String accessToken,
+  })  : _accessToken = accessToken,
+        _graphqlEndpoint = EnvConfig.edgeGraphqlEndpoint,
         _supabaseUrl = EnvConfig.supabaseUrl,
         _supabaseAnonKey = EnvConfig.supabaseAnonKey;
 
@@ -22,17 +21,19 @@ class HasuraDataProvider implements DataProvider {
   // import 'package:graphql_flutter/graphql_flutter.dart';
   // import 'package:http/http.dart' as http;
 
+  // ignore: unused_element
   Map<String, String> get _graphqlHeaders {
     return {
       'Content-Type': 'application/json',
-      'Authorization': 'Bearer $_idToken', // Firebase ID token for Hasura JWT
+      if (_accessToken.isNotEmpty) 'Authorization': 'Bearer $_accessToken',
     };
   }
 
+  // ignore: unused_element
   Map<String, String> get _supabaseHeaders {
     return {
       'apikey': _supabaseAnonKey,
-      'Authorization': 'Bearer $_idToken', // Firebase token or Supabase token
+      if (_accessToken.isNotEmpty) 'Authorization': 'Bearer $_accessToken',
     };
   }
 

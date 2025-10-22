@@ -4,6 +4,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:geodraw/geodraw.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../bloc/problem_bloc.dart';
 import '../bloc/problem_event.dart';
@@ -12,7 +13,9 @@ import '../config/build_flags.dart';
 import '../config/env_config.dart';
 import '../models/problem.dart';
 import '../services/directus_file_service.dart';
+import '../services/supabase_file_service.dart';
 import '../utils/canvas_capture.dart';
+import '../services/app_services.dart';
 
 /// Screen for creating and editing problems with a GeoDraw-first workflow.
 class ProblemFormScreen extends StatefulWidget {
@@ -35,7 +38,10 @@ class _ProblemFormScreenState extends State<ProblemFormScreen> {
 
   ProblemMetadata? _metadata;
   bool _isAuthenticated = false;
+  String? _userEmail;
+  StreamSubscription<String?>? _authSubscription;
   bool _isSavingThumbnail = false;
+  String? _thumbnailPendingDeletion;
   double _paletteWidth = 330;
   static const double _minPaletteWidth = 220;
   static const double _paletteHandleWidth = 12;
@@ -46,13 +52,16 @@ class _ProblemFormScreenState extends State<ProblemFormScreen> {
     super.initState();
     _initializeGeoDraw();
     _initializeMetadata();
+    _initializeAuthState();
   }
 
   void _initializeGeoDraw() {
     if (widget.problem?.geometryData != null) {
       try {
         final decoder = GeoDrawDecoder();
-        _dagManager = decoder.decode(widget.problem!.geometryData!);
+        _dagManager = decoder.decodeFromStorage(
+          widget.problem!.geometryData!,
+        );
       } catch (error) {
         debugPrint('Failed to decode geometry data: $error');
         _dagManager = DAGManager();
@@ -68,7 +77,11 @@ class _ProblemFormScreenState extends State<ProblemFormScreen> {
     );
 
     _commandExecutor = UnifiedCLIExecutor(dagManager: _dagManager);
-    _aiService = AIService(config: AIServiceConfig.development());
+
+    final aiEndpoint = EnvConfig.edgeLlmEndpoint;
+    _aiService = AIService(
+      config: AIServiceConfig.production(aiEndpoint),
+    );
   }
 
   void _initializeMetadata() {
@@ -81,8 +94,33 @@ class _ProblemFormScreenState extends State<ProblemFormScreen> {
         category: existing.category,
         solution: existing.solution,
       );
-      _isAuthenticated = true;
     }
+  }
+
+  void _initializeAuthState() {
+    try {
+      final authProvider = AppServices.auth;
+      _isAuthenticated = authProvider.isAuthenticated;
+      _userEmail =
+          authProvider.currentUserEmail ?? authProvider.currentUserDisplayName;
+
+      _authSubscription = authProvider.authStateChanges.listen((_) {
+        if (!mounted) return;
+        setState(() {
+          _isAuthenticated = authProvider.isAuthenticated;
+          _userEmail = authProvider.currentUserEmail ??
+              authProvider.currentUserDisplayName;
+        });
+      });
+    } catch (error) {
+      debugPrint('Auth services unavailable: $error');
+    }
+  }
+
+  @override
+  void dispose() {
+    _authSubscription?.cancel();
+    super.dispose();
   }
 
   @override
@@ -96,8 +134,10 @@ class _ProblemFormScreenState extends State<ProblemFormScreen> {
         actions: [
           _AuthStatusChip(
             isAuthenticated: _isAuthenticated,
+            userLabel: _userEmail,
             onSignInRequest: _handleSignIn,
-            onSignOut: widget.isEditing ? null : _handleSignOut,
+            onSignOut:
+                widget.isEditing ? null : () => unawaited(_handleSignOut()),
           ),
           IconButton(
             tooltip: _metadata == null
@@ -119,6 +159,7 @@ class _ProblemFormScreenState extends State<ProblemFormScreen> {
       body: BlocConsumer<ProblemBloc, ProblemState>(
         listener: (context, state) {
           if (state is ProblemOperationSuccess) {
+            unawaited(_cleanupReplacedThumbnailIfNeeded());
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(content: Text(state.message)),
             );
@@ -126,6 +167,7 @@ class _ProblemFormScreenState extends State<ProblemFormScreen> {
           }
 
           if (state is ProblemError) {
+            _thumbnailPendingDeletion = null;
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(content: Text(state.message)),
             );
@@ -326,7 +368,11 @@ class _ProblemFormScreenState extends State<ProblemFormScreen> {
     if (metadata == null) return;
 
     final encoder = GeoDrawEncoder();
-    final geometryData = encoder.encode(_dagManager);
+    final geometryData = encoder.encodeForStorage(
+      _dagManager,
+      base64: false,
+      pretty: false,
+    );
 
     String? thumbnailId;
     if (_hasVisibleObjects()) {
@@ -340,6 +386,7 @@ class _ProblemFormScreenState extends State<ProblemFormScreen> {
     final bloc = context.read<ProblemBloc>();
 
     if (widget.isEditing) {
+      _planThumbnailCleanup(newThumbnailId: thumbnailId);
       bloc.add(
         UpdateProblem(
           id: widget.problem!.id,
@@ -364,12 +411,18 @@ class _ProblemFormScreenState extends State<ProblemFormScreen> {
           thumbnailId: thumbnailId,
         ),
       );
+      _thumbnailPendingDeletion = null;
     }
   }
 
   Future<bool> _ensureAuthenticated() async {
-    if (_isAuthenticated) {
-      return true;
+    try {
+      final auth = AppServices.auth;
+      if (auth.isAuthenticated) {
+        return true;
+      }
+    } catch (error) {
+      debugPrint('Auth services unavailable: $error');
     }
 
     final didSignIn = await showDialog<bool>(
@@ -379,7 +432,11 @@ class _ProblemFormScreenState extends State<ProblemFormScreen> {
         false;
 
     if (didSignIn) {
-      setState(() => _isAuthenticated = true);
+      try {
+        await AppServices.refreshDataProvider();
+      } catch (error) {
+        debugPrint('Failed to refresh data provider: $error');
+      }
     }
 
     return didSignIn;
@@ -420,16 +477,31 @@ class _ProblemFormScreenState extends State<ProblemFormScreen> {
     final success = await _ensureAuthenticated();
     if (!mounted) return;
     if (success) {
+      final auth = AppServices.auth;
+      final label = auth.currentUserEmail ?? auth.currentUserDisplayName;
+      final message = label != null && label.isNotEmpty
+          ? 'Signed in as $label'
+          : 'Signed in';
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Signed in (demo placeholder)')),
+        SnackBar(content: Text(message)),
       );
     }
   }
 
-  void _handleSignOut() {
-    setState(() {
-      _isAuthenticated = false;
-    });
+  Future<void> _handleSignOut() async {
+    try {
+      await AppServices.auth.signOut();
+      await AppServices.refreshDataProvider();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Signed out')),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Sign out failed: $error')),
+      );
+    }
   }
 
   Future<String?> _captureThumbnail() async {
@@ -459,10 +531,26 @@ class _ProblemFormScreenState extends State<ProblemFormScreen> {
           title: 'Problem Thumbnail',
         );
       } else {
-        // Cloud mode: Upload to Supabase
-        // TODO: Implement Supabase file upload
-        debugPrint('WARNING: Supabase file upload not yet implemented');
-        return null;
+        final userId = AppServices.auth.currentUserId;
+        if (userId == null || userId.isEmpty) {
+          debugPrint('WARNING: No Supabase user ID available for upload');
+          return null;
+        }
+
+        final problemId = widget.problem?.id ??
+            'draft_${DateTime.now().millisecondsSinceEpoch}';
+
+        final supabaseService = SupabaseFileService(
+          supabaseUrl: EnvConfig.supabaseUrl,
+          supabaseAnonKey: EnvConfig.supabaseAnonKey,
+        );
+
+        return await supabaseService.uploadThumbnail(
+          bytes: imageBytes,
+          problemId: problemId,
+          userId: userId,
+          filename: 'thumbnail_${DateTime.now().millisecondsSinceEpoch}.png',
+        );
       }
     } catch (error, stackTrace) {
       debugPrint('Error capturing thumbnail: $error');
@@ -486,6 +574,61 @@ class _ProblemFormScreenState extends State<ProblemFormScreen> {
       const SnackBar(
           content: Text('Unable to capture thumbnail. Continue anyway.')),
     );
+  }
+
+  void _planThumbnailCleanup({String? newThumbnailId}) {
+    if (!widget.isEditing) {
+      _thumbnailPendingDeletion = null;
+      return;
+    }
+    if (BuildFlags.useDirectus) {
+      _thumbnailPendingDeletion = null;
+      return;
+    }
+    final previousThumbnail = widget.problem?.thumbnailId;
+    if (previousThumbnail == null || previousThumbnail.isEmpty) {
+      _thumbnailPendingDeletion = null;
+      return;
+    }
+    if (newThumbnailId == null || newThumbnailId.isEmpty) {
+      _thumbnailPendingDeletion = null;
+      return;
+    }
+    if (newThumbnailId == previousThumbnail) {
+      _thumbnailPendingDeletion = null;
+      return;
+    }
+    _thumbnailPendingDeletion = previousThumbnail;
+  }
+
+  Future<void> _cleanupReplacedThumbnailIfNeeded() async {
+    final storagePath = _thumbnailPendingDeletion;
+    _thumbnailPendingDeletion = null;
+    if (storagePath == null || storagePath.isEmpty) {
+      return;
+    }
+    if (BuildFlags.useDirectus) {
+      return;
+    }
+
+    final supabaseUrl = EnvConfig.supabaseUrl;
+    final supabaseAnonKey = EnvConfig.supabaseAnonKey;
+    if (supabaseUrl.isEmpty || supabaseAnonKey.isEmpty) {
+      debugPrint(
+        'Skipping Supabase thumbnail cleanup: missing configuration values.',
+      );
+      return;
+    }
+
+    final supabaseService = SupabaseFileService(
+      supabaseUrl: supabaseUrl,
+      supabaseAnonKey: supabaseAnonKey,
+    );
+
+    final didDelete = await supabaseService.deleteFile(storagePath);
+    if (!didDelete) {
+      debugPrint('Failed to delete Supabase thumbnail at $storagePath');
+    }
   }
 }
 
@@ -636,21 +779,33 @@ class _AuthStatusChip extends StatelessWidget {
     required this.isAuthenticated,
     required this.onSignInRequest,
     this.onSignOut,
+    this.userLabel,
   });
 
   final bool isAuthenticated;
   final VoidCallback onSignInRequest;
   final VoidCallback? onSignOut;
+  final String? userLabel;
 
   @override
   Widget build(BuildContext context) {
     if (isAuthenticated) {
+      final labelText = userLabel != null && userLabel!.isNotEmpty
+          ? 'Signed in as ${userLabel!}'
+          : 'Signed in';
+
       return Padding(
         padding: const EdgeInsets.symmetric(horizontal: 8),
-        child: ActionChip(
-          avatar: const Icon(Icons.verified_user, size: 18),
-          label: const Text('Signed in'),
-          onPressed: onSignOut,
+        child: Tooltip(
+          message: labelText,
+          child: ActionChip(
+            avatar: const Icon(Icons.verified_user, size: 18),
+            label: Text(
+              labelText,
+              overflow: TextOverflow.ellipsis,
+            ),
+            onPressed: onSignOut,
+          ),
         ),
       );
     }
@@ -890,11 +1045,44 @@ class _SignInDialog extends StatefulWidget {
   State<_SignInDialog> createState() => _SignInDialogState();
 }
 
+enum _AuthMode { signIn, register }
+
+enum _AuthAction { none, email, google, github, reset }
+
 class _SignInDialogState extends State<_SignInDialog> {
+  static const String _rememberEmailKey = 'geoapp_last_email';
+
   final _formKey = GlobalKey<FormState>();
-  final _emailController = TextEditingController();
-  final _passwordController = TextEditingController();
+  final TextEditingController _emailController = TextEditingController();
+  final TextEditingController _passwordController = TextEditingController();
+
+  _AuthMode _mode = _AuthMode.signIn;
+  _AuthAction _activeAction = _AuthAction.none;
   bool _rememberMe = true;
+  String? _errorMessage;
+
+  bool get _isBusy => _activeAction != _AuthAction.none;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSavedEmail();
+  }
+
+  Future<void> _loadSavedEmail() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final savedEmail = prefs.getString(_rememberEmailKey);
+      if (savedEmail != null && mounted) {
+        setState(() {
+          _emailController.text = savedEmail;
+          _rememberMe = true;
+        });
+      }
+    } catch (error) {
+      debugPrint('Unable to load saved email: $error');
+    }
+  }
 
   @override
   void dispose() {
@@ -908,84 +1096,314 @@ class _SignInDialogState extends State<_SignInDialog> {
     final theme = Theme.of(context);
 
     return AlertDialog(
-      title: const Text('Sign in to save'),
-      content: Form(
-        key: _formKey,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Authentication is required before we can store your work. '
-              'Firebase integration is pending; this dialog is a placeholder.',
-              style: theme.textTheme.bodySmall,
-            ),
-            const SizedBox(height: 16),
-            TextFormField(
-              controller: _emailController,
-              decoration: const InputDecoration(
-                labelText: 'Email',
-                hintText: 'you@example.com',
+      title: const Text('Authenticate to continue'),
+      content: SingleChildScrollView(
+        child: Form(
+          key: _formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Sign in to sync problems across devices. Sessions persist automatically; "Remember me" only stores your email for quick access.',
+                style: theme.textTheme.bodySmall,
               ),
-              validator: (value) {
-                if (value == null || value.trim().isEmpty) {
-                  return 'Email is required';
-                }
-                if (!value.contains('@')) {
-                  return 'Enter a valid email';
-                }
-                return null;
-              },
-            ),
-            const SizedBox(height: 12),
-            TextFormField(
-              controller: _passwordController,
-              decoration: const InputDecoration(
-                labelText: 'Password',
-                hintText: '••••••••',
+              const SizedBox(height: 16),
+              SegmentedButton<_AuthMode>(
+                segments: const [
+                  ButtonSegment(
+                      value: _AuthMode.signIn, label: Text('Sign in')),
+                  ButtonSegment(
+                      value: _AuthMode.register, label: Text('Register')),
+                ],
+                selected: {_mode},
+                onSelectionChanged: (selection) {
+                  setState(() {
+                    _mode = selection.first;
+                    _errorMessage = null;
+                  });
+                },
               ),
-              obscureText: true,
-              validator: (value) {
-                if (value == null || value.isEmpty) {
-                  return 'Password is required';
-                }
-                if (value.length < 6) {
-                  return 'Must be at least 6 characters';
-                }
-                return null;
-              },
-            ),
-            const SizedBox(height: 12),
-            CheckboxListTile(
-              contentPadding: EdgeInsets.zero,
-              value: _rememberMe,
-              dense: true,
-              onChanged: (value) {
-                setState(() => _rememberMe = value ?? true);
-              },
-              title: const Text('Remember me on this device'),
-            ),
-          ],
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _emailController,
+                keyboardType: TextInputType.emailAddress,
+                autofillHints: const [AutofillHints.email],
+                decoration: const InputDecoration(
+                  labelText: 'Email',
+                  hintText: 'you@example.com',
+                ),
+                enabled: !_isBusy,
+                validator: (value) {
+                  final trimmed = value?.trim() ?? '';
+                  if (trimmed.isEmpty) {
+                    return 'Email is required';
+                  }
+                  if (!trimmed.contains('@')) {
+                    return 'Enter a valid email';
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _passwordController,
+                autofocus: false,
+                decoration: InputDecoration(
+                  labelText: _mode == _AuthMode.signIn
+                      ? 'Password'
+                      : 'Create password',
+                  hintText: '••••••••',
+                ),
+                enabled: !_isBusy,
+                obscureText: true,
+                validator: (value) {
+                  final input = value ?? '';
+                  if (input.isEmpty) {
+                    return 'Password is required';
+                  }
+                  if (input.length < 6) {
+                    return 'Must be at least 6 characters';
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 12),
+              CheckboxListTile(
+                contentPadding: EdgeInsets.zero,
+                value: _rememberMe,
+                dense: true,
+                onChanged: _isBusy
+                    ? null
+                    : (value) {
+                        setState(() => _rememberMe = value ?? true);
+                      },
+                title: const Text('Remember my email on this device'),
+              ),
+              if (_mode == _AuthMode.signIn)
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton(
+                    onPressed:
+                        _isBusy ? null : () => _handlePasswordReset(context),
+                    child: const Text('Forgot password?'),
+                  ),
+                ),
+              if (_errorMessage != null) ...[
+                const SizedBox(height: 12),
+                Text(
+                  _errorMessage!,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.error,
+                  ),
+                ),
+              ],
+              const SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: _isBusy ? null : () => _handleEmailSubmit(context),
+                  style: ElevatedButton.styleFrom(
+                      minimumSize: const Size.fromHeight(48)),
+                  child: _buildButtonChild(
+                    label: _mode == _AuthMode.signIn
+                        ? 'Sign in with email'
+                        : 'Create account',
+                    action: _AuthAction.email,
+                    icon: Icons.mail_outline,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton(
+                  onPressed:
+                      _isBusy ? null : () => _handleGoogleSignIn(context),
+                  style: OutlinedButton.styleFrom(
+                    minimumSize: const Size.fromHeight(48),
+                  ),
+                  child: _buildButtonChild(
+                    label: 'Continue with Google',
+                    action: _AuthAction.google,
+                    icon: Icons.g_translate,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton(
+                  onPressed:
+                      _isBusy ? null : () => _handleGithubSignIn(context),
+                  style: OutlinedButton.styleFrom(
+                    minimumSize: const Size.fromHeight(48),
+                  ),
+                  child: _buildButtonChild(
+                    label: 'Continue with GitHub',
+                    action: _AuthAction.github,
+                    icon: Icons.code,
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
       actions: [
         TextButton(
-          onPressed: () => Navigator.of(context).pop(false),
+          onPressed: _isBusy ? null : () => Navigator.of(context).pop(false),
           child: const Text('Cancel'),
-        ),
-        FilledButton(
-          onPressed: _submit,
-          child: const Text('Sign in'),
         ),
       ],
     );
   }
 
-  void _submit() {
+  Widget _buildButtonChild({
+    required String label,
+    required _AuthAction action,
+    IconData? icon,
+  }) {
+    final isLoading = _activeAction == action;
+    if (isLoading) {
+      return const SizedBox(
+        height: 20,
+        width: 20,
+        child: CircularProgressIndicator(strokeWidth: 2),
+      );
+    }
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        if (icon != null) ...[
+          Icon(icon, size: 20),
+          const SizedBox(width: 8),
+        ],
+        Flexible(
+          child: Text(
+            label,
+            textAlign: TextAlign.center,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _handleEmailSubmit(BuildContext context) async {
     if (!_formKey.currentState!.validate()) {
       return;
     }
 
-    Navigator.of(context).pop(true);
+    setState(() {
+      _activeAction = _AuthAction.email;
+      _errorMessage = null;
+    });
+
+    try {
+      final auth = AppServices.auth;
+      final email = _emailController.text.trim();
+      final password = _passwordController.text;
+
+      if (_mode == _AuthMode.signIn) {
+        await auth.signInWithEmailAndPassword(email, password);
+      } else {
+        await auth.createUserWithEmailAndPassword(email, password);
+      }
+
+      await _persistRememberPreference();
+      await AppServices.refreshDataProvider();
+
+      if (!mounted) return;
+      Navigator.of(context).pop(true);
+    } catch (error) {
+      setState(() => _errorMessage = error.toString());
+    } finally {
+      if (mounted) {
+        setState(() => _activeAction = _AuthAction.none);
+      }
+    }
+  }
+
+  Future<void> _handleGoogleSignIn(BuildContext context) async {
+    setState(() {
+      _activeAction = _AuthAction.google;
+      _errorMessage = null;
+    });
+
+    try {
+      await AppServices.auth.signInWithGoogle();
+      await AppServices.refreshDataProvider();
+      if (!mounted) return;
+      Navigator.of(context).pop(true);
+    } catch (error) {
+      setState(() => _errorMessage = error.toString());
+    } finally {
+      if (mounted) {
+        setState(() => _activeAction = _AuthAction.none);
+      }
+    }
+  }
+
+  Future<void> _handleGithubSignIn(BuildContext context) async {
+    setState(() {
+      _activeAction = _AuthAction.github;
+      _errorMessage = null;
+    });
+
+    try {
+      await AppServices.auth.signInWithGithub();
+      await AppServices.refreshDataProvider();
+      if (!mounted) return;
+      Navigator.of(context).pop(true);
+    } catch (error) {
+      setState(() => _errorMessage = error.toString());
+    } finally {
+      if (mounted) {
+        setState(() => _activeAction = _AuthAction.none);
+      }
+    }
+  }
+
+  Future<void> _handlePasswordReset(BuildContext context) async {
+    final email = _emailController.text.trim();
+    if (email.isEmpty) {
+      setState(() =>
+          _errorMessage = 'Enter your email to receive reset instructions.');
+      return;
+    }
+
+    setState(() {
+      _activeAction = _AuthAction.reset;
+      _errorMessage = null;
+    });
+
+    try {
+      await AppServices.auth.sendPasswordResetEmail(email);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Password reset link sent to $email')),
+      );
+    } catch (error) {
+      setState(() => _errorMessage = error.toString());
+    } finally {
+      if (mounted) {
+        setState(() => _activeAction = _AuthAction.none);
+      }
+    }
+  }
+
+  Future<void> _persistRememberPreference() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (_rememberMe) {
+        await prefs.setString(_rememberEmailKey, _emailController.text.trim());
+      } else {
+        await prefs.remove(_rememberEmailKey);
+      }
+    } catch (error) {
+      debugPrint('Unable to persist remember-me preference: $error');
+    }
   }
 }

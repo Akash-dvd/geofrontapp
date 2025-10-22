@@ -238,6 +238,7 @@ class GeoCircle2P extends GeoCircle {
     );
   }
 
+  @override
   GeometryObject? rebuildFromParents(List<GeometryObject> parents) {
     final points = parents.whereType<GeoPoint>().toList(growable: false);
     if (points.length != 2) {
@@ -397,6 +398,7 @@ class GeoCircle3P extends GeoCircle {
     );
   }
 
+  @override
   GeometryObject? rebuildFromParents(List<GeometryObject> parents) {
     final points = parents.whereType<GeoPoint>().toList(growable: false);
     if (points.length != 3) {

@@ -1,11 +1,13 @@
 import 'dart:convert';
+
 import 'package:flutter/material.dart';
-import '../models/canvas_object.dart';
-import '../models/simple/geo_point.dart';
-import '../models/simple/geo_line.dart';
-import '../models/simple/geo_circle.dart';
-import '../models/simple/geo_trans.dart';
+
 import '../core/dag/dag_manager.dart' as dag;
+import '../models/canvas_object.dart';
+import '../models/simple/geo_circle.dart';
+import '../models/simple/geo_line.dart';
+import '../models/simple/geo_point.dart';
+import '../models/simple/geo_trans.dart';
 
 /// Decodes JSON format back to geometry objects and DAG
 ///
@@ -115,5 +117,23 @@ class GeoDrawDecoder {
   dag.DAGManager decodeFromJson(String jsonString) {
     final json = jsonDecode(jsonString) as Map<String, dynamic>;
     return decode(json);
+  }
+
+  /// Decode DAG from stored representation (JSON or base64-encoded JSON).
+  dag.DAGManager decodeFromStorage(String payload) {
+    final trimmed = payload.trim();
+    if (trimmed.isEmpty) {
+      return dag.DAGManager();
+    }
+
+    String jsonString;
+    try {
+      final decodedBytes = base64Decode(trimmed);
+      jsonString = utf8.decode(decodedBytes);
+    } catch (_) {
+      jsonString = trimmed;
+    }
+
+    return decodeFromJson(jsonString);
   }
 }

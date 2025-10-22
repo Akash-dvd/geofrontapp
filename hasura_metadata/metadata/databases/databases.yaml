@@ -1,3 +1,0 @@
-- name: supabase
-  kind: postgres
-  tables: "!include supabase/tables/tables.yaml"

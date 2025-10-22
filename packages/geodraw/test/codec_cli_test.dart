@@ -109,7 +109,7 @@ void main() {
       final command = parser.parse('point(10, 20)');
 
       expect(command, isNotNull);
-      expect(command!.name, 'point');
+      expect(command.name, 'point');
       expect(command.arguments.length, 2);
       expect(command.arguments[0], 10);
       expect(command.arguments[1], 20);
@@ -120,7 +120,7 @@ void main() {
       final command = parser.parse('line(A, B)');
 
       expect(command, isNotNull);
-      expect(command!.name, 'line');
+      expect(command.name, 'line');
       expect(command.arguments.length, 2);
       expect(command.arguments[0], 'A');
       expect(command.arguments[1], 'B');
@@ -131,7 +131,7 @@ void main() {
       final command = parser.parse('circle(center, 10)');
 
       expect(command, isNotNull);
-      expect(command!.name, 'circle');
+      expect(command.name, 'circle');
       expect(command.arguments.length, 2);
       expect(command.arguments[0], 'center');
       expect(command.arguments[1], 10);
@@ -146,7 +146,7 @@ void main() {
 
     test('Parser validates command', () {
       final parser = CommandParser();
-      final command = parser.parse('point(10, 20)')!;
+      final command = parser.parse('point(10, 20)');
 
       expect(parser.validate(command), isTrue);
     });
@@ -158,7 +158,7 @@ void main() {
       final executor = CommandExecutor(dagManager: dag);
       final parser = CommandParser();
 
-      final command = parser.parse('point(10, 20, A)')!;
+      final command = parser.parse('point(10, 20, A)');
       final result = await executor.execute(command);
 
       expect(result.success, isTrue);
@@ -176,11 +176,11 @@ void main() {
       final parser = CommandParser();
 
       // Create two points first
-      await executor.execute(parser.parse('point(0, 0, A)')!);
-      await executor.execute(parser.parse('point(10, 10, B)')!);
+      await executor.execute(parser.parse('point(0, 0, A)'));
+      await executor.execute(parser.parse('point(10, 10, B)'));
 
       // Create line
-      final lineCommand = parser.parse('line(A, B)')!;
+      final lineCommand = parser.parse('line(A, B)');
       final result = await executor.execute(lineCommand);
 
       expect(result.success, isTrue);
@@ -193,10 +193,10 @@ void main() {
       final parser = CommandParser();
 
       // Create center point
-      await executor.execute(parser.parse('point(0, 0, C)')!);
+      await executor.execute(parser.parse('point(0, 0, C)'));
 
       // Create circle with radius
-      final circleCommand = parser.parse('circle(C, 5)')!;
+      final circleCommand = parser.parse('circle(C, 5)');
       final result = await executor.execute(circleCommand);
 
       expect(result.success, isTrue);
@@ -209,11 +209,11 @@ void main() {
       final parser = CommandParser();
 
       // Create two points
-      await executor.execute(parser.parse('point(0, 0, A)')!);
-      await executor.execute(parser.parse('point(10, 10, B)')!);
+      await executor.execute(parser.parse('point(0, 0, A)'));
+      await executor.execute(parser.parse('point(10, 10, B)'));
 
       // Create midpoint
-      final midCommand = parser.parse('midpoint(A, B)')!;
+      final midCommand = parser.parse('midpoint(A, B)');
       final result = await executor.execute(midCommand);
 
       expect(result.success, isTrue);
@@ -230,7 +230,7 @@ void main() {
       final parser = CommandParser();
 
       // Try to create line with non-existent points
-      final command = parser.parse('line(X, Y)')!;
+      final command = parser.parse('line(X, Y)');
       final result = await executor.execute(command);
 
       expect(result.success, isFalse);
@@ -243,13 +243,13 @@ void main() {
       final parser = CommandParser();
 
       // Create some objects
-      await executor.execute(parser.parse('point(0, 0)')!);
-      await executor.execute(parser.parse('point(10, 10)')!);
+      await executor.execute(parser.parse('point(0, 0)'));
+      await executor.execute(parser.parse('point(10, 10)'));
 
       expect(dag.nodeCount, 2);
 
       // Clear
-      final clearResult = await executor.execute(parser.parse('clear')!);
+      final clearResult = await executor.execute(parser.parse('clear'));
 
       expect(clearResult.success, isTrue);
       expect(dag.nodeCount, 0);
@@ -260,10 +260,10 @@ void main() {
       final executor = CommandExecutor(dagManager: dag);
       final parser = CommandParser();
 
-      await executor.execute(parser.parse('point(0, 0, A)')!);
-      await executor.execute(parser.parse('point(10, 10, B)')!);
+      await executor.execute(parser.parse('point(0, 0, A)'));
+      await executor.execute(parser.parse('point(10, 10, B)'));
 
-      final listResult = await executor.execute(parser.parse('list')!);
+      final listResult = await executor.execute(parser.parse('list'));
 
       expect(listResult.success, isTrue);
       expect(listResult.message, contains('2'));

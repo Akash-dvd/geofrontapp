@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:graphql_flutter/graphql_flutter.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
 import 'build_flags.dart';
 import 'env_config.dart';
 
@@ -13,33 +14,59 @@ class GraphQLConfig {
     if (BuildFlags.useDirectus) {
       // Local Directus backend
       return '${EnvConfig.directusUrl}/graphql';
-    } else {
-      // Cloud Hasura backend
-      return EnvConfig.hasuraEndpoint;
     }
+    // Cloud/edge gateway
+    return EnvConfig.edgeGraphqlEndpoint;
   }
 
-  /// Create and configure GraphQL client with Firebase authentication
-  /// Both Directus and Hasura use Firebase ID token via Authorization header
+  /// Create and configure GraphQL client with Supabase authentication
+  /// Both Directus (optional) and the edge gateway use Bearer tokens
   static GraphQLClient createClient() {
     final HttpLink httpLink = HttpLink(_graphqlEndpoint);
 
-    // Add Firebase authentication link
-    // Both backends expect: Authorization: Bearer <firebase_id_token>
+    // Add Supabase authentication link
     final AuthLink authLink = AuthLink(
       getToken: () async {
         try {
-          // Get Firebase ID token directly from FirebaseAuth
-          // (AppServices might not be initialized yet)
-          final user = FirebaseAuth.instance.currentUser;
-          if (user == null) {
-            debugPrint('⚠️ GraphQL AuthLink: No user signed in');
+          if (BuildFlags.useDirectus) {
+            final directusToken = EnvConfig.directusToken;
+            if (directusToken != null && directusToken.isNotEmpty) {
+              return 'Bearer $directusToken';
+            }
+          }
+
+          final auth = Supabase.instance.client.auth;
+          var session = auth.currentSession;
+          if (session == null) {
+            debugPrint('⚠️ GraphQL AuthLink: No Supabase session available');
             return null;
           }
 
-          final idToken = await user.getIdToken();
-          debugPrint('✅ GraphQL AuthLink: Got token for user ${user.uid}');
-          return idToken != null ? 'Bearer $idToken' : null;
+          final expiresAt = session.expiresAt;
+          if (expiresAt != null) {
+            final expiry =
+                DateTime.fromMillisecondsSinceEpoch(expiresAt * 1000);
+            if (expiry.isBefore(DateTime.now().add(const Duration(minutes: 1)))) {
+              try {
+                final refreshResponse = await auth.refreshSession();
+                session = refreshResponse.session ?? auth.currentSession;
+                if (session == null) {
+                  debugPrint('⚠️ GraphQL AuthLink: Session refresh failed');
+                  return null;
+                }
+                debugPrint(
+                    '♻️ GraphQL AuthLink: Refreshed Supabase access token');
+              } catch (refreshError) {
+                debugPrint(
+                    '❌ GraphQL AuthLink: Failed to refresh session: $refreshError');
+                return null;
+              }
+            }
+          }
+
+          debugPrint(
+              '✅ GraphQL AuthLink: Using Supabase access token for ${session.user.id}');
+          return 'Bearer ${session.accessToken}';
         } catch (e) {
           debugPrint('❌ GraphQL AuthLink error: $e');
           return null;

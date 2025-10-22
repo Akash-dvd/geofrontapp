@@ -9,14 +9,14 @@ import 'hasura_data_provider.dart';
 /// In local mode: returns DirectusDataProvider
 /// In cloud mode: returns HasuraDataProvider
 /// 
-/// The idToken parameter is the Firebase ID token from FirebaseAuthProvider
-DataProvider createDataProvider({required String idToken}) {
+/// The idToken parameter is the Supabase access token from the auth provider
+DataProvider createDataProvider({required String accessToken}) {
   if (BuildFlags.useDirectus) {
     // Local development with Directus
     // This branch will be tree-shaken in production builds
-    return DirectusDataProvider(idToken: idToken);
+    return DirectusDataProvider(accessToken: accessToken);
   } else {
     // Cloud/production with Hasura + Supabase
-    return HasuraDataProvider(idToken: idToken);
+    return HasuraDataProvider(accessToken: accessToken);
   }
 }

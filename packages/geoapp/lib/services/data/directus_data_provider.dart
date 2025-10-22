@@ -1,15 +1,15 @@
 import 'package:geoapp/geoapp.dart';
 
 /// Directus Data Provider for local development
-/// Uses Firebase ID token for authentication or falls back to DIRECTUS_TOKEN
+/// Uses Supabase access tokens for authentication or falls back to DIRECTUS_TOKEN
 class DirectusDataProvider implements DataProvider {
   final String _baseUrl;
   final String? _staticToken;
-  final String _idToken;
+  final String _accessToken;
 
   DirectusDataProvider({
-    required String idToken,
-  })  : _idToken = idToken,
+    required String accessToken,
+  })  : _accessToken = accessToken,
         _baseUrl = EnvConfig.directusUrl,
         _staticToken = EnvConfig.directusToken;
 
@@ -17,8 +17,8 @@ class DirectusDataProvider implements DataProvider {
   // import 'package:http/http.dart' as http;
 
   Map<String, String> get _headers {
-    // Prefer Firebase ID token, fallback to static token for local dev
-    final token = _idToken.isNotEmpty ? _idToken : _staticToken;
+  // Prefer Supabase access token, fallback to static token for local dev
+  final token = _accessToken.isNotEmpty ? _accessToken : _staticToken;
     return {
       'Content-Type': 'application/json',
       if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',

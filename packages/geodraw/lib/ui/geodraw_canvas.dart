@@ -110,7 +110,7 @@ class _GeoDrawCanvasState extends State<GeoDrawCanvas> {
     return Material(
       elevation: 4,
       borderRadius: BorderRadius.circular(12),
-      color: colorScheme.surfaceVariant.withOpacity(0.9),
+      color: colorScheme.surfaceContainerHighest.withOpacity(0.9),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 4),
         child: Row(

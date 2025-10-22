@@ -68,12 +68,12 @@ class HasuraProblemQueries {
       \$description: String!
       \$difficulty: String!
       \$category: String!
-      \$geometry_data: jsonb
+  \$geometry_data: String
       \$solution: String
-      \$scalar_constraints: jsonb
-      \$object_constraints: jsonb
-      \$scalar_proof: jsonb
-      \$object_proof: jsonb
+  \$scalar_constraints: String
+  \$object_constraints: String
+  \$scalar_proof: String
+  \$object_proof: String
       \$thumbnail_id: String
     ) {
       insert_problems_one(object: {
@@ -116,12 +116,12 @@ class HasuraProblemQueries {
       \$description: String
       \$difficulty: String
       \$category: String
-      \$geometry_data: jsonb
+  \$geometry_data: String
       \$solution: String
-      \$scalar_constraints: jsonb
-      \$object_constraints: jsonb
-      \$scalar_proof: jsonb
-      \$object_proof: jsonb
+  \$scalar_constraints: String
+  \$object_constraints: String
+  \$scalar_proof: String
+  \$object_proof: String
       \$thumbnail_id: String
     ) {
       update_problems_by_pk(

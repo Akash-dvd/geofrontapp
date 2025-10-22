@@ -1,15 +1,14 @@
 /// Abstract authentication provider interface
-/// All implementations must use Firebase Authentication
-/// Supports: Email/Password, Google Sign-In, and Anonymous authentication
+/// Implementations encapsulate Supabase Auth for email/password and OAuth flows.
 abstract class AuthProvider {
-  /// Get the current user's Firebase ID token
+  /// Get the current user's access token
   /// This token is used for authenticating requests to backends
   Future<String?> getIdToken({bool forceRefresh = false});
 
   /// Get the current user ID
   String? get currentUserId;
 
-  /// Get the current user's email (null for anonymous)
+  /// Get the current user's email address
   String? get currentUserEmail;
 
   /// Get the current user's display name
@@ -17,9 +16,6 @@ abstract class AuthProvider {
 
   /// Check if user is authenticated
   bool get isAuthenticated;
-
-  /// Check if user is signed in anonymously
-  bool get isAnonymous;
 
   // ==================== Email/Password Authentication ====================
 
@@ -44,19 +40,8 @@ abstract class AuthProvider {
   /// Opens Google Sign-In flow in browser/native UI
   Future<void> signInWithGoogle();
 
-  // ==================== Anonymous Authentication ====================
-
-  /// Sign in anonymously (no credentials required)
-  /// Useful for guest access or temporary users
-  Future<void> signInAnonymously();
-
-  /// Link anonymous account to email/password credentials
-  /// Converts anonymous user to permanent account
-  Future<void> linkAnonymousToEmailPassword(String email, String password);
-
-  /// Link anonymous account to Google account
-  /// Converts anonymous user to Google-authenticated account
-  Future<void> linkAnonymousToGoogle();
+  /// Sign in with GitHub account via Supabase OAuth
+  Future<void> signInWithGithub();
 
   // ==================== Sign Out ====================
 

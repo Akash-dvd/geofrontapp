@@ -11,12 +11,12 @@ import '../simple/geo_circle.dart';
 /// List of intersection points between two objects
 class GeoIntersection extends SimpleGeometryObjectList<GeoPoint> {
   GeoIntersection({
-    required String id,
-    required String label,
-    required List<String> dependencies, // Should have exactly 2 dependencies
-    required List<GeoPoint> objects,
+    required super.id,
+    required super.label,
+    required super.dependencies, // Should have exactly 2 dependencies
+    required super.objects,
     Color color = Colors.orange,
-    bool visible = true,
+    super.visible,
     CanvasStyle? style,
     Map<String, dynamic>? styleOverrides,
   }) : assert(
@@ -24,11 +24,6 @@ class GeoIntersection extends SimpleGeometryObjectList<GeoPoint> {
          'Intersection requires exactly 2 object dependencies',
        ),
        super(
-         id: id,
-         label: label,
-         dependencies: dependencies,
-         objects: objects,
-         visible: visible,
          styleOverrides: _styleOverridesForType(
            type: GeoIntersection,
            style: style,
@@ -230,20 +225,15 @@ class GeoIntersection extends SimpleGeometryObjectList<GeoPoint> {
 /// List of tangent lines from a point to a circle or between circles
 class GeoTangent extends SimpleGeometryObjectList<GeoLine> {
   GeoTangent({
-    required String id,
-    required String label,
-    required List<String> dependencies,
-    required List<GeoLine> objects,
+    required super.id,
+    required super.label,
+    required super.dependencies,
+    required super.objects,
     Color color = Colors.pink,
-    bool visible = true,
+    super.visible,
     CanvasStyle? style,
     Map<String, dynamic>? styleOverrides,
   }) : super(
-         id: id,
-         label: label,
-         dependencies: dependencies,
-         objects: objects,
-         visible: visible,
          styleOverrides: _styleOverridesForType(
            type: GeoTangent,
            style: style,

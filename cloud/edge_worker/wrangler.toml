@@ -1,0 +1,20 @@
+name = "edge-gateway"
+main = "index.ts"
+compatibility_date = "2025-10-20"
+workers_dev = true
+
+[build]
+command = "npm install"
+
+[vars]
+SUPABASE_GRAPHQL_URL = "https://YOUR_PROJECT.supabase.co/graphql/v1"
+SOLVER_TUNNEL_URL = "https://solver.example.com"
+OPENAI_API_URL = "https://api.openai.com/v1/chat/completions"
+
+[env.production]
+workers_dev = true
+
+[env.production.vars]
+SUPABASE_GRAPHQL_URL = "https://YOUR_PROJECT.supabase.co/graphql/v1"
+SOLVER_TUNNEL_URL = "https://solver.example.com"
+OPENAI_API_URL = "https://api.openai.com/v1/chat/completions"

@@ -127,7 +127,7 @@ class ObjectBrowser extends StatelessWidget {
     );
     bool filled = style.filled;
 
-    Color _parseColor(String input, Color fallback) {
+    Color parseColor(String input, Color fallback) {
       final trimmed = input.trim();
       if (trimmed.isEmpty) return fallback;
       try {
@@ -137,7 +137,7 @@ class ObjectBrowser extends StatelessWidget {
       }
     }
 
-    double _parseDouble(String input, double fallback) {
+    double parseDouble(String input, double fallback) {
       final value = double.tryParse(input.trim());
       return value ?? fallback;
     }
@@ -245,27 +245,27 @@ class ObjectBrowser extends StatelessWidget {
                 ),
                 ElevatedButton(
                   onPressed: () {
-                    final newStrokeColor = _parseColor(
+                    final newStrokeColor = parseColor(
                       strokeColorController.text,
                       style.strokeColor,
                     );
-                    final newFillColor = _parseColor(
+                    final newFillColor = parseColor(
                       fillColorController.text,
                       style.fillColor,
                     );
-                    final newLabelColor = _parseColor(
+                    final newLabelColor = parseColor(
                       labelColorController.text,
                       style.labelColor,
                     );
-                    final newStrokeWidth = _parseDouble(
+                    final newStrokeWidth = parseDouble(
                       strokeWidthController.text,
                       style.strokeWidth,
                     );
-                    final newPointRadius = _parseDouble(
+                    final newPointRadius = parseDouble(
                       pointRadiusController.text,
                       style.pointRadius,
                     );
-                    final newLabelFontSize = _parseDouble(
+                    final newLabelFontSize = parseDouble(
                       labelFontSizeController.text,
                       style.labelFontSize,
                     );

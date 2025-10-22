@@ -1,5 +1,5 @@
 import 'auth/auth_provider.dart';
-import 'auth/firebase_auth_provider.dart';
+import 'auth/supabase_auth_provider.dart';
 import 'data/data_provider.dart';
 import 'data/data_provider_factory.dart';
 
@@ -12,16 +12,16 @@ class AppServices {
   static DataProvider? _dataProvider;
 
   /// Initialize app services
-  /// Must be called after Firebase initialization and .env loading
+  /// Must be called after Supabase initialization and .env loading
   static Future<void> initialize() async {
-    // 1. Create auth provider (always Firebase)
+    // 1. Create auth provider (Supabase across all modes)
     _authProvider = createAuthProvider();
 
-    // 2. Get Firebase ID token (or empty string if not authenticated yet)
-    final idToken = await _authProvider!.getIdToken() ?? '';
+    // 2. Get Supabase access token (or empty string if not authenticated yet)
+  final accessToken = await _authProvider!.getIdToken() ?? '';
 
-    // 3. Create data provider (Directus or Hasura+Supabase based on build flag)
-    _dataProvider = createDataProvider(idToken: idToken);
+  // 3. Create data provider (Directus or edge gateway based on build flag)
+  _dataProvider = createDataProvider(accessToken: accessToken);
   }
 
   /// Get the authentication provider instance
@@ -43,7 +43,7 @@ class AppServices {
   /// Refresh data provider when auth state changes
   /// Call this when user signs in/out to update the data provider with new token
   static Future<void> refreshDataProvider() async {
-    final idToken = await _authProvider!.getIdToken(forceRefresh: true) ?? '';
-    _dataProvider = createDataProvider(idToken: idToken);
+    final accessToken = await _authProvider!.getIdToken() ?? '';
+    _dataProvider = createDataProvider(accessToken: accessToken);
   }
 }

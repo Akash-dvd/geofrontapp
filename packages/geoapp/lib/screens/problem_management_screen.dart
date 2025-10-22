@@ -9,6 +9,7 @@ import '../config/build_flags.dart';
 import '../config/env_config.dart';
 import '../models/problem.dart';
 import '../services/directus_file_service.dart';
+import '../services/supabase_file_service.dart';
 import 'problem_details_screen.dart';
 import 'problem_form_screen.dart';
 
@@ -30,7 +31,9 @@ class _ProblemManagementScreenState extends State<ProblemManagementScreen> {
     super.initState();
     _scrollController.addListener(_onScroll);
     // Fetch initial problems
-    context.read<ProblemBloc>().add(const FetchProblems());
+    context
+        .read<ProblemBloc>()
+        .add(const FetchProblems(refresh: true, start: 0));
   }
 
   @override
@@ -314,9 +317,19 @@ class ProblemCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final fileService = BuildFlags.useDirectus
-        ? DirectusFileService(baseUrl: EnvConfig.directusUrl)
-        : null; // TODO: Implement Supabase file service
+  final fileService = BuildFlags.useDirectus
+    ? DirectusFileService(baseUrl: EnvConfig.directusUrl)
+    : null;
+  // Always create SupabaseFileService so we can resolve storage-path style
+  // thumbnail IDs even when the app was compiled with Directus mode.
+  final supabaseFileService = SupabaseFileService(
+    supabaseUrl: EnvConfig.supabaseUrl,
+    supabaseAnonKey: EnvConfig.supabaseAnonKey,
+  );
+    final imageUrl = _resolveThumbnailUrl(
+      fileService: fileService,
+      supabaseFileService: supabaseFileService,
+    );
 
     return Card(
       child: InkWell(
@@ -330,15 +343,9 @@ class ProblemCard extends StatelessWidget {
             SizedBox(
               height: 240,
               width: double.infinity,
-              child: problem.thumbnailId != null && fileService != null
+              child: imageUrl != null
                   ? Image.network(
-                      fileService.getFileUrl(
-                        problem.thumbnailId!,
-                        width: 300,
-                        height: 200,
-                        fit: 'cover',
-                        quality: 80,
-                      ),
+                      imageUrl,
                       fit: BoxFit.cover,
                       errorBuilder: (context, error, stackTrace) {
                         return Container(
@@ -464,5 +471,36 @@ class ProblemCard extends StatelessWidget {
       case ProblemDifficulty.expert:
         return AppTheme.expertColor;
     }
+  }
+
+  String? _resolveThumbnailUrl({
+    DirectusFileService? fileService,
+    SupabaseFileService? supabaseFileService,
+  }) {
+    final thumbnailId = problem.thumbnailId;
+    if (thumbnailId == null || thumbnailId.isEmpty) {
+      return null;
+    }
+
+    // Heuristic: Supabase storage keys include a slash (userId/path...).
+    // Prefer Supabase URL when the thumbnailId looks like a storage path.
+    if (thumbnailId.contains('/')) {
+      return supabaseFileService?.getPublicUrl(thumbnailId);
+    }
+
+    // Otherwise, if running in Directus mode and we have a Directus file id,
+    // use DirectusFileService to build the URL.
+    if (fileService != null && BuildFlags.useDirectus) {
+      return fileService.getFileUrl(
+        thumbnailId,
+        width: 300,
+        height: 200,
+        fit: 'cover',
+        quality: 80,
+      );
+    }
+
+    // Fall back to Supabase public URL when in cloud mode or unknown format.
+    return supabaseFileService?.getPublicUrl(thumbnailId);
   }
 }

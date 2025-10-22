@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:equatable/equatable.dart';
 
 /// Enum for problem difficulty levels
@@ -83,12 +85,12 @@ class Problem extends Equatable {
   final String description;
   final ProblemDifficulty difficulty;
   final ProblemCategory category;
-  final Map<String, dynamic>? geometryData;
+  final String? geometryData;
   final String? solution;
-  final Map<String, dynamic>? scalarConstraints;
-  final Map<String, dynamic>? objectConstraints;
-  final Map<String, dynamic>? scalarProof;
-  final Map<String, dynamic>? objectProof;
+  final String? scalarConstraints;
+  final String? objectConstraints;
+  final String? scalarProof;
+  final String? objectProof;
   final String? thumbnailId; // Directus file ID for canvas thumbnail
   final DateTime createdAt;
   final DateTime updatedAt;
@@ -107,12 +109,12 @@ class Problem extends Equatable {
       description: json['description'] as String,
       difficulty: ProblemDifficulty.fromString(json['difficulty'] as String),
       category: ProblemCategory.fromString(json['category'] as String),
-      geometryData: json['geometry_data'] as Map<String, dynamic>?,
+  geometryData: _normalizeJsonField(json['geometry_data']),
       solution: json['solution'] as String?,
-      scalarConstraints: json['scalar_constraints'] as Map<String, dynamic>?,
-      objectConstraints: json['object_constraints'] as Map<String, dynamic>?,
-      scalarProof: json['scalar_proof'] as Map<String, dynamic>?,
-      objectProof: json['object_proof'] as Map<String, dynamic>?,
+  scalarConstraints: _normalizeJsonField(json['scalar_constraints']),
+  objectConstraints: _normalizeJsonField(json['object_constraints']),
+  scalarProof: _normalizeJsonField(json['scalar_proof']),
+  objectProof: _normalizeJsonField(json['object_proof']),
       thumbnailId: json['thumbnail_id'] != null
           ? json['thumbnail_id'] as String?
           : (json['thumbnail'] != null
@@ -135,12 +137,12 @@ class Problem extends Equatable {
       'description': description,
       'difficulty': difficulty.name,
       'category': category.name,
-      'geometry_data': geometryData,
+    'geometry_data': _decodeJsonField(geometryData),
       'solution': solution,
-      'scalar_constraints': scalarConstraints,
-      'object_constraints': objectConstraints,
-      'scalar_proof': scalarProof,
-      'object_proof': objectProof,
+    'scalar_constraints': _decodeJsonField(scalarConstraints),
+    'object_constraints': _decodeJsonField(objectConstraints),
+    'scalar_proof': _decodeJsonField(scalarProof),
+    'object_proof': _decodeJsonField(objectProof),
       'thumbnail': thumbnailId,
     };
   }
@@ -152,12 +154,12 @@ class Problem extends Equatable {
     String? description,
     ProblemDifficulty? difficulty,
     ProblemCategory? category,
-    Map<String, dynamic>? geometryData,
+    String? geometryData,
     String? solution,
-    Map<String, dynamic>? scalarConstraints,
-    Map<String, dynamic>? objectConstraints,
-    Map<String, dynamic>? scalarProof,
-    Map<String, dynamic>? objectProof,
+  String? scalarConstraints,
+  String? objectConstraints,
+  String? scalarProof,
+  String? objectProof,
     String? thumbnailId,
     DateTime? createdAt,
     DateTime? updatedAt,
@@ -199,6 +201,34 @@ class Problem extends Equatable {
       ];
 }
 
+String? _normalizeJsonField(dynamic value) {
+  if (value == null) {
+    return null;
+  }
+
+  if (value is String) {
+    return value;
+  }
+
+  try {
+    return jsonEncode(value);
+  } catch (_) {
+    return value.toString();
+  }
+}
+
+dynamic _decodeJsonField(String? value) {
+  if (value == null) {
+    return null;
+  }
+
+  try {
+    return jsonDecode(value);
+  } catch (_) {
+    return value;
+  }
+}
+
 /// Data structure for paginated problem results (Directus format)
 class ProblemList extends Equatable {
   const ProblemList({
@@ -206,37 +236,97 @@ class ProblemList extends Equatable {
     required this.total,
     required this.offset,
     required this.limit,
+    this.hasNextPage,
   });
 
   final List<Problem> problems;
   final int total;
   final int offset;
   final int limit;
+  final bool? hasNextPage;
 
-  bool get hasMore => offset + problems.length < total;
+  bool get hasMore {
+    if (hasNextPage != null) {
+      return hasNextPage!;
+    }
+    return offset + problems.length < total;
+  }
 
   // For backward compatibility with existing code
   int get start => offset;
 
-  factory ProblemList.fromJson(Map<String, dynamic> json) {
-    final problemsData = json['problems'] as List<dynamic>;
+  factory ProblemList.fromJson(
+    Map<String, dynamic> json, {
+    int? offsetHint,
+    int? limitHint,
+  }) {
+    if (json.containsKey('problemsCollection')) {
+      final collection = json['problemsCollection'] as Map<String, dynamic>? ??
+          const <String, dynamic>{};
+      final edges = collection['edges'] as List<dynamic>? ?? const [];
+      final problems = edges
+          .map((edge) => Problem.fromJson(
+                (edge as Map<String, dynamic>)['node'] as Map<String, dynamic>,
+              ))
+          .toList();
+      final pageInfo = collection['pageInfo'] as Map<String, dynamic>?;
+      final nextPage = pageInfo != null
+          ? pageInfo['hasNextPage'] as bool?
+          : null;
+      final total = collection['totalCount'] as int? ??
+          _inferTotal(
+            offsetHint: offsetHint,
+            limitHint: limitHint,
+            fetchedCount: problems.length,
+            hasNextPage: nextPage,
+          );
+      return ProblemList(
+        problems: problems,
+        total: total,
+        offset: offsetHint ?? 0,
+        limit: limitHint ?? problems.length,
+        hasNextPage: nextPage,
+      );
+    }
 
-    // problems_aggregated is an array with one element containing count
-    final aggregatedList = json['problems_aggregated'] as List<dynamic>?;
-    final count = aggregatedList != null && aggregatedList.isNotEmpty
-        ? (aggregatedList[0] as Map<String, dynamic>)['count']['id'] as int
-        : problemsData.length;
+    if (json.containsKey('problems')) {
+      final problemsData = json['problems'] as List<dynamic>;
 
-    return ProblemList(
-      problems: problemsData
-          .map((item) => Problem.fromJson(item as Map<String, dynamic>))
-          .toList(),
-      total: count,
-      offset: 0, // Directus doesn't return offset, will be managed by BLoC
-      limit: problemsData.length,
-    );
+      // problems_aggregated is an array with one element containing count
+      final aggregatedList = json['problems_aggregated'] as List<dynamic>?;
+      final count = aggregatedList != null && aggregatedList.isNotEmpty
+          ? (aggregatedList[0] as Map<String, dynamic>)['count']['id'] as int
+          : problemsData.length;
+
+      return ProblemList(
+        problems: problemsData
+            .map((item) => Problem.fromJson(item as Map<String, dynamic>))
+            .toList(),
+        total: count,
+        offset: offsetHint ?? 0,
+        limit: limitHint ?? problemsData.length,
+        hasNextPage: null,
+      );
+    }
+
+    throw ArgumentError('Unsupported problem list response structure: $json');
   }
 
   @override
-  List<Object?> get props => [problems, total, offset, limit];
+  List<Object?> get props => [problems, total, offset, limit, hasNextPage];
+}
+
+int _inferTotal({
+  int? offsetHint,
+  int? limitHint,
+  required int fetchedCount,
+  bool? hasNextPage,
+}) {
+  final baseOffset = offsetHint ?? 0;
+  if (hasNextPage == true) {
+    final inferredLimit = limitHint ?? fetchedCount;
+    return baseOffset + fetchedCount + inferredLimit;
+  }
+
+  return baseOffset + fetchedCount;
 }

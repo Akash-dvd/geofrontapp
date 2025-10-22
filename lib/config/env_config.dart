@@ -1,64 +1,39 @@
-import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:geoapp/config/env_config.dart' as core;
 
-/// Runtime environment configuration loaded from .env files
-/// This provides access to secrets and URLs that vary between local/cloud
+/// App-level wrapper around the shared geoapp environment configuration.
 class EnvConfig {
   EnvConfig._();
 
-  // App mode
-  static String get appMode => dotenv.get('APP_MODE', fallback: 'local');
-  static bool get isLocal => appMode == 'local';
-  static bool get isCloud => appMode == 'cloud';
+  static String get appMode => core.EnvConfig.appMode;
+  static bool get isLocal => core.EnvConfig.isLocal;
+  static bool get isCloud => core.EnvConfig.isCloud;
 
-  // Firebase Authentication (required for both modes)
-  static String get firebaseApiKey => dotenv.get('FIREBASE_API_KEY');
-  static String get firebaseAuthDomain => dotenv.get('FIREBASE_AUTH_DOMAIN');
-  static String get firebaseProjectId => dotenv.get('FIREBASE_PROJECT_ID');
-  static String get firebaseStorageBucket =>
-      dotenv.get('FIREBASE_STORAGE_BUCKET');
-  static String get firebaseMessagingSenderId =>
-      dotenv.get('FIREBASE_MESSAGING_SENDER_ID');
-  static String get firebaseAppId => dotenv.get('FIREBASE_APP_ID');
+  static String get supabaseUrl => core.EnvConfig.supabaseUrl;
+  static String get supabaseAnonKey => core.EnvConfig.supabaseAnonKey;
+  static String? get supabaseServiceRoleKey => core.EnvConfig.supabaseServiceRoleKey;
+  static String? get supabaseJwtSecret => core.EnvConfig.supabaseJwtSecret;
+  static String get supabaseOauthRedirectUri => core.EnvConfig.supabaseOauthRedirectUri;
+  static String get supabaseGoogleOAuthScopes => core.EnvConfig.supabaseGoogleOAuthScopes;
+  static String get supabaseGithubOAuthScopes => core.EnvConfig.supabaseGithubOAuthScopes;
+  static String get supabaseAuthCallbackHostname => core.EnvConfig.supabaseAuthCallbackHostname;
 
-  // Local Directus (only used in local mode)
-  static String get directusUrl =>
-      dotenv.get('DIRECTUS_URL', fallback: 'http://localhost:8055');
-  static String? get directusToken => dotenv.maybeGet('DIRECTUS_TOKEN');
+  static String get googleClientId => core.EnvConfig.googleClientId;
+  static String get googleClientSecret => core.EnvConfig.googleClientSecret;
+  static String get githubClientId => core.EnvConfig.githubClientId;
+  static String get githubClientSecret => core.EnvConfig.githubClientSecret;
 
-  // Cloud Hasura + Supabase (only used in cloud mode)
-  static String get hasuraEndpoint =>
-      dotenv.get('HASURA_GRAPHQL_ENDPOINT', fallback: '');
-  static String? get hasuraAdminSecret =>
-      dotenv.maybeGet('HASURA_ADMIN_SECRET');
-  static String get supabaseUrl => dotenv.get('SUPABASE_URL', fallback: '');
-  static String get supabaseAnonKey =>
-      dotenv.get('SUPABASE_ANON_KEY', fallback: '');
-  static String? get supabaseServiceRoleKey =>
-      dotenv.maybeGet('SUPABASE_SERVICE_ROLE_KEY');
+  static String get edgeGatewayUrl => core.EnvConfig.edgeGatewayBaseUrl;
+  static String get edgeGraphqlEndpoint => core.EnvConfig.edgeGraphqlEndpoint;
+  static String get edgeLlmEndpoint => core.EnvConfig.edgeLlmEndpoint;
+  static String get edgeSolverEndpoint => core.EnvConfig.edgeSolverEndpoint;
 
-  // Development flags
-  static bool get keepTestData =>
-      dotenv.get('KEEP_TEST_DATA', fallback: 'false').toLowerCase() == 'true';
+  static String get directusUrl => core.EnvConfig.directusUrl;
+  static String? get directusToken => core.EnvConfig.directusToken;
 
-  /// Validate that required environment variables are present
-  static void validate() {
-    // Always require Firebase config
-    _require('FIREBASE_API_KEY');
-    _require('FIREBASE_AUTH_DOMAIN');
-    _require('FIREBASE_PROJECT_ID');
+  static bool get keepTestData => _keepTestData;
+  static const bool _keepTestData = false;
 
-    if (isLocal) {
-      _require('DIRECTUS_URL');
-    } else if (isCloud) {
-      _require('HASURA_GRAPHQL_ENDPOINT');
-      _require('SUPABASE_URL');
-      _require('SUPABASE_ANON_KEY');
-    }
-  }
+  static void validate() => core.EnvConfig.validate();
 
-  static void _require(String key) {
-    if (!dotenv.isInitialized || dotenv.maybeGet(key) == null) {
-      throw Exception('Missing required environment variable: $key');
-    }
-  }
+  static void printConfig() => core.EnvConfig.printConfig();
 }

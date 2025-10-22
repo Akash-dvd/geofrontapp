@@ -49,12 +49,12 @@ CREATE TABLE problems (
   description TEXT,
   difficulty TEXT,                     -- 'easy', 'medium', 'hard'
   category TEXT,                       -- 'geometry', 'algebra', etc.
-  geometry_data JSONB,                 -- GeoDraw canvas state
+  geometry_data TEXT,                  -- GeoDraw canvas state
   solution TEXT,
-  scalar_constraints JSONB,            -- Constraint definitions
-  object_constraints JSONB,
-  scalar_proof JSONB,                  -- Proof steps
-  object_proof JSONB,
+  scalar_constraints TEXT,             -- Constraint definitions
+  object_constraints TEXT,
+  scalar_proof TEXT,                   -- Proof steps
+  object_proof TEXT,
   status TEXT DEFAULT 'draft',         -- 'draft', 'published'
   image_id UUID REFERENCES images(id) ON DELETE SET NULL,
   owner_uid TEXT,                      -- Firebase UID

@@ -36,10 +36,10 @@ export 'services/app_services.dart';
 
 // Auth
 export 'services/auth/auth_provider.dart';
-export 'services/auth/firebase_auth_provider.dart';
+export 'services/auth/supabase_auth_provider.dart';
 
 // Data Providers
 export 'services/data/data_provider.dart';
 export 'services/data/data_provider_factory.dart';
 export 'services/data/directus_data_provider.dart';
-export 'services/data/hasura_data_provider.dart';
+// export 'services/data/hasura_data_provider.dart';

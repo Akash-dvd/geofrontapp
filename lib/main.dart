@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:graphql_flutter/graphql_flutter.dart';
-import 'package:firebase_core/firebase_core.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 // Import from packages
 import 'package:geoapp/geoapp.dart';
@@ -22,45 +21,32 @@ void main() async {
   );
   print('═══════════════════════════════════════════════════════');
 
-  // 3. Initialize Firebase (always required for auth)
+  // 3. Initialize Supabase (shared auth + database)
   try {
-    await Firebase.initializeApp(
-      options: FirebaseOptions(
-        apiKey: EnvConfig.firebaseApiKey,
-        authDomain: EnvConfig.firebaseAuthDomain,
-        projectId: EnvConfig.firebaseProjectId,
-        storageBucket: EnvConfig.firebaseStorageBucket,
-        messagingSenderId: EnvConfig.firebaseMessagingSenderId,
-        appId: EnvConfig.firebaseAppId,
+    await Supabase.initialize(
+      url: EnvConfig.supabaseUrl,
+      anonKey: EnvConfig.supabaseAnonKey,
+      authOptions: const FlutterAuthClientOptions(
+        authFlowType: AuthFlowType.pkce,
+        autoRefreshToken: true,
+        detectSessionInUri: true,
       ),
     );
-    print('✅ Firebase initialized successfully');
+  // Note: SupabaseAuth isn't exported directly from the package's public
+  // entrypoint. The supabase_flutter package initializes its internal
+  // auth handling during `Supabase.initialize(...)`. If you need to run
+  // additional web-specific initialization for PKCE, import the
+  // implementation from the package that exposes it or handle PKCE
+  // callback detection in your web entrypoint.
+    print('✅ Supabase initialized successfully');
   } catch (e) {
-    print('❌ Firebase initialization failed: $e');
+    print('❌ Supabase initialization failed: $e');
   }
 
-  // 4. Sign in anonymously if not already authenticated (for cloud mode)
-  if (!BuildFlags.useDirectus) {
-    try {
-      final user = FirebaseAuth.instance.currentUser;
-      if (user == null) {
-        print('🔐 No user signed in, signing in anonymously...');
-        final userCredential = await FirebaseAuth.instance.signInAnonymously();
-        print('✅ Signed in anonymously: ${userCredential.user?.uid}');
-      } else {
-        print('✅ User already signed in: ${user.uid}');
-        print('   Anonymous: ${user.isAnonymous}');
-        print('   Email: ${user.email ?? 'N/A'}');
-      }
-    } catch (e) {
-      print('❌ Anonymous sign-in failed: $e');
-    }
-  }
+  // 4. Initialize app services (auth + data providers)
+  await AppServices.initialize();
 
-  // 5. Initialize app services (auth + data providers)
-  // await AppServices.initialize();
-
-  // 6. Initialize GraphQL cache (kept for compatibility)
+  // 5. Initialize GraphQL cache (kept for compatibility)
   await initHiveForFlutter();
 
   runApp(const GeoFrontApp());

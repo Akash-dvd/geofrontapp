@@ -20,7 +20,6 @@ class AppTheme {
       tertiary: AppPalette.accent,
       surface: AppPalette.neutralLight,
       surfaceContainerHighest: Colors.white,
-      background: AppPalette.neutralLight,
       onSurface: AppPalette.neutralDark,
       onPrimary: Colors.white,
     );
@@ -86,7 +85,6 @@ class AppTheme {
       secondary: AppPalette.accent,
       surface: const Color(0xFF111827),
       surfaceContainerHighest: const Color(0xFF1F2937),
-      background: const Color(0xFF0B1627),
       onSurface: Colors.white.withOpacity(0.9),
     );
 
