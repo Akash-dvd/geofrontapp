@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -16,6 +17,7 @@ import '../services/directus_file_service.dart';
 import '../services/supabase_file_service.dart';
 import '../utils/canvas_capture.dart';
 import '../services/app_services.dart';
+import '../services/solver_service.dart';
 
 /// Screen for creating and editing problems with a GeoDraw-first workflow.
 class ProblemFormScreen extends StatefulWidget {
@@ -29,23 +31,83 @@ class ProblemFormScreen extends StatefulWidget {
   State<ProblemFormScreen> createState() => _ProblemFormScreenState();
 }
 
+/// Presents the shared sign-in dialog used across GeoApp experiences.
+Future<bool> showGeoAppSignInDialog(BuildContext context) async {
+  final didSignIn = await showDialog<bool>(
+    context: context,
+    builder: (context) => const _SignInDialog(),
+  );
+  return didSignIn ?? false;
+}
+
 class _ProblemFormScreenState extends State<ProblemFormScreen> {
   late DAGManager _dagManager;
   late ToolManager _toolManager;
   late UnifiedCLIExecutor _commandExecutor;
   late AIService _aiService;
+  late SolverService _solverService;
   final Set<String> _selectedIds = {};
 
   ProblemMetadata? _metadata;
+  SolverResult? _lastSolverResult;
   bool _isAuthenticated = false;
   String? _userEmail;
   StreamSubscription<String?>? _authSubscription;
   bool _isSavingThumbnail = false;
+  bool _isSolving = false;
   String? _thumbnailPendingDeletion;
   double _paletteWidth = 330;
   static const double _minPaletteWidth = 220;
   static const double _paletteHandleWidth = 12;
   static const double _minCanvasWidth = 360;
+
+  String? _canonicalizeJsonString(String? raw) {
+    if (raw == null) {
+      return null;
+    }
+
+    final trimmed = raw.trim();
+    if (trimmed.isEmpty) {
+      return null;
+    }
+
+    try {
+      final decoded = jsonDecode(trimmed);
+      const encoder = JsonEncoder.withIndent('  ');
+      return encoder.convert(decoded);
+    } catch (_) {
+      return trimmed;
+    }
+  }
+
+  void _showSnack(String message, {bool error = false}) {
+    if (!mounted) return;
+    final theme = Theme.of(context);
+    final snackBar = SnackBar(
+      content: Text(message),
+      backgroundColor: error ? theme.colorScheme.errorContainer : null,
+      behavior: SnackBarBehavior.floating,
+    );
+    ScaffoldMessenger.of(context).showSnackBar(snackBar);
+  }
+
+  String? _stringifySolverPayload(dynamic value) {
+    if (value == null) {
+      return null;
+    }
+
+    if (value is String) {
+      final trimmed = value.trim();
+      return trimmed.isEmpty ? null : trimmed;
+    }
+
+    try {
+      const encoder = JsonEncoder.withIndent('  ');
+      return encoder.convert(value);
+    } catch (_) {
+      return value.toString();
+    }
+  }
 
   @override
   void initState() {
@@ -82,6 +144,10 @@ class _ProblemFormScreenState extends State<ProblemFormScreen> {
     _aiService = AIService(
       config: AIServiceConfig.production(aiEndpoint),
     );
+
+    _solverService = SolverService(
+      endpoint: BuildFlags.useDirectus ? null : EnvConfig.edgeSolverEndpoint,
+    );
   }
 
   void _initializeMetadata() {
@@ -92,7 +158,18 @@ class _ProblemFormScreenState extends State<ProblemFormScreen> {
         description: existing.description,
         difficulty: existing.difficulty,
         category: existing.category,
+        status: existing.status,
         solution: existing.solution,
+        scalarConstraints: _canonicalizeJsonString(
+          existing.scalarConstraints,
+        ),
+        objectConstraints: _canonicalizeJsonString(
+          existing.objectConstraints,
+        ),
+        scalarProof: existing.scalarProof,
+        objectProof: existing.objectProof,
+        proofGoal: null,
+        autoRunSolverOnSave: false,
       );
     }
   }
@@ -174,8 +251,9 @@ class _ProblemFormScreenState extends State<ProblemFormScreen> {
           }
         },
         builder: (context, state) {
-          final isBusy =
-              state is ProblemOperationInProgress || _isSavingThumbnail;
+          final isBusy = state is ProblemOperationInProgress ||
+              _isSavingThumbnail ||
+              _isSolving;
 
           return Stack(
             children: [
@@ -299,6 +377,10 @@ class _ProblemFormScreenState extends State<ProblemFormScreen> {
                       onEdit: _openMetadataSheet,
                     ),
                   ],
+                  if (_lastSolverResult != null) ...[
+                    const SizedBox(height: 12),
+                    _SolverResultCard(result: _lastSolverResult!),
+                  ],
                   const SizedBox(height: 12),
                   SizedBox(
                     height: 130,
@@ -347,6 +429,18 @@ class _ProblemFormScreenState extends State<ProblemFormScreen> {
             label: Text(_metadata == null ? 'Add details' : 'Review details'),
           ),
           const Spacer(),
+          OutlinedButton.icon(
+            onPressed: _isSolving ? null : _handleSolverPush,
+            icon: _isSolving
+                ? SizedBox(
+                    height: 18,
+                    width: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.science_outlined),
+            label: const Text('Run solver'),
+          ),
+          const SizedBox(width: 12),
           FilledButton.icon(
             onPressed: _handleSave,
             icon: const Icon(Icons.cloud_upload_outlined),
@@ -363,9 +457,21 @@ class _ProblemFormScreenState extends State<ProblemFormScreen> {
       return;
     }
 
-    final metadata = await _requireMetadata();
+    var metadata = await _requireMetadata();
     if (!mounted) return;
     if (metadata == null) return;
+
+    if (metadata.autoRunSolverOnSave && !_isSolving) {
+      final solved = await _runSolver(triggerSource: 'save');
+      if (!mounted) return;
+      if (!solved) {
+        return;
+      }
+      metadata = _metadata;
+      if (metadata == null) {
+        return;
+      }
+    }
 
     final encoder = GeoDrawEncoder();
     final geometryData = encoder.encodeForStorage(
@@ -394,9 +500,14 @@ class _ProblemFormScreenState extends State<ProblemFormScreen> {
           description: metadata.description,
           difficulty: metadata.difficulty,
           category: metadata.category,
+          status: metadata.status,
           geometryData: geometryData,
           solution: metadata.solution,
           thumbnailId: thumbnailId ?? widget.problem!.thumbnailId,
+          scalarConstraints: metadata.scalarConstraints,
+          objectConstraints: metadata.objectConstraints,
+          scalarProof: metadata.scalarProof,
+          objectProof: metadata.objectProof,
         ),
       );
     } else {
@@ -406,13 +517,142 @@ class _ProblemFormScreenState extends State<ProblemFormScreen> {
           description: metadata.description,
           difficulty: metadata.difficulty,
           category: metadata.category,
+          status: metadata.status,
           geometryData: geometryData,
           solution: metadata.solution,
           thumbnailId: thumbnailId,
+          scalarConstraints: metadata.scalarConstraints,
+          objectConstraints: metadata.objectConstraints,
+          scalarProof: metadata.scalarProof,
+          objectProof: metadata.objectProof,
         ),
       );
       _thumbnailPendingDeletion = null;
     }
+  }
+
+  Future<void> _handleSolverPush() async {
+    if (_isSolving) return;
+    await _runSolver();
+  }
+
+  Future<bool> _runSolver({String triggerSource = 'manual'}) async {
+    var metadata = _metadata;
+    if (metadata == null) {
+      metadata = await _requireMetadata();
+      if (!mounted) return false;
+      if (metadata == null) {
+        return false;
+      }
+    }
+
+    var proofGoal = metadata.proofGoal?.trim();
+    if (proofGoal == null || proofGoal.isEmpty) {
+      proofGoal = metadata.title.trim();
+    }
+
+    if (proofGoal.isEmpty) {
+      _showSnack(
+        'Add a proof goal before running the solver.',
+        error: true,
+      );
+      return false;
+    }
+
+    Map<String, dynamic>? scalarConstraints;
+    if (metadata.scalarConstraints != null &&
+        metadata.scalarConstraints!.trim().isNotEmpty) {
+      try {
+        final decoded = jsonDecode(metadata.scalarConstraints!);
+        if (decoded is Map<String, dynamic>) {
+          scalarConstraints = decoded;
+        } else if (decoded is Map) {
+          scalarConstraints = Map<String, dynamic>.from(decoded);
+        } else {
+          throw const FormatException(
+            'Scalar constraints must be a JSON object',
+          );
+        }
+      } catch (error) {
+        _showSnack(
+          'Scalar constraints JSON is invalid: $error',
+          error: true,
+        );
+        return false;
+      }
+    }
+
+    Map<String, dynamic>? objectConstraints;
+    if (metadata.objectConstraints != null &&
+        metadata.objectConstraints!.trim().isNotEmpty) {
+      try {
+        final decoded = jsonDecode(metadata.objectConstraints!);
+        if (decoded is Map<String, dynamic>) {
+          objectConstraints = decoded;
+        } else if (decoded is Map) {
+          objectConstraints = Map<String, dynamic>.from(decoded);
+        } else {
+          throw const FormatException(
+            'Object constraints must be a JSON object',
+          );
+        }
+      } catch (error) {
+        _showSnack(
+          'Object constraints JSON is invalid: $error',
+          error: true,
+        );
+        return false;
+      }
+    }
+
+    final constructionData = GeoDrawEncoder().encode(_dagManager);
+
+    setState(() {
+      _isSolving = true;
+    });
+
+    final result = await _solverService.solveConstraints(
+      constructionData: constructionData,
+      scalarConstraints: scalarConstraints,
+      objectConstraints: objectConstraints,
+      proofGoal: proofGoal,
+    );
+
+    if (!mounted) {
+      return result.success;
+    }
+
+    setState(() {
+      _isSolving = false;
+      _lastSolverResult = result;
+    });
+
+    if (!result.success) {
+      final message = result.errorMessage ??
+          'Solver failed to complete. Check constraints and try again.';
+      _showSnack(message, error: true);
+      return false;
+    }
+
+    final updatedMetadata = metadata.copyWith(
+      scalarConstraints: _canonicalizeJsonString(metadata.scalarConstraints),
+      objectConstraints: _canonicalizeJsonString(metadata.objectConstraints),
+      scalarProof:
+          _stringifySolverPayload(result.scalarProof) ?? metadata.scalarProof,
+      objectProof:
+          _stringifySolverPayload(result.objectProof) ?? metadata.objectProof,
+      proofGoal: proofGoal,
+    );
+
+    setState(() {
+      _metadata = updatedMetadata;
+    });
+
+    final sourceDescription =
+        triggerSource == 'save' ? 'before saving' : 'via solver action';
+    _showSnack('Solver completed $sourceDescription.');
+
+    return true;
   }
 
   Future<bool> _ensureAuthenticated() async {
@@ -425,11 +665,7 @@ class _ProblemFormScreenState extends State<ProblemFormScreen> {
       debugPrint('Auth services unavailable: $error');
     }
 
-    final didSignIn = await showDialog<bool>(
-          context: context,
-          builder: (context) => const _SignInDialog(),
-        ) ??
-        false;
+    final didSignIn = await showGeoAppSignInDialog(context);
 
     if (didSignIn) {
       try {
@@ -672,14 +908,58 @@ class ProblemMetadata {
     required this.description,
     required this.difficulty,
     required this.category,
+    this.status = ProblemStatus.draft,
     this.solution,
+    this.scalarConstraints,
+    this.objectConstraints,
+    this.scalarProof,
+    this.objectProof,
+    this.proofGoal,
+    this.autoRunSolverOnSave = false,
   });
 
   final String title;
   final String description;
   final ProblemDifficulty difficulty;
   final ProblemCategory category;
+  final ProblemStatus status;
   final String? solution;
+  final String? scalarConstraints;
+  final String? objectConstraints;
+  final String? scalarProof;
+  final String? objectProof;
+  final String? proofGoal;
+  final bool autoRunSolverOnSave;
+
+  ProblemMetadata copyWith({
+    String? title,
+    String? description,
+    ProblemDifficulty? difficulty,
+    ProblemCategory? category,
+  ProblemStatus? status,
+    String? solution,
+    String? scalarConstraints,
+    String? objectConstraints,
+    String? scalarProof,
+    String? objectProof,
+    String? proofGoal,
+    bool? autoRunSolverOnSave,
+  }) {
+    return ProblemMetadata(
+      title: title ?? this.title,
+      description: description ?? this.description,
+      difficulty: difficulty ?? this.difficulty,
+      category: category ?? this.category,
+  status: status ?? this.status,
+      solution: solution ?? this.solution,
+      scalarConstraints: scalarConstraints ?? this.scalarConstraints,
+      objectConstraints: objectConstraints ?? this.objectConstraints,
+      scalarProof: scalarProof ?? this.scalarProof,
+      objectProof: objectProof ?? this.objectProof,
+      proofGoal: proofGoal ?? this.proofGoal,
+      autoRunSolverOnSave: autoRunSolverOnSave ?? this.autoRunSolverOnSave,
+    );
+  }
 }
 
 class _MetadataPreviewCard extends StatelessWidget {
@@ -694,6 +974,36 @@ class _MetadataPreviewCard extends StatelessWidget {
 
     if (metadata == null) {
       return const SizedBox.shrink();
+    }
+
+    final solverChips = <Widget>[];
+    if (metadata!.scalarConstraints != null &&
+        metadata!.scalarConstraints!.isNotEmpty) {
+      solverChips.add(
+        const _ChipLabel(
+          icon: Icons.straighten_outlined,
+          label: 'Scalar constraints',
+        ),
+      );
+    }
+
+    if (metadata!.objectConstraints != null &&
+        metadata!.objectConstraints!.isNotEmpty) {
+      solverChips.add(
+        const _ChipLabel(
+          icon: Icons.all_out_outlined,
+          label: 'Object constraints',
+        ),
+      );
+    }
+
+    if (metadata!.autoRunSolverOnSave) {
+      solverChips.add(
+        const _ChipLabel(
+          icon: Icons.bolt_outlined,
+          label: 'Auto-run solver',
+        ),
+      );
     }
 
     return Card(
@@ -740,13 +1050,60 @@ class _MetadataPreviewCard extends StatelessWidget {
                   icon: Icons.category_outlined,
                   label: metadata!.category.displayName,
                 ),
+                _ChipLabel(
+                  icon: metadata!.status.isPublished
+                      ? Icons.public_outlined
+                      : Icons.lock_clock,
+                  label: metadata!.status.displayName,
+                ),
               ],
             ),
+            if (metadata!.proofGoal != null && metadata!.proofGoal!.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 12),
+                child: Text(
+                  'Proof goal: ${metadata!.proofGoal}',
+                  style: theme.textTheme.bodySmall,
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            if (solverChips.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 12),
+                child: Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: solverChips,
+                ),
+              ),
             if (metadata!.solution != null && metadata!.solution!.isNotEmpty)
               Padding(
                 padding: const EdgeInsets.only(top: 12),
                 child: Text(
                   metadata!.solution!,
+                  style: theme.textTheme.bodySmall,
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            if (metadata!.scalarProof != null &&
+                metadata!.scalarProof!.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 12),
+                child: Text(
+                  metadata!.scalarProof!,
+                  style: theme.textTheme.bodySmall,
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            if (metadata!.objectProof != null &&
+                metadata!.objectProof!.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 12),
+                child: Text(
+                  metadata!.objectProof!,
                   style: theme.textTheme.bodySmall,
                   maxLines: 3,
                   overflow: TextOverflow.ellipsis,
@@ -770,6 +1127,76 @@ class _ChipLabel extends StatelessWidget {
     return Chip(
       avatar: Icon(icon, size: 16),
       label: Text(label),
+    );
+  }
+}
+
+class _SolverResultCard extends StatelessWidget {
+  const _SolverResultCard({required this.result});
+
+  final SolverResult result;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final success = result.success;
+    final satisfied = result.constraintResults
+        .where((constraint) => constraint.satisfied)
+        .length;
+    final total = result.constraintResults.length;
+    final computationTime = result.computationTime;
+
+    return Card(
+      margin: EdgeInsets.zero,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  success ? Icons.check_circle_outline : Icons.error_outline,
+                  color: success
+                      ? theme.colorScheme.primary
+                      : theme.colorScheme.error,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  success ? 'Solver succeeded' : 'Solver failed',
+                  style: theme.textTheme.titleMedium,
+                ),
+              ],
+            ),
+            if (total > 0)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text(
+                  'Constraints satisfied: $satisfied / $total',
+                  style: theme.textTheme.bodySmall,
+                ),
+              ),
+            if (!success && result.errorMessage != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text(
+                  result.errorMessage!,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.error,
+                  ),
+                ),
+              ),
+            if (computationTime != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text(
+                  'Computation time: ${computationTime.toStringAsFixed(1)} ms',
+                  style: theme.textTheme.bodySmall,
+                ),
+              ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -837,8 +1264,15 @@ class _ProblemMetadataSheetState extends State<ProblemMetadataSheet> {
   late final TextEditingController _titleController;
   late final TextEditingController _descriptionController;
   late final TextEditingController _solutionController;
+  late final TextEditingController _scalarConstraintsController;
+  late final TextEditingController _objectConstraintsController;
+  late final TextEditingController _scalarProofController;
+  late final TextEditingController _objectProofController;
+  late final TextEditingController _proofGoalController;
   late ProblemDifficulty _difficulty;
   late ProblemCategory _category;
+  late ProblemStatus _status;
+  late bool _autoRunSolver;
 
   @override
   void initState() {
@@ -848,8 +1282,25 @@ class _ProblemMetadataSheetState extends State<ProblemMetadataSheet> {
         TextEditingController(text: widget.initial?.description ?? '');
     _solutionController =
         TextEditingController(text: widget.initial?.solution ?? '');
+    _scalarConstraintsController = TextEditingController(
+      text: widget.initial?.scalarConstraints ?? '',
+    );
+    _objectConstraintsController = TextEditingController(
+      text: widget.initial?.objectConstraints ?? '',
+    );
+    _scalarProofController = TextEditingController(
+      text: widget.initial?.scalarProof ?? '',
+    );
+    _objectProofController = TextEditingController(
+      text: widget.initial?.objectProof ?? '',
+    );
+    _proofGoalController = TextEditingController(
+      text: widget.initial?.proofGoal ?? '',
+    );
     _difficulty = widget.initial?.difficulty ?? ProblemDifficulty.beginner;
     _category = widget.initial?.category ?? ProblemCategory.geometry;
+  _status = widget.initial?.status ?? ProblemStatus.draft;
+    _autoRunSolver = widget.initial?.autoRunSolverOnSave ?? false;
   }
 
   @override
@@ -857,6 +1308,11 @@ class _ProblemMetadataSheetState extends State<ProblemMetadataSheet> {
     _titleController.dispose();
     _descriptionController.dispose();
     _solutionController.dispose();
+    _scalarConstraintsController.dispose();
+    _objectConstraintsController.dispose();
+    _scalarProofController.dispose();
+    _objectProofController.dispose();
+    _proofGoalController.dispose();
     super.dispose();
   }
 
@@ -943,6 +1399,25 @@ class _ProblemMetadataSheetState extends State<ProblemMetadataSheet> {
                           },
                         ),
                         const SizedBox(height: 24),
+                        Text('Visibility', style: theme.textTheme.titleSmall),
+                        const SizedBox(height: 8),
+                        SegmentedButton<ProblemStatus>(
+                          segments: const [
+                            ButtonSegment(
+                              value: ProblemStatus.draft,
+                              label: Text('Draft'),
+                            ),
+                            ButtonSegment(
+                              value: ProblemStatus.published,
+                              label: Text('Published'),
+                            ),
+                          ],
+                          selected: {_status},
+                          onSelectionChanged: (selection) {
+                            setState(() => _status = selection.first);
+                          },
+                        ),
+                        const SizedBox(height: 24),
                         Text('Difficulty', style: theme.textTheme.titleSmall),
                         const SizedBox(height: 8),
                         Wrap(
@@ -990,6 +1465,78 @@ class _ProblemMetadataSheetState extends State<ProblemMetadataSheet> {
                           ),
                         ),
                         const SizedBox(height: 32),
+                        Divider(color: theme.dividerColor.withOpacity(0.4)),
+                        const SizedBox(height: 24),
+                        Text('Solver configuration',
+                            style: theme.textTheme.titleSmall),
+                        const SizedBox(height: 8),
+                        TextFormField(
+                          controller: _proofGoalController,
+                          decoration: const InputDecoration(
+                            labelText: 'Proof goal',
+                            hintText: 'e.g. Triangle ABC is equilateral',
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        TextFormField(
+                          controller: _scalarConstraintsController,
+                          minLines: 4,
+                          maxLines: 10,
+                          decoration: const InputDecoration(
+                            labelText: 'Scalar constraints (JSON)',
+                            hintText:
+                                '{ "distances": [{"id": "d1", "from": "A", "to": "B", "value": 5.0}] }',
+                          ),
+                          validator: _validateJsonField,
+                        ),
+                        const SizedBox(height: 16),
+                        TextFormField(
+                          controller: _objectConstraintsController,
+                          minLines: 4,
+                          maxLines: 10,
+                          decoration: const InputDecoration(
+                            labelText: 'Object constraints (JSON)',
+                            hintText:
+                                '{ "parallel": [{"id": "p1", "line1": "l1", "line2": "l2"}] }',
+                          ),
+                          validator: _validateJsonField,
+                        ),
+                        const SizedBox(height: 16),
+                        TextFormField(
+                          controller: _scalarProofController,
+                          minLines: 3,
+                          maxLines: 8,
+                          decoration: const InputDecoration(
+                            labelText:
+                                'Scalar proof (markdown or JSON payload)',
+                            hintText:
+                                'Paste solver output or add notes for algebraic proof.',
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        TextFormField(
+                          controller: _objectProofController,
+                          minLines: 3,
+                          maxLines: 8,
+                          decoration: const InputDecoration(
+                            labelText:
+                                'Geometric proof (markdown or JSON payload)',
+                            hintText:
+                                'Paste solver output or add notes for geometric proof.',
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        SwitchListTile.adaptive(
+                          contentPadding: EdgeInsets.zero,
+                          value: _autoRunSolver,
+                          onChanged: (value) {
+                            setState(() => _autoRunSolver = value);
+                          },
+                          title: const Text('Run solver automatically on save'),
+                          subtitle: const Text(
+                            'If enabled, the solver worker runs before saving to sync proofs.',
+                          ),
+                        ),
                       ],
                     ),
                   ),
@@ -1019,8 +1566,58 @@ class _ProblemMetadataSheetState extends State<ProblemMetadataSheet> {
     );
   }
 
+  String? _validateJsonField(String? value) {
+    final trimmed = value?.trim() ?? '';
+    if (trimmed.isEmpty) {
+      return null;
+    }
+
+    try {
+      jsonDecode(trimmed);
+      return null;
+    } catch (error) {
+      if (error is FormatException) {
+        return 'Invalid JSON: ${error.message}';
+      }
+      return 'Invalid JSON: $error';
+    }
+  }
+
+  String? _normalizeJsonOrNull(String text) {
+    final trimmed = text.trim();
+    if (trimmed.isEmpty) {
+      return null;
+    }
+
+    final decoded = jsonDecode(trimmed);
+    const encoder = JsonEncoder.withIndent('  ');
+    return encoder.convert(decoded);
+  }
+
+  String? _trimToNull(String text) {
+    final trimmed = text.trim();
+    if (trimmed.isEmpty) {
+      return null;
+    }
+    return trimmed;
+  }
+
   void _submit() {
     if (!_formKey.currentState!.validate()) {
+      return;
+    }
+
+    String? scalarConstraints;
+    String? objectConstraints;
+    try {
+      scalarConstraints =
+          _normalizeJsonOrNull(_scalarConstraintsController.text);
+      objectConstraints =
+          _normalizeJsonOrNull(_objectConstraintsController.text);
+    } catch (error) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to normalize JSON: $error')),
+      );
       return;
     }
 
@@ -1029,9 +1626,16 @@ class _ProblemMetadataSheetState extends State<ProblemMetadataSheet> {
       description: _descriptionController.text.trim(),
       difficulty: _difficulty,
       category: _category,
+      status: _status,
       solution: _solutionController.text.trim().isEmpty
           ? null
           : _solutionController.text.trim(),
+      scalarConstraints: scalarConstraints,
+      objectConstraints: objectConstraints,
+      scalarProof: _trimToNull(_scalarProofController.text),
+      objectProof: _trimToNull(_objectProofController.text),
+      proofGoal: _trimToNull(_proofGoalController.text),
+      autoRunSolverOnSave: _autoRunSolver,
     );
 
     Navigator.of(context).pop(metadata);

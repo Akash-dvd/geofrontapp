@@ -70,9 +70,13 @@ void main() {
       await tester.pumpWidget(createWidgetUnderTest());
       await tester.pumpAndSettle();
 
-      expect(find.text('No problems found'), findsOneWidget);
-      expect(find.text('Create your first problem to get started'), findsOneWidget);
-      expect(find.byIcon(Icons.quiz_outlined), findsOneWidget);
+      expect(find.text('No published problems yet'), findsOneWidget);
+      expect(
+        find.textContaining('Check back soon—published problems will appear here once they are shared.'),
+        findsOneWidget,
+      );
+      expect(find.text('Sign in to contribute'), findsOneWidget);
+      expect(find.text('Refresh published list'), findsWidgets);
     });
 
   testWidgets('should display list of problems when problems are loaded',
@@ -84,13 +88,14 @@ void main() {
         tester.view.resetPhysicalSize();
         tester.view.resetDevicePixelRatio();
       });
-      final testProblems = [
+      final List<Problem> testProblems = [
         Problem(
           id: '1',
           title: 'Test Problem 1',
           description: 'Description 1',
           difficulty: ProblemDifficulty.beginner,
           category: ProblemCategory.geometry,
+          status: ProblemStatus.published,
           createdAt: DateTime(2025, 10, 4, 10, 0),
           updatedAt: DateTime(2025, 10, 4, 11, 0),
         ),
@@ -100,6 +105,7 @@ void main() {
           description: 'Description 2',
           difficulty: ProblemDifficulty.intermediate,
           category: ProblemCategory.algebra,
+          status: ProblemStatus.published,
           createdAt: DateTime(2025, 10, 4, 10, 0),
           updatedAt: DateTime(2025, 10, 4, 11, 0),
         ),
@@ -137,8 +143,12 @@ void main() {
       await tester.pumpWidget(createWidgetUnderTest());
       await tester.pumpAndSettle();
 
-      expect(find.byType(FloatingActionButton), findsOneWidget);
-      expect(find.byIcon(Icons.add), findsOneWidget);
+  expect(find.byType(FloatingActionButton), findsOneWidget);
+      final fab = tester.widget<FloatingActionButton>(
+        find.byType(FloatingActionButton),
+      );
+      final icon = fab.child as Icon;
+      expect(icon.icon, equals(Icons.login));
     });
 
     testWidgets('should show refresh button in app bar',
@@ -156,7 +166,7 @@ void main() {
       await tester.pumpWidget(createWidgetUnderTest());
       await tester.pumpAndSettle();
 
-      expect(find.byIcon(Icons.refresh), findsOneWidget);
+  expect(find.byIcon(Icons.refresh), findsWidgets);
     });
 
   testWidgets('should display problem list items with actions',
@@ -173,6 +183,7 @@ void main() {
         description: 'Test Description',
         difficulty: ProblemDifficulty.advanced,
         category: ProblemCategory.proofs,
+        status: ProblemStatus.published,
         createdAt: DateTime(2025, 10, 4, 10, 0),
         updatedAt: DateTime(2025, 10, 4, 11, 0),
       );
@@ -184,11 +195,11 @@ void main() {
       await tester.pumpWidget(createWidgetUnderTest());
       await tester.pumpAndSettle();
 
-      // Expect action buttons present instead of popup menu
-      expect(find.text('Edit'), findsOneWidget);
-      expect(find.text('Delete'), findsOneWidget);
-      expect(find.text('Advanced'), findsOneWidget);
-      expect(find.text('Proofs'), findsOneWidget);
+  expect(find.text('Published library'), findsOneWidget);
+  expect(find.text('Advanced'), findsOneWidget);
+  expect(find.text('Proofs'), findsOneWidget);
+  expect(find.text('Edit'), findsNothing);
+  expect(find.text('Delete'), findsNothing);
     });
 
     testWidgets('should show edit and delete actions',
@@ -205,6 +216,7 @@ void main() {
         description: 'Test Description',
         difficulty: ProblemDifficulty.beginner,
         category: ProblemCategory.geometry,
+        status: ProblemStatus.published,
         createdAt: DateTime(2025, 10, 4, 10, 0),
         updatedAt: DateTime(2025, 10, 4, 11, 0),
       );
@@ -216,12 +228,11 @@ void main() {
       await tester.pumpWidget(createWidgetUnderTest());
       await tester.pumpAndSettle();
 
-      // Actions are visible directly
-      expect(find.text('Edit'), findsOneWidget);
-  expect(find.text('Delete'), findsWidgets);
+    expect(find.text('Edit'), findsNothing);
+    expect(find.text('Delete'), findsNothing);
     });
 
-    testWidgets('should show confirmation dialog when delete is tapped',
+    testWidgets('should not show delete confirmation when unauthenticated',
         (WidgetTester tester) async {
       tester.view.devicePixelRatio = 1.0;
       tester.view.physicalSize = const Size(1200, 1600);
@@ -235,6 +246,7 @@ void main() {
         description: 'Test Description',
         difficulty: ProblemDifficulty.beginner,
         category: ProblemCategory.geometry,
+        status: ProblemStatus.published,
         createdAt: DateTime(2025, 10, 4, 10, 0),
         updatedAt: DateTime(2025, 10, 4, 11, 0),
       );
@@ -246,16 +258,7 @@ void main() {
       await tester.pumpWidget(createWidgetUnderTest());
       await tester.pumpAndSettle();
 
-  // Tap delete action button
-  await tester.tap(find.text('Delete').first);
-      await tester.pumpAndSettle();
-
-      expect(find.text('Delete Problem'), findsOneWidget);
-      expect(find.text('Are you sure you want to delete "Test Problem"?'),
-          findsOneWidget);
-      expect(find.text('Cancel'), findsOneWidget);
-  // There are two 'Delete' labels: button in card and dialog action
-  expect(find.text('Delete'), findsWidgets);
+      expect(find.text('Delete'), findsNothing);
     });
 
     testWidgets('should display loading more indicator when loading more',
@@ -272,6 +275,7 @@ void main() {
         description: 'Test Description',
         difficulty: ProblemDifficulty.beginner,
         category: ProblemCategory.geometry,
+        status: ProblemStatus.published,
         createdAt: DateTime(2025, 10, 4, 10, 0),
         updatedAt: DateTime(2025, 10, 4, 11, 0),
       );
@@ -299,6 +303,7 @@ void main() {
         description: 'This is a sample problem description for testing purposes',
         difficulty: ProblemDifficulty.expert,
         category: ProblemCategory.calculus,
+        status: ProblemStatus.published,
         createdAt: DateTime(2025, 10, 4, 10, 0),
         updatedAt: DateTime(2025, 10, 4, 11, 0),
       );
@@ -330,6 +335,7 @@ void main() {
         description: 'Description',
         difficulty: ProblemDifficulty.beginner,
         category: ProblemCategory.geometry,
+        status: ProblemStatus.published,
         createdAt: DateTime(2025, 10, 4, 10, 0),
         updatedAt: DateTime(2025, 10, 4, 11, 0),
       );
@@ -359,6 +365,7 @@ void main() {
         description: 'This is a very long description that should be truncated when displayed in the list item. It contains multiple sentences and should not take up too much space in the UI. The description should be cut off with an ellipsis to maintain a clean layout.',
         difficulty: ProblemDifficulty.intermediate,
         category: ProblemCategory.algebra,
+        status: ProblemStatus.published,
         createdAt: DateTime(2025, 10, 4, 10, 0),
         updatedAt: DateTime(2025, 10, 4, 11, 0),
       );

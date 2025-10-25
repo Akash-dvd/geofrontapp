@@ -1,0 +1,10 @@
+the central executor
+
+1) called by query
+2) creates IGraph
+3) creates structure
+4) calls pattmatt (subgraph isomorhism)
+5) calls solver for pather towards query
+6) calls prover to create proof
+7) creates solution array
+8) sends solution back to query

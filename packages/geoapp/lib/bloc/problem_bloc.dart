@@ -206,6 +206,46 @@ class ProblemBloc extends Bloc<ProblemEvent, ProblemState> {
           }
         }
 
+        if (event.scalarConstraints != null &&
+            event.scalarConstraints!.trim().isNotEmpty) {
+          try {
+            variables['scalar_constraints'] =
+                jsonDecode(event.scalarConstraints!);
+          } catch (error) {
+            emit(
+              ProblemError(
+                message: 'Invalid scalar constraints JSON: $error',
+                currentProblems: _allProblems,
+              ),
+            );
+            return;
+          }
+        }
+
+        if (event.objectConstraints != null &&
+            event.objectConstraints!.trim().isNotEmpty) {
+          try {
+            variables['object_constraints'] =
+                jsonDecode(event.objectConstraints!);
+          } catch (error) {
+            emit(
+              ProblemError(
+                message: 'Invalid object constraints JSON: $error',
+                currentProblems: _allProblems,
+              ),
+            );
+            return;
+          }
+        }
+
+        if (event.scalarProof != null && event.scalarProof!.trim().isNotEmpty) {
+          variables['scalar_proof'] = _parseJsonOrString(event.scalarProof!);
+        }
+
+        if (event.objectProof != null && event.objectProof!.trim().isNotEmpty) {
+          variables['object_proof'] = _parseJsonOrString(event.objectProof!);
+        }
+
         if (event.thumbnailId != null) {
           variables['thumbnail'] = event.thumbnailId;
         }
@@ -218,7 +258,26 @@ class ProblemBloc extends Bloc<ProblemEvent, ProblemState> {
           'geometry_data': event.geometryData,
           'solution': event.solution,
           'thumbnail_id': event.thumbnailId,
+          'status': event.status.name,
         };
+
+        if (event.scalarConstraints != null &&
+            event.scalarConstraints!.trim().isNotEmpty) {
+          insertObject['scalar_constraints'] = event.scalarConstraints;
+        }
+
+        if (event.objectConstraints != null &&
+            event.objectConstraints!.trim().isNotEmpty) {
+          insertObject['object_constraints'] = event.objectConstraints;
+        }
+
+        if (event.scalarProof != null && event.scalarProof!.trim().isNotEmpty) {
+          insertObject['scalar_proof'] = event.scalarProof;
+        }
+
+        if (event.objectProof != null && event.objectProof!.trim().isNotEmpty) {
+          insertObject['object_proof'] = event.objectProof;
+        }
 
         variables['object'] = _sanitizeJsonMap(
           insertObject,
@@ -319,6 +378,49 @@ class ProblemBloc extends Bloc<ProblemEvent, ProblemState> {
       if (BuildFlags.useDirectus) {
         final baseUrl = EnvConfig.directusUrl;
         final uri = Uri.parse('$baseUrl/items/problems/${event.id}');
+
+        dynamic scalarConstraintsJson;
+        if (event.scalarConstraints != null &&
+            event.scalarConstraints!.trim().isNotEmpty) {
+          try {
+            scalarConstraintsJson = jsonDecode(event.scalarConstraints!);
+          } catch (error) {
+            emit(
+              ProblemError(
+                message: 'Invalid scalar constraints JSON: $error',
+                currentProblems: _allProblems,
+              ),
+            );
+            return;
+          }
+        }
+
+        dynamic objectConstraintsJson;
+        if (event.objectConstraints != null &&
+            event.objectConstraints!.trim().isNotEmpty) {
+          try {
+            objectConstraintsJson = jsonDecode(event.objectConstraints!);
+          } catch (error) {
+            emit(
+              ProblemError(
+                message: 'Invalid object constraints JSON: $error',
+                currentProblems: _allProblems,
+              ),
+            );
+            return;
+          }
+        }
+
+        final scalarProofValue =
+            event.scalarProof != null && event.scalarProof!.trim().isNotEmpty
+                ? _parseJsonOrString(event.scalarProof!)
+                : null;
+
+        final objectProofValue =
+            event.objectProof != null && event.objectProof!.trim().isNotEmpty
+                ? _parseJsonOrString(event.objectProof!)
+                : null;
+
         final response = await http.patch(
           uri,
           headers: {'Content-Type': 'application/json'},
@@ -330,6 +432,12 @@ class ProblemBloc extends Bloc<ProblemEvent, ProblemState> {
             if (event.geometryData != null)
               'geometry_data': jsonDecode(event.geometryData!),
             'solution': event.solution,
+            if (scalarConstraintsJson != null)
+              'scalar_constraints': scalarConstraintsJson,
+            if (objectConstraintsJson != null)
+              'object_constraints': objectConstraintsJson,
+            if (scalarProofValue != null) 'scalar_proof': scalarProofValue,
+            if (objectProofValue != null) 'object_proof': objectProofValue,
             if (event.thumbnailId != null) 'thumbnail': event.thumbnailId,
           }),
         );
@@ -354,10 +462,29 @@ class ProblemBloc extends Bloc<ProblemEvent, ProblemState> {
           'category': event.category.name,
           'geometry_data': event.geometryData,
           'solution': event.solution,
+          'status': event.status.name,
         };
 
         if (event.thumbnailId != null) {
           updateValues['thumbnail_id'] = event.thumbnailId;
+        }
+
+        if (event.scalarConstraints != null &&
+            event.scalarConstraints!.trim().isNotEmpty) {
+          updateValues['scalar_constraints'] = event.scalarConstraints;
+        }
+
+        if (event.objectConstraints != null &&
+            event.objectConstraints!.trim().isNotEmpty) {
+          updateValues['object_constraints'] = event.objectConstraints;
+        }
+
+        if (event.scalarProof != null && event.scalarProof!.trim().isNotEmpty) {
+          updateValues['scalar_proof'] = event.scalarProof;
+        }
+
+        if (event.objectProof != null && event.objectProof!.trim().isNotEmpty) {
+          updateValues['object_proof'] = event.objectProof;
         }
 
         final result = await _runWithAuthRetry(
@@ -652,5 +779,18 @@ dynamic _coerceJsonValue(dynamic value) {
     return jsonDecode(encoded);
   } catch (_) {
     return value.toString();
+  }
+}
+
+dynamic _parseJsonOrString(String raw) {
+  final trimmed = raw.trim();
+  if (trimmed.isEmpty) {
+    return null;
+  }
+
+  try {
+    return jsonDecode(trimmed);
+  } catch (_) {
+    return trimmed;
   }
 }

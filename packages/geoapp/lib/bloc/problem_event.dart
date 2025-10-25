@@ -29,18 +29,28 @@ class CreateProblem extends ProblemEvent {
     required this.description,
     required this.difficulty,
     required this.category,
+    required this.status,
     this.geometryData,
     this.solution,
     this.thumbnailId,
+    this.scalarConstraints,
+    this.objectConstraints,
+    this.scalarProof,
+    this.objectProof,
   });
 
   final String title;
   final String description;
   final ProblemDifficulty difficulty;
   final ProblemCategory category;
+  final ProblemStatus status;
   final String? geometryData;
   final String? solution;
   final String? thumbnailId;
+  final String? scalarConstraints;
+  final String? objectConstraints;
+  final String? scalarProof;
+  final String? objectProof;
 
   @override
   List<Object?> get props => [
@@ -48,9 +58,14 @@ class CreateProblem extends ProblemEvent {
         description,
         difficulty,
         category,
+  status,
         geometryData,
         solution,
         thumbnailId,
+        scalarConstraints,
+        objectConstraints,
+        scalarProof,
+        objectProof,
       ];
 }
 
@@ -62,9 +77,14 @@ class UpdateProblem extends ProblemEvent {
     required this.description,
     required this.difficulty,
     required this.category,
+    required this.status,
     this.geometryData,
     this.solution,
     this.thumbnailId,
+    this.scalarConstraints,
+    this.objectConstraints,
+    this.scalarProof,
+    this.objectProof,
   });
 
   final String id;
@@ -72,9 +92,14 @@ class UpdateProblem extends ProblemEvent {
   final String description;
   final ProblemDifficulty difficulty;
   final ProblemCategory category;
+  final ProblemStatus status;
   final String? geometryData;
   final String? solution;
   final String? thumbnailId;
+  final String? scalarConstraints;
+  final String? objectConstraints;
+  final String? scalarProof;
+  final String? objectProof;
 
   @override
   List<Object?> get props => [
@@ -83,9 +108,14 @@ class UpdateProblem extends ProblemEvent {
         description,
         difficulty,
         category,
+  status,
         geometryData,
         solution,
         thumbnailId,
+        scalarConstraints,
+        objectConstraints,
+        scalarProof,
+        objectProof,
       ];
 }
 

@@ -1,0 +1,19 @@
+schema {
+  query: Query
+}
+
+type SinglePost {
+  description: String!
+  references : String!
+  xml : String!
+}
+
+type PostSolution {
+  success: Boolean!
+  errors: [String]
+  solution: [SinglePost]
+}
+
+type Query {
+  getSolution(content:String!): PostSolution!
+}

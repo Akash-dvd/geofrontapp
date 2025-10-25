@@ -56,3 +56,7 @@ $sizeMB = [Math]::Round(((Get-ChildItem -Path $buildPath -Recurse | Measure-Obje
 Write-Host "[build] Build complete" -ForegroundColor Green
 Write-Host "[build] Output: $buildPath" -ForegroundColor Yellow
 Write-Host "[build] Approx bundle size: $sizeMB MB" -ForegroundColor Yellow
+
+
+
+# powershell -ExecutionPolicy Bypass -File .\cloud\scripts\build_flutter_web.ps1 -Renderer auto

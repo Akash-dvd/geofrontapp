@@ -13,12 +13,12 @@ void main() {
         description: 'Desc',
         difficulty: ProblemDifficulty.beginner,
         category: ProblemCategory.geometry,
+        status: ProblemStatus.published,
         thumbnailId: 'user123/thumbnails/p1.png',
         createdAt: DateTime(2025, 10, 4, 10),
         updatedAt: DateTime(2025, 10, 4, 11),
       );
 
-      var tapped = false;
       var edited = false;
       var deleted = false;
 
@@ -27,7 +27,7 @@ void main() {
           home: Scaffold(
             body: ProblemCard(
               problem: problem,
-              onTap: () => tapped = true,
+              onTap: () {},
               onEdit: () => edited = true,
               onDelete: () => deleted = true,
             ),

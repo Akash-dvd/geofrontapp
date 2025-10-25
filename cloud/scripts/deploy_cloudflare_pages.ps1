@@ -1,7 +1,7 @@
 param(
     [Parameter(Mandatory = $true)][string]$ProjectName,
     [string]$BuildDirectory = "build\web",
-    [string]$Branch = "",
+    [string]$Branch = "main",
     [switch]$DryRun,
     [switch]$VerboseOutput
 )
@@ -33,9 +33,7 @@ Write-Host "[deploy] Deploying to Cloudflare Pages project '$ProjectName'" -Fore
 
 $arguments = @('pages', 'deploy', $buildPath.Path, '--project-name', $ProjectName)
 
-if ($Branch) {
-    $arguments += @('--branch', $Branch)
-}
+$arguments += @('--branch', $Branch)
 
 if ($DryRun) {
     $arguments += '--dry-run'

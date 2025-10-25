@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+if [[ "${EUID}" -eq 0 ]]; then
+  echo "Please run this script without sudo; it will use sudo only where required." >&2
+  exit 1
+fi
+
 if ! command -v cloudflared >/dev/null 2>&1; then
   echo "cloudflared CLI not found. Install from https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/." >&2
   exit 1
@@ -11,15 +16,12 @@ if ! command -v jq >/dev/null 2>&1; then
   exit 1
 fi
 
-TUNNEL_NAME="${TUNNEL_NAME:-solver-edge}"
-TUNNEL_HOSTNAME="${TUNNEL_HOSTNAME:-}"  # e.g. solver.example.com
-LOCAL_SERVICE_URL="${LOCAL_SERVICE_URL:-http://localhost:8000}"  # backend origin served through the tunnel
-CONFIG_PATH="${CLOUDFLARED_CONFIG_PATH:-${HOME}/.cloudflared/${TUNNEL_NAME}.yaml}"
+TUNNEL_NAME="${TUNNEL_NAME:-solver-tunnel}"
+TUNNEL_HOSTNAME="${TUNNEL_HOSTNAME:-solver.aksharaintelligence.com}"
+LOCAL_SERVICE_URL="${LOCAL_SERVICE_URL:-http://localhost:5000}"  # Python solver origin
+CONFIG_PATH="${CLOUDFLARED_CONFIG_PATH:-/etc/cloudflared/config.yml}"
 
-if [[ -z "${TUNNEL_HOSTNAME}" ]]; then
-  echo "Set TUNNEL_HOSTNAME to the public hostname you want to expose (e.g. solver.example.com)." >&2
-  exit 1
-fi
+sudo mkdir -p "$(dirname "${CONFIG_PATH}")"
 
 if [[ -z "${CLOUDFLARE_ACCOUNT_ID:-}" ]]; then
   echo "Optional: set CLOUDFLARE_ACCOUNT_ID to skip interactive prompts."
@@ -50,7 +52,7 @@ if [[ ! -f "${CREDENTIALS_FILE}" ]]; then
   exit 1
 fi
 
-cat <<EOF >"${CONFIG_PATH}"
+sudo tee "${CONFIG_PATH}" >/dev/null <<EOF
 tunnel: ${TUNNEL_UUID}
 credentials-file: ${CREDENTIALS_FILE}
 

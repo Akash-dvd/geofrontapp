@@ -69,6 +69,8 @@ class Problem extends Equatable {
     required this.description,
     required this.difficulty,
     required this.category,
+    required this.status,
+    this.ownerId,
     this.geometryData,
     this.solution,
     this.scalarConstraints,
@@ -85,6 +87,8 @@ class Problem extends Equatable {
   final String description;
   final ProblemDifficulty difficulty;
   final ProblemCategory category;
+  final ProblemStatus status;
+  final String? ownerId;
   final String? geometryData;
   final String? solution;
   final String? scalarConstraints;
@@ -102,6 +106,11 @@ class Problem extends Equatable {
         json['created_at'] as String? ?? json['date_created'] as String?;
     final dateUpdated =
         json['updated_at'] as String? ?? json['date_updated'] as String?;
+  final rawStatus = json['status'] as String? ?? 'published';
+  final ownerId = json['owner_id'] as String? ??
+    json['owner_uid'] as String? ??
+    json['owner'] as String? ??
+    json['user_created'] as String?;
 
     return Problem(
       id: json['id'].toString(),
@@ -109,6 +118,8 @@ class Problem extends Equatable {
       description: json['description'] as String,
       difficulty: ProblemDifficulty.fromString(json['difficulty'] as String),
       category: ProblemCategory.fromString(json['category'] as String),
+    status: ProblemStatus.fromString(rawStatus),
+    ownerId: ownerId,
   geometryData: _normalizeJsonField(json['geometry_data']),
       solution: json['solution'] as String?,
   scalarConstraints: _normalizeJsonField(json['scalar_constraints']),
@@ -137,6 +148,7 @@ class Problem extends Equatable {
       'description': description,
       'difficulty': difficulty.name,
       'category': category.name,
+      'status': status.name,
     'geometry_data': _decodeJsonField(geometryData),
       'solution': solution,
     'scalar_constraints': _decodeJsonField(scalarConstraints),
@@ -154,6 +166,8 @@ class Problem extends Equatable {
     String? description,
     ProblemDifficulty? difficulty,
     ProblemCategory? category,
+    ProblemStatus? status,
+    String? ownerId,
     String? geometryData,
     String? solution,
   String? scalarConstraints,
@@ -170,6 +184,8 @@ class Problem extends Equatable {
       description: description ?? this.description,
       difficulty: difficulty ?? this.difficulty,
       category: category ?? this.category,
+  status: status ?? this.status,
+  ownerId: ownerId ?? this.ownerId,
       geometryData: geometryData ?? this.geometryData,
       solution: solution ?? this.solution,
       scalarConstraints: scalarConstraints ?? this.scalarConstraints,
@@ -189,6 +205,8 @@ class Problem extends Equatable {
         description,
         difficulty,
         category,
+  status,
+  ownerId,
         geometryData,
         solution,
         scalarConstraints,
@@ -199,6 +217,33 @@ class Problem extends Equatable {
         createdAt,
         updatedAt,
       ];
+}
+
+/// Visibility status for a problem.
+enum ProblemStatus {
+  draft,
+  published;
+
+  String get displayName {
+    switch (this) {
+      case ProblemStatus.draft:
+        return 'Draft';
+      case ProblemStatus.published:
+        return 'Published';
+    }
+  }
+
+  bool get isPublished => this == ProblemStatus.published;
+
+  static ProblemStatus fromString(String? value) {
+    if (value == null) {
+      return ProblemStatus.published;
+    }
+    return ProblemStatus.values.firstWhere(
+      (status) => status.name.toLowerCase() == value.toLowerCase(),
+      orElse: () => ProblemStatus.published,
+    );
+  }
 }
 
 String? _normalizeJsonField(dynamic value) {

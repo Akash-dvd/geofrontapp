@@ -162,6 +162,7 @@ void main() {
           description: 'New Description',
           difficulty: ProblemDifficulty.advanced,
           category: ProblemCategory.proofs,
+          status: ProblemStatus.draft,
         )),
         expect: () => [
           isA<ProblemOperationInProgress>(),
@@ -191,6 +192,7 @@ void main() {
           description: 'New Description',
           difficulty: ProblemDifficulty.advanced,
           category: ProblemCategory.proofs,
+          status: ProblemStatus.draft,
         )),
         expect: () => [
           isA<ProblemOperationInProgress>(),
@@ -231,6 +233,7 @@ void main() {
               description: 'Description',
               difficulty: ProblemDifficulty.beginner,
               category: ProblemCategory.geometry,
+              status: ProblemStatus.published,
               createdAt: DateTime.parse('2025-10-04T10:00:00.000Z'),
               updatedAt: DateTime.parse('2025-10-04T10:00:00.000Z'),
             ),
@@ -254,6 +257,7 @@ void main() {
           'description': 'Single Description',
           'difficulty': 'intermediate',
           'category': 'trigonometry',
+          'status': 'published',
           'geometry_data': null,
           'solution': null,
           'scalar_constraints': null,

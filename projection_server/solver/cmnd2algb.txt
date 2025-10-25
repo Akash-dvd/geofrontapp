@@ -1,0 +1,37 @@
+LIST OF COMMANDS
+
+
+######### OBJECT #########
+>>>>>>>>> Simple <<<<<<<<<
+> Circle (p,len) (p,segment) (p,p) (p,p,p) (L,p)
+    > Line (p,p) (p,l)
+        > Tangent (p,Obj) (p,Obj,p|Obj=0) (l,Obj) (Obj,Obj)
+        > OrthogonalLine (p,l) (p,seg) 
+        > LineBisector (p,p) (seg)
+        > AngularBisector (l,l) (p,p,p)
+        > Segment (p,p) (p,len)
+    > point () (Obj)
+        > Midpoint (p,p) 
+        > center(C)
+        > Intersect (Obj,Obj,1/2) 
+
+
+>>>>>>>>> Complex <<<<<<<<<
+> Polygon(p,p,p,...)  (p,p,#of v)
+> Pair of Points
+    > Intersect (Obj,Obj) 
+
+
+######### Measure #########
+> Angle (p,p,p) (l,l)
+> Segment
+> Area (Polygon)
+
+
+######### Transform #########
+> Object Transform
+    > Mirror (Obj,Obj)   
+> Scalar Transform
+    > Rotate (Obj, angle,Obj)
+    > Translate (OBj, vec)
+    > Dilate (Obj, scale,Obj) 

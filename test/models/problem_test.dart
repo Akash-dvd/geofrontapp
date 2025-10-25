@@ -15,6 +15,7 @@ void main() {
         'description': 'This is a test problem description',
         'difficulty': 'intermediate',
         'category': 'geometry',
+        'status': 'published',
         'geometry_data': jsonEncode({
           'points': [
             {'x': 0, 'y': 0},
@@ -50,6 +51,7 @@ void main() {
         description: 'This is a test problem description',
         difficulty: ProblemDifficulty.intermediate,
         category: ProblemCategory.geometry,
+        status: ProblemStatus.published,
         geometryData: jsonEncode({
           'points': [
             {'x': 0, 'y': 0},
@@ -120,6 +122,7 @@ void main() {
         'description': 'Minimal description',
         'difficulty': 'beginner',
         'category': 'algebra',
+  'status': 'draft',
         'geometry_data': null,
         'solution': null,
         'scalar_constraints': null,
@@ -159,6 +162,7 @@ void main() {
         description: 'Same description',
         difficulty: ProblemDifficulty.beginner,
         category: ProblemCategory.geometry,
+        status: ProblemStatus.published,
         createdAt: DateTime.parse('2025-10-04T10:00:00.000Z'),
         updatedAt: DateTime.parse('2025-10-04T10:00:00.000Z'),
       );
@@ -169,6 +173,7 @@ void main() {
         description: 'Same description',
         difficulty: ProblemDifficulty.beginner,
         category: ProblemCategory.geometry,
+        status: ProblemStatus.published,
         createdAt: DateTime.parse('2025-10-04T10:00:00.000Z'),
         updatedAt: DateTime.parse('2025-10-04T10:00:00.000Z'),
       );

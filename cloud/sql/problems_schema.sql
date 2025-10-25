@@ -54,7 +54,10 @@ begin
   else
     new.owner_id := auth.uid();
   end if;
-  new.status := 'draft';
+
+  if new.status is null then
+    new.status := 'draft';
+  end if;
 
   if new.created_at is null then
     new.created_at := timezone('utc', now());
@@ -112,7 +115,7 @@ grant usage on schema public to authenticated;
 grant usage on schema public to anon;
 
 grant select on table public.problems to authenticated;
-grant insert (title, description, difficulty, category, geometry_data, solution, scalar_constraints, object_constraints, scalar_proof, object_proof, thumbnail_id)
+grant insert (title, description, difficulty, category, geometry_data, solution, scalar_constraints, object_constraints, scalar_proof, object_proof, thumbnail_id, status)
   on public.problems to authenticated;
 grant update (title, description, difficulty, category, geometry_data, solution, scalar_constraints, object_constraints, scalar_proof, object_proof, status, thumbnail_id)
   on public.problems to authenticated;

@@ -38,8 +38,16 @@ class GraphQLConfig {
           final auth = Supabase.instance.client.auth;
           var session = auth.currentSession;
           if (session == null) {
-            debugPrint('⚠️ GraphQL AuthLink: No Supabase session available');
-            return null;
+            if (BuildFlags.useDirectus) {
+              debugPrint('⚠️ GraphQL AuthLink: No Directus token available');
+              return null;
+            }
+            final anonKey = EnvConfig.supabaseAnonKey;
+            if (anonKey.isEmpty) {
+              debugPrint('⚠️ GraphQL AuthLink: No Supabase session or anon key');
+              return null;
+            }
+            return 'Bearer $anonKey';
           }
 
           final expiresAt = session.expiresAt;

@@ -1,0 +1,2 @@
+-- PS C:\Users\skdwi\OneDrive\Documents\Project\flutter\geofrontapp\cloud\scripts>  .\refresh_pg_graphql.ps1 -ProjectRef ahcndokbcggdymszuhpn -ServiceRoleKey "REDACTED"
+-- Triggering pg_g
