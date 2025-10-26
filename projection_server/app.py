@@ -1,18 +1,33 @@
 from api import app
 from ariadne import load_schema_from_path, make_executable_schema, \
-  graphql_sync, snake_case_fallback_resolvers, ObjectType
+  graphql_sync, snake_case_fallback_resolvers, ObjectType, ScalarType
 from ariadne.explorer import ExplorerGraphiQL
 # from ariadne.constants import PLAYGROUND_HTML
 from flask import request, jsonify
 # from api.queries import listPosts_resolver
-from api.queries import getSolution_resolver
+from api.queries import solve_problem_resolver, solve_constraints_resolver, solver_status_resolver
 
 query = ObjectType("Query")
-query.set_field("getSolution", getSolution_resolver)
+query.set_field("solverStatus", solver_status_resolver)
+
+mutation = ObjectType("Mutation")
+mutation.set_field("solveProblem", solve_problem_resolver)
+mutation.set_field("solveConstraints", solve_constraints_resolver)
+
+json_scalar = ScalarType("JSON")
+
+@json_scalar.serializer
+def serialize_json(value):
+  return value
+
+
+@json_scalar.value_parser
+def parse_json(value):
+  return value
 
 type_defs = load_schema_from_path("schema.graphql")
 schema = make_executable_schema(
-  type_defs, query, snake_case_fallback_resolvers
+  type_defs, query, mutation, json_scalar, snake_case_fallback_resolvers
 )
 
 explorer_html = ExplorerGraphiQL().html(None)

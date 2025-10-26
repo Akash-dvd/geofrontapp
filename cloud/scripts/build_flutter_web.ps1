@@ -60,3 +60,4 @@ Write-Host "[build] Approx bundle size: $sizeMB MB" -ForegroundColor Yellow
 
 
 # powershell -ExecutionPolicy Bypass -File .\cloud\scripts\build_flutter_web.ps1 -Renderer auto
+# flutter build web --release --dart-define=USE_DIRECTUS=false

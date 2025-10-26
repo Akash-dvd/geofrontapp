@@ -1,19 +1,86 @@
 schema {
   query: Query
+  mutation: Mutation
 }
 
-type SinglePost {
-  description: String!
-  references : String!
-  xml : String!
-}
-
-type PostSolution {
-  success: Boolean!
-  errors: [String]
-  solution: [SinglePost]
-}
+scalar JSON
 
 type Query {
-  getSolution(content:String!): PostSolution!
+  solverStatus: SolverStatus!
+}
+
+type Mutation {
+  solveProblem(problem: ProblemInput!): SolverResponse!
+  solveConstraints(input: SolverInput!): ConstraintSolverResponse!
+}
+
+type SolverStatus {
+  online: Boolean!
+  version: String!
+  uptimeMs: Float!
+  requestCount: Int!
+}
+
+input ProblemInput {
+  id: ID
+  title: String
+  description: String
+  difficulty: String
+  category: String
+  status: String
+  ownerId: String
+  geometryData: JSON!
+  scalarConstraints: JSON
+  objectConstraints: JSON
+  scalarProof: JSON
+  objectProof: JSON
+  proofGoal: String
+}
+
+type SolverResponse {
+  success: Boolean!
+  solutions: [SolutionStep!]!
+  errors: [String!]
+}
+
+type SolutionStep {
+  text: String!
+  geometry: JSON
+  references: [String!]
+}
+
+input SolverInput {
+  constructionData: JSON!
+  scalarConstraints: JSON
+  objectConstraints: JSON
+  proofGoal: String!
+}
+
+type ConstraintSolverResponse {
+  success: Boolean!
+  errorMessage: String
+  errorType: String
+  scalarProof: JSON
+  objectProof: JSON
+  constraintResults: [ConstraintResult!]!
+  constructionSteps: [ConstructionStep!]!
+  computationTime: Float
+}
+
+type ConstraintResult {
+  id: ID!
+  type: String!
+  satisfied: Boolean!
+  actualValue: Float
+  expectedValue: Float
+  tolerance: Float
+  explanation: String
+}
+
+type ConstructionStep {
+  stepNumber: Int!
+  command: String
+  description: String!
+  theoremApplied: String
+  justification: String
 }

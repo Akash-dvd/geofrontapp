@@ -47,3 +47,6 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 Write-Host "[deploy] Deployment finished" -ForegroundColor Green
+
+
+# powershell -ExecutionPolicy Bypass -File .\cloud\scripts\deploy_cloudflare_pages.ps1 -ProjectName aksharaintelligence -Branch main

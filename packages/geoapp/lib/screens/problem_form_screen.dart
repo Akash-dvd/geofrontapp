@@ -147,6 +147,7 @@ class _ProblemFormScreenState extends State<ProblemFormScreen> {
 
     _solverService = SolverService(
       endpoint: BuildFlags.useDirectus ? null : EnvConfig.edgeSolverEndpoint,
+      directLanAccess: BuildFlags.useDirectus,
     );
   }
 
@@ -303,6 +304,8 @@ class _ProblemFormScreenState extends State<ProblemFormScreen> {
           minAllowedPaletteWidth,
           maxAllowedPaletteWidth,
         );
+        final solutionSteps =
+            _lastSolverResult?.solutionSteps ?? const <SolverSolutionStep>[];
 
         if (clampedPaletteWidth != _paletteWidth) {
           _paletteWidth = clampedPaletteWidth;
@@ -336,21 +339,18 @@ class _ProblemFormScreenState extends State<ProblemFormScreen> {
               },
             ),
             Expanded(
-              child: Container(
-                color: Theme.of(context).colorScheme.surface,
-                child: GeoDrawCanvas(
-                  dagManager: _dagManager,
-                  toolManager: _toolManager,
-                  selectedIds: _selectedIds,
-                  onSelectionChanged: (selection) {
-                    setState(() {
-                      _selectedIds
-                        ..clear()
-                        ..addAll(selection);
-                    });
-                  },
-                  showGrid: true,
-                ),
+              child: _CanvasAndSolutions(
+                dagManager: _dagManager,
+                toolManager: _toolManager,
+                selectedIds: _selectedIds,
+                onSelectionChanged: (selection) {
+                  setState(() {
+                    _selectedIds
+                      ..clear()
+                      ..addAll(selection);
+                  });
+                },
+                solutionSteps: solutionSteps,
               ),
             ),
             SizedBox(
@@ -1194,6 +1194,250 @@ class _SolverResultCard extends StatelessWidget {
                   style: theme.textTheme.bodySmall,
                 ),
               ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _CanvasAndSolutions extends StatelessWidget {
+  const _CanvasAndSolutions({
+    required this.dagManager,
+    required this.toolManager,
+    required this.selectedIds,
+    required this.onSelectionChanged,
+    required this.solutionSteps,
+  });
+
+  final DAGManager dagManager;
+  final ToolManager toolManager;
+  final Set<String> selectedIds;
+  final ValueChanged<Set<String>>? onSelectionChanged;
+  final List<SolverSolutionStep> solutionSteps;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final hasSolutions = solutionSteps.isNotEmpty;
+
+    final canvas = Container(
+      color: theme.colorScheme.surface,
+      child: GeoDrawCanvas(
+        dagManager: dagManager,
+        toolManager: toolManager,
+        selectedIds: selectedIds,
+        onSelectionChanged: onSelectionChanged,
+        showGrid: true,
+      ),
+    );
+
+    if (!hasSolutions) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [Expanded(child: canvas)],
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Expanded(flex: 3, child: canvas),
+        Expanded(
+          flex: 2,
+          child: Padding(
+            padding: const EdgeInsets.only(top: 12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  'Solver Solutions',
+                  style: theme.textTheme.titleMedium,
+                ),
+                const SizedBox(height: 8),
+                Expanded(child: _SolutionStepsList(steps: solutionSteps)),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _SolutionStepsList extends StatefulWidget {
+  const _SolutionStepsList({required this.steps});
+
+  final List<SolverSolutionStep> steps;
+
+  @override
+  State<_SolutionStepsList> createState() => _SolutionStepsListState();
+}
+
+class _SolutionStepsListState extends State<_SolutionStepsList> {
+  late List<_SolutionStepPresentation> _presentations;
+
+  @override
+  void initState() {
+    super.initState();
+    _presentations = _generatePresentations();
+  }
+
+  @override
+  void didUpdateWidget(covariant _SolutionStepsList oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!identical(widget.steps, oldWidget.steps)) {
+      setState(() {
+        _presentations = _generatePresentations();
+      });
+    }
+  }
+
+  List<_SolutionStepPresentation> _generatePresentations() {
+    final decoder = GeoDrawDecoder();
+    return widget.steps.map((step) {
+      final geometry = step.geometryAsMap();
+      if (geometry == null) {
+        return _SolutionStepPresentation(
+          step: step,
+          dagManager: DAGManager(),
+          hasGeometry: false,
+        );
+      }
+
+      try {
+        final dag = decoder.decode(Map<String, dynamic>.from(geometry));
+        return _SolutionStepPresentation(
+          step: step,
+          dagManager: dag,
+          hasGeometry: true,
+        );
+      } catch (error) {
+        debugPrint('Failed to decode solver solution: $error');
+        return _SolutionStepPresentation(
+          step: step,
+          dagManager: DAGManager(),
+          hasGeometry: false,
+        );
+      }
+    }).toList(growable: false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_presentations.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return Scrollbar(
+      thumbVisibility: true,
+      child: ListView.builder(
+        padding: const EdgeInsets.only(bottom: 16),
+        physics: const ClampingScrollPhysics(),
+        itemCount: _presentations.length,
+        itemBuilder: (context, index) {
+          final presentation = _presentations[index];
+          return _SolutionStepCard(
+            key: ValueKey('solution-step-$index'),
+            index: index,
+            step: presentation.step,
+            dagManager: presentation.dagManager,
+            hasGeometry: presentation.hasGeometry,
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _SolutionStepPresentation {
+  const _SolutionStepPresentation({
+    required this.step,
+    required this.dagManager,
+    required this.hasGeometry,
+  });
+
+  final SolverSolutionStep step;
+  final DAGManager dagManager;
+  final bool hasGeometry;
+}
+
+class _SolutionStepCard extends StatelessWidget {
+  const _SolutionStepCard({
+    super.key,
+    required this.index,
+    required this.step,
+    required this.dagManager,
+    required this.hasGeometry,
+  });
+
+  final int index;
+  final SolverSolutionStep step;
+  final DAGManager dagManager;
+  final bool hasGeometry;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final toolManager = ToolManager(dagManager: dagManager);
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      elevation: 2,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Step ${index + 1}',
+              style: theme.textTheme.titleMedium,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              step.description,
+              style: theme.textTheme.bodyMedium,
+            ),
+            if (step.references.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Wrap(
+                  spacing: 8,
+                  runSpacing: 4,
+                  children: step.references
+                      .map(
+                        (ref) => Chip(
+                          label: Text(ref),
+                          visualDensity: VisualDensity.compact,
+                        ),
+                      )
+                      .toList(),
+                ),
+              ),
+            const SizedBox(height: 12),
+            AspectRatio(
+              aspectRatio: 4 / 3,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: hasGeometry
+                    ? IgnorePointer(
+                        child: GeoDrawCanvas(
+                          dagManager: dagManager,
+                          toolManager: toolManager,
+                          selectedIds: const {},
+                          showGrid: true,
+                        ),
+                      )
+                    : Container(
+                        color: theme.colorScheme.surfaceContainerHighest,
+                        alignment: Alignment.center,
+                        child: Text(
+                          'No geometry returned for this step yet.',
+                          style: theme.textTheme.bodySmall,
+                        ),
+                      ),
+              ),
+            ),
           ],
         ),
       ),

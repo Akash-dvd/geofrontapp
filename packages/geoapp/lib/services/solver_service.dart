@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:graphql_flutter/graphql_flutter.dart';
 
 /// Service for interacting with the Python Solver GraphQL API
@@ -9,9 +11,14 @@ import 'package:graphql_flutter/graphql_flutter.dart';
 class SolverService {
   final GraphQLClient _client;
 
-  SolverService({String? endpoint}) 
+  SolverService({String? endpoint, bool directLanAccess = false})
       : _client = GraphQLClient(
-          link: HttpLink(endpoint ?? 'http://192.168.1.3:5000/graphql'),
+          link: HttpLink(
+            endpoint ??
+                (directLanAccess
+                    ? 'http://192.168.1.3:5000/graphql'
+                    : 'https://solver.aksharaintelligence.com/graphql'),
+          ),
           cache: GraphQLCache(),
         );
 
@@ -299,6 +306,8 @@ class SolverResult {
   final List<ConstraintResult> constraintResults;
   final List<ConstructionStep> constructionSteps;
   final double? computationTime;
+  late final List<SolverSolutionStep> solutionSteps =
+      List.unmodifiable(SolverSolutionStep.listFromObjectProof(objectProof));
 
   SolverResult({
     required this.success,
@@ -317,8 +326,8 @@ class SolverResult {
       success: json['success'] as bool,
       errorMessage: json['errorMessage'] as String?,
       errorType: json['errorType'] as String?,
-      scalarProof: json['scalarProof'] as Map<String, dynamic>?,
-      objectProof: json['objectProof'] as Map<String, dynamic>?,
+      scalarProof: _normalizeProof(json['scalarProof']),
+      objectProof: _normalizeProof(json['objectProof']),
       constraintResults: (json['constraintResults'] as List<dynamic>?)
               ?.map((e) => ConstraintResult.fromJson(e as Map<String, dynamic>))
               .toList() ??
@@ -329,6 +338,148 @@ class SolverResult {
           [],
       computationTime: (json['computationTime'] as num?)?.toDouble(),
     );
+  }
+
+  static Map<String, dynamic>? _normalizeProof(dynamic value) {
+    if (value == null) {
+      return null;
+    }
+
+    if (value is Map<String, dynamic>) {
+      return value;
+    }
+
+    if (value is Map) {
+      return value.map((key, dynamic v) => MapEntry(key.toString(), v));
+    }
+
+    if (value is String) {
+      final trimmed = value.trim();
+      if (trimmed.isEmpty) {
+        return null;
+      }
+
+      try {
+        final decoded = jsonDecode(trimmed);
+        if (decoded is Map<String, dynamic>) {
+          return decoded;
+        }
+
+        if (decoded is Map) {
+          return decoded.map((key, dynamic v) => MapEntry(key.toString(), v));
+        }
+      } catch (_) {
+        return null;
+      }
+    }
+
+    return null;
+  }
+}
+
+class SolverSolutionStep {
+  final String description;
+  final List<String> references;
+  final dynamic geometry;
+
+  const SolverSolutionStep({
+    required this.description,
+    required this.references,
+    this.geometry,
+  });
+
+  static List<SolverSolutionStep> listFromObjectProof(
+    Map<String, dynamic>? objectProof,
+  ) {
+    if (objectProof == null) {
+      return const [];
+    }
+
+    final rawSolutions = objectProof['solutions'] ?? objectProof['steps'];
+    if (rawSolutions is! List) {
+      return const [];
+    }
+
+    return rawSolutions
+        .whereType<Map<String, dynamic>>()
+        .map(SolverSolutionStep.fromJson)
+        .toList(growable: false);
+  }
+
+  factory SolverSolutionStep.fromJson(Map<String, dynamic> json) {
+    final description = (json['text'] ?? json['description'] ?? '').toString();
+    final refs = _parseReferences(json['references']);
+    final geometry = json['geometry'] ?? json['xml'];
+
+    return SolverSolutionStep(
+      description: description.isEmpty ? 'Solver step' : description,
+      references: refs,
+      geometry: geometry,
+    );
+  }
+
+  Map<String, dynamic>? geometryAsMap() {
+    if (geometry == null) {
+      return null;
+    }
+
+    if (geometry is Map<String, dynamic>) {
+      return Map<String, dynamic>.from(geometry as Map<String, dynamic>);
+    }
+
+    if (geometry is Map) {
+      return (geometry as Map)
+          .map((key, dynamic value) => MapEntry(key.toString(), value));
+    }
+
+    if (geometry is String) {
+      final trimmed = geometry.trim();
+      if (trimmed.isEmpty) {
+        return null;
+      }
+      try {
+        final decoded = jsonDecode(trimmed);
+        if (decoded is Map<String, dynamic>) {
+          return decoded;
+        }
+        if (decoded is Map) {
+          return decoded.map(
+            (key, dynamic value) => MapEntry(key.toString(), value),
+          );
+        }
+      } catch (_) {
+        return null;
+      }
+    }
+
+    return null;
+  }
+
+  static List<String> _parseReferences(dynamic value) {
+    if (value == null) {
+      return const [];
+    }
+
+    if (value is String) {
+      final trimmed = value.trim();
+      return trimmed.isEmpty ? const [] : [trimmed];
+    }
+
+    if (value is Iterable) {
+      final refs = <String>[];
+      for (final item in value) {
+        if (item == null) {
+          continue;
+        }
+        final text = item.toString().trim();
+        if (text.isNotEmpty) {
+          refs.add(text);
+        }
+      }
+      return refs;
+    }
+
+    return [value.toString()];
   }
 }
 

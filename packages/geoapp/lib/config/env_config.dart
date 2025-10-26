@@ -31,7 +31,8 @@ class EnvConfig {
     'https://edge-gateway-production.akshara-intelligence.workers.dev';
   static const String _edgeGraphqlPath = '/graphql';
   static const String _edgeLlmPath = '/llm';
-  static const String _edgeSolverPath = '/solver';
+  static const String _edgeSolverDefault =
+      'https://solver.aksharaintelligence.com/graphql';
 
   // ==================== Local Directus Backend ====================
 
@@ -103,7 +104,8 @@ class EnvConfig {
 
   static String get edgeSolverEndpoint => const String.fromEnvironment(
     'EDGE_SOLVER_ENDPOINT',
-    defaultValue: '$_edgeGatewayUrl$_edgeSolverPath');
+    defaultValue: _edgeSolverDefault,
+  );
 
   static String get directusUrl =>
       const String.fromEnvironment('DIRECTUS_URL', defaultValue: _directusUrl);
