@@ -2,7 +2,9 @@ part of 'Multivector.dart';
 
 /// Extension methods for Multivector
 extension MultivectorDefinitions on Multivector {
-  static const double tolerance = 1e-14;
+  static const double tolerance = 1e-14;  
+  // static const double tolerance = 1e-8;
+
 
   /// Example function - replace with your actual implementation
   bool isZero() {
@@ -121,6 +123,54 @@ extension MultivectorDefinitions on Multivector {
       oe2O: oe2O / scalar,
       e12O: e12O / scalar,
       oe12O: oe12O / scalar,
+    );
+  }
+
+  Multivector scalarMultiply(double scalar) {
+    if (scalar.abs() < tolerance) {
+      return Multivector.zero();
+    }
+    return Multivector(
+      s: s * scalar,
+      o: o * scalar,
+      e1: e1 * scalar,
+      e2: e2 * scalar,
+      O: O * scalar,
+      oe1: oe1 * scalar,
+      oe2: oe2 * scalar,
+      oO: oO * scalar,
+      e12: e12 * scalar,
+      e1O: e1O * scalar,
+      e2O: e2O * scalar,
+      oe12: oe12 * scalar,
+      oe1O: oe1O * scalar,
+      oe2O: oe2O * scalar,
+      e12O: e12O * scalar,
+      oe12O: oe12O * scalar,
+    );
+  }
+
+  Multivector sanitize() {
+    double sanitizeComponent(double value) =>
+        value.abs() < tolerance ? 0.0 : value;
+
+    return Multivector(
+      s: sanitizeComponent(s),
+      o: sanitizeComponent(o),
+      e1: sanitizeComponent(e1),
+      e2: sanitizeComponent(e2),
+      O: sanitizeComponent(O),
+      oe1: sanitizeComponent(oe1),
+      oe2: sanitizeComponent(oe2),
+      oO: sanitizeComponent(oO),
+      e12: sanitizeComponent(e12),
+      e1O: sanitizeComponent(e1O),
+      e2O: sanitizeComponent(e2O),
+      oe12: sanitizeComponent(oe12),
+      oe1O: sanitizeComponent(oe1O),
+      oe2O: sanitizeComponent(oe2O),
+      e12O: sanitizeComponent(e12O),
+      oe12O: sanitizeComponent(oe12O),
     );
   }
 }

@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:geodraw/geodraw.dart';
+import 'package:geodraw/core/command/command_runtime.dart';
 
 void main() {
   group('GeoPoint Tests', () {
@@ -43,6 +44,59 @@ void main() {
       expect(point.contains(const Offset(10, 10)), true);
       expect(point.contains(const Offset(12, 12)), true);
       expect(point.contains(const Offset(20, 20)), false);
+    });
+  });
+
+  group('Midpoint Command Schema', () {
+    test('Schema accepts points or segment inputs', () {
+      final registry = CommandRegistry.standard;
+      final midpointDef = registry.definitionByName('midpoint');
+
+      expect(midpointDef, isNotNull, reason: 'Midpoint command is registered');
+      final schema = midpointDef!.schema;
+
+      final p1 = GeoPointer(id: 'p1', label: 'A', x: 0, y: 0);
+      final p2 = GeoPointer(id: 'p2', label: 'B', x: 4, y: 0);
+      final segment = GeoSegment2P.fromDependencies(
+        id: 's1',
+        label: 'AB',
+        points: [p1, p2],
+      );
+
+      expect(schema.validate([p1, p2]).isValid, isTrue);
+      expect(schema.validate([p1, p2, 'M']).isValid, isTrue);
+      expect(schema.validate([segment]).isValid, isTrue);
+      expect(schema.validate([segment, 'M']).isValid, isTrue);
+      expect(schema.validate([p1]).isValid, isFalse);
+    });
+
+    test('Midpoint command resolves segment endpoints through DAG', () async {
+      final registry = CommandRegistry.standard;
+      final midpointDef = registry.definitionByName('midpoint');
+      expect(midpointDef, isNotNull);
+
+      final dag = DAGManager();
+      final p1 = GeoPointer(id: 'p1', label: 'A', x: 0, y: 0);
+      final p2 = GeoPointer(id: 'p2', label: 'B', x: 6, y: 0);
+      dag.addObject(p1, []);
+      dag.addObject(p2, []);
+
+      final segment = GeoSegment2P.fromDependencies(
+        id: 's1',
+        label: 'AB',
+        points: [p1, p2],
+      );
+      dag.addObject(segment, [p1.id, p2.id]);
+
+      final context = CommandExecutionContext(dagManager: dag);
+      final result = await midpointDef!.run(context, [segment]);
+
+      expect(result.success, isTrue);
+      expect(result.object, isA<GeoMidpoint>());
+
+      final midpoint = dag.getObject(result.objectId ?? '') as GeoMidpoint?;
+      expect(midpoint, isNotNull);
+      expect(midpoint!.dependencies, [p1.id, p2.id]);
     });
   });
 
@@ -122,6 +176,44 @@ void main() {
 
       expect(circle.contains(const Offset(0, 0)), false); // Not filled
       expect(circle.contains(const Offset(10, 0)), true); // On circumference
+    });
+  });
+
+  group('GeoArc Tests', () {
+    test('GeoArc3P creates arc through three points', () {
+      final p1 = GeoPointer(id: 'p1', label: 'A', x: 0, y: 0);
+      final p2 = GeoPointer(id: 'p2', label: 'B', x: 5, y: 5);
+      final p3 = GeoPointer(id: 'p3', label: 'C', x: 10, y: 0);
+
+      final arc = GeoArc3P.fromDependencies(
+        id: 'arc1',
+        label: 'Arc',
+        points: [p1, p2, p3],
+      );
+
+      expect(arc, isNotNull);
+      expect(arc!.dependencies, ['p1', 'p2', 'p3']);
+      expect(arc.contains(p2.position), true);
+      expect(arc.length(), greaterThan(0));
+    });
+  });
+
+  group('GeoSegment Tests', () {
+    test('GeoSegment2P creates segment through two points', () {
+      final p1 = GeoPointer(id: 'p1', label: 'A', x: 0, y: 0);
+      final p2 = GeoPointer(id: 'p2', label: 'B', x: 6, y: 8);
+
+      final segment = GeoSegment2P.fromDependencies(
+        id: 'seg1',
+        label: 'AB',
+        points: [p1, p2],
+      );
+
+      expect(segment.dependencies, ['p1', 'p2']);
+      expect(segment.usesDirectSweep, isTrue);
+      expect(segment.length(), closeTo(10, 1e-6));
+      expect(segment.contains(const Offset(3, 4)), isTrue);
+      expect(segment.type, 'GeoSegment2P');
     });
   });
 

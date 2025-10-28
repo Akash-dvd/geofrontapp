@@ -7,43 +7,96 @@ import '../models/canvas_object.dart';
 import '../models/simple/geo_circle.dart';
 import '../models/simple/geo_line.dart';
 import '../models/simple/geo_point.dart';
+import '../models/geometry_object.dart';
 import '../models/simple/geo_trans.dart';
+import '../models/simple/geo_transformed_simple.dart';
+import '../models/complex/geo_transformed_complex.dart';
+import '../models/simple_lists/geo_intersection.dart';
+import '../models/simple_lists/geo_tangent.dart';
+import '../models/complex/geo_shapes.dart';
 
 /// Decodes JSON format back to geometry objects and DAG
 ///
 /// Uses type registry pattern where each class has a fromJson factory.
 /// This eliminates the need for large switch statements and makes the
 /// decoder simple and maintainable.
+typedef ObjectFactory =
+    CanvasObject Function(Map<String, dynamic> json, dag.DAGManager dagManager);
+
 class GeoDrawDecoder {
-  /// Type registry mapping type strings to fromJson factory functions
-  static final Map<String, Function> _typeRegistry = {
+  /// Type registry mapping type strings to factory functions
+  static final Map<String, ObjectFactory> _typeRegistry = {
     // Points
-    'GeoPointer': GeoPointer.fromJson,
-    'GeoMidpoint': GeoMidpoint.fromJson,
-    'GeoInvPoint': GeoInvPoint.fromJson,
+    'GeoPointer': (json, _) => GeoPointer.fromJson(json),
+    'GeoMidpoint': (json, _) => GeoMidpoint.fromJson(json),
+    'GeoInvPoint': (json, _) => GeoTransPoint.fromJson(json),
 
     // Lines
-    'GeoLine2P': GeoLine2P.fromJson,
-    'GeoPerpendicularBisector': GeoPerpendicularBisector.fromJson,
-    'GeoPerpendicularLine': GeoPerpendicularLine.fromJson,
-    'GeoParallelLine': GeoParallelLine.fromJson,
+    'GeoLine2P': (json, _) => GeoLine2P.fromJson(json),
+    'GeoPerpendicularBisector': (json, _) =>
+        GeoPerpendicularBisector.fromJson(json),
+    'GeoPerpendicularLine': (json, _) => GeoPerpendicularLine.fromJson(json),
+    'GeoParallelLine': (json, _) => GeoParallelLine.fromJson(json),
 
     // Circles
-    'GeoCircle2P': GeoCircle2P.fromJson,
-    'GeoCircle3P': GeoCircle3P.fromJson,
-    'GeoInvCircle': GeoInvCircle.fromJson,
+    'GeoCircle2P': (json, _) => GeoCircle2P.fromJson(json),
+    'GeoCircle3P': (json, _) => GeoCircle3P.fromJson(json),
+    'GeoInvCircle': (json, _) => GeoInvCircle.fromJson(json),
 
     // Transformations
-    'GeoInverse': GeoInverse.fromJson,
-    'GeoRotate': GeoRotate.fromJson,
-    'GeoDilate': GeoDilate.fromJson,
+    'GeoInverse': (json, _) => GeoInverse.fromJson(json),
+    'GeoRotate': (json, _) => GeoRotate.fromJson(json),
+    'GeoDilate': (json, _) => GeoDilate.fromJson(json),
 
-    // TODO: Add complex objects as they are implemented
-    // 'GeoSegment': GeoSegment.fromJson,
-    // 'GeoTriangle': GeoTriangle.fromJson,
-    // 'GeoPolygon': GeoPolygon.fromJson,
-    // 'GeoIntersection': GeoIntersection.fromJson,
-    // 'GeoTangent': GeoTangent.fromJson,
+    // Transformed simple geometry
+    'GeoTransPoint': (json, _) => GeoTransPoint.fromJson(json),
+    'GeoTransLine': (json, _) => GeoTransLine.fromJson(json),
+    'GeoTransCircle': (json, _) => GeoTransCircle.fromJson(json),
+    'GeoTransSegment': (json, _) => GeoTransSegment.fromJson(json),
+    'GeoTransArc': (json, _) => GeoTransArc.fromJson(json),
+    'GeoTransUnionGeometryObjectList': (json, _) =>
+        GeoTransUnionGeometryObjectList.fromJson(json),
+
+    // Complex geometry
+    'GeoSegment2P': (json, dagManager) => GeoSegment2P.fromJson(
+      json,
+      (id) => _resolvePoint(dagManager, 'GeoSegment2P', id),
+    ),
+    'GeoArc3P': (json, dagManager) => GeoArc3P.fromJson(
+      json,
+      (id) => _resolvePoint(dagManager, 'GeoArc3P', id),
+    ),
+
+    // Simple geometry lists
+    'GeoIntersection': (json, _) => GeoIntersection.fromJson(json),
+    'GeoTangent': (json, dagManager) {
+      final deps = (json['dependencies'] as List?)?.cast<String>() ?? const [];
+      if (deps.length != 2) {
+        return GeoTangent.fromJson(json);
+      }
+
+      final first = dagManager.getObject(deps[0]);
+      final second = dagManager.getObject(deps[1]);
+
+      if (first is! GeometryObject || second is! GeometryObject) {
+        return GeoTangent.fromJson(json);
+      }
+
+      try {
+        return GeoTangent.constructFromObjects(
+          id: json['id'] as String,
+          label: (json['label'] as String?) ?? '',
+          first: first,
+          second: second,
+          styleOverrides: _extractStyleOverrides(json),
+          visible: json['visible'] as bool? ?? true,
+        );
+      } catch (_) {
+        return GeoTangent.fromJson(json);
+      }
+    },
+
+    // TODO: Add remaining complex objects (polygons, intersections, etc.) as they are implemented
   };
 
   /// Decode JSON to DAG manager
@@ -73,8 +126,8 @@ class GeoDrawDecoder {
           throw UnsupportedError('Unknown type: $type');
         }
 
-        // Call the appropriate fromJson factory
-        final object = factory(objJson) as CanvasObject;
+        // Call the appropriate factory with DAG context
+        final object = factory(objJson, dagManager);
         final dependencies = (objJson['dependencies'] as List).cast<String>();
         dagManager.addObject(object, dependencies);
       } catch (e) {
@@ -88,16 +141,38 @@ class GeoDrawDecoder {
 
   /// Decode viewport settings
   dag.Viewport? _decodeViewport(Map<String, dynamic> json) {
+    Map<String, dynamic>? resolveMap(dynamic value) {
+      if (value is Map<String, dynamic>) {
+        return value;
+      }
+      if (value is Map) {
+        return value.map((key, dynamic v) => MapEntry(key.toString(), v));
+      }
+      return null;
+    }
+
+    final centerJson = resolveMap(json['center']) ?? const {'x': 0, 'y': 0};
+    final canvasJson = resolveMap(json['canvasSize']);
+
+    num asNum(dynamic value, [num fallback = 0]) {
+      if (value is num) return value;
+      if (value is String) return num.tryParse(value) ?? fallback;
+      return fallback;
+    }
+
+    final zoomValue = asNum(json['zoom'], 1.0).toDouble();
+    final gridValue = json['gridVisible'];
+
     return dag.Viewport(
       center: Offset(
-        (json['center']['x'] as num).toDouble(),
-        (json['center']['y'] as num).toDouble(),
+        asNum(centerJson['x']).toDouble(),
+        asNum(centerJson['y']).toDouble(),
       ),
-      zoom: (json['zoom'] as num).toDouble(),
-      gridVisible: json['gridVisible'] as bool,
+      zoom: zoomValue,
+      gridVisible: gridValue is bool ? gridValue : true,
       canvasSize: Size(
-        (json['canvasSize']['width'] as num).toDouble(),
-        (json['canvasSize']['height'] as num).toDouble(),
+        asNum(canvasJson?['width'], 0).toDouble(),
+        asNum(canvasJson?['height'], 0).toDouble(),
       ),
     );
   }
@@ -136,4 +211,29 @@ class GeoDrawDecoder {
 
     return decodeFromJson(jsonString);
   }
+
+  static GeoPoint _resolvePoint(
+    dag.DAGManager dagManager,
+    String ownerType,
+    String dependencyId,
+  ) {
+    final object = dagManager.getObject(dependencyId);
+    if (object is GeoPoint) {
+      return object;
+    }
+    throw StateError('$ownerType dependency $dependencyId is not a point');
+  }
+}
+
+Map<String, dynamic>? _extractStyleOverrides(Map<String, dynamic> json) {
+  final rawStyle = json['style'];
+  if (rawStyle is Map<String, dynamic>) {
+    return Map<String, dynamic>.unmodifiable(rawStyle);
+  }
+  if (rawStyle is Map) {
+    return Map<String, dynamic>.unmodifiable(
+      rawStyle.map((key, value) => MapEntry(key.toString(), value)),
+    );
+  }
+  return null;
 }

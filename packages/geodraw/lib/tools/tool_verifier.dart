@@ -39,15 +39,19 @@ class ToolVerifier {
       );
     }
 
+    final prospective = List<dynamic>.from(_currentArgs)..add(arg);
+    if (!schema.matchesPrefix(prospective)) {
+      return ValidationResult.failure(
+        'Argument combination is not permitted for this command',
+      );
+    }
+
     _currentArgs.add(arg);
     return ValidationResult.success();
   }
 
   bool get isComplete {
-    final requiredCount = schema.argumentTypes
-        .where((c) => !c.isOptional)
-        .length;
-    return _currentArgs.length >= requiredCount;
+    return schema.isSatisfied(_currentArgs);
   }
 
   String get nextArgumentDescription => schema.describeNext(_currentArgs);

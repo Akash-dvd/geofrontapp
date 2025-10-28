@@ -10,24 +10,14 @@ class AIResponse {
   final List<String>? commands;
   final String? error;
 
-  AIResponse._({
-    required this.isSuccess,
-    this.commands,
-    this.error,
-  });
+  AIResponse._({required this.isSuccess, this.commands, this.error});
 
   factory AIResponse.success(List<String> commands) {
-    return AIResponse._(
-      isSuccess: true,
-      commands: commands,
-    );
+    return AIResponse._(isSuccess: true, commands: commands);
   }
 
   factory AIResponse.error(String error) {
-    return AIResponse._(
-      isSuccess: false,
-      error: error,
-    );
+    return AIResponse._(isSuccess: false, error: error);
   }
 }
 
@@ -67,12 +57,13 @@ class AIServiceConfig {
       maxRetries: maxRetries,
     );
   }
-  
+
   /// Network configuration (for cross-device access)
-  factory AIServiceConfig.network({String host = '192.168.1.3', int port = 5000}) {
-    return AIServiceConfig(
-      apiEndpoint: 'http://$host:$port/graphql',
-    );
+  factory AIServiceConfig.network({
+    String host = '192.168.1.3',
+    int port = 5000,
+  }) {
+    return AIServiceConfig(apiEndpoint: 'http://$host:$port/graphql');
   }
 }
 
@@ -81,10 +72,8 @@ class AIService {
   final AIServiceConfig config;
   final http.Client _client;
 
-  AIService({
-    required this.config,
-    http.Client? client,
-  }) : _client = client ?? http.Client();
+  AIService({required this.config, http.Client? client})
+    : _client = client ?? http.Client();
 
   /// Generate geometry commands from natural language description
   Future<AIResponse> generateCommands(String description) async {
@@ -119,9 +108,7 @@ class AIService {
   }
 
   Future<Map<String, dynamic>> _makeRequest(String description) async {
-    final headers = <String, String>{
-      'Content-Type': 'application/json',
-    };
+    final headers = <String, String>{'Content-Type': 'application/json'};
 
     if (config.apiKey != null) {
       headers['Authorization'] = 'Bearer ${config.apiKey}';
@@ -137,14 +124,12 @@ class AIService {
     );
 
     final response = await _client
-        .post(
-          Uri.parse(config.apiEndpoint),
-          headers: headers,
-          body: body,
-        )
+        .post(Uri.parse(config.apiEndpoint), headers: headers, body: body)
         .timeout(config.timeout);
 
-    print('AIService: Response ${response.statusCode} (${response.body.length} bytes)');
+    print(
+      'AIService: Response ${response.statusCode} (${response.body.length} bytes)',
+    );
 
     if (response.statusCode != 200) {
       print('AIService: Non-200 response body => ${response.body}');
@@ -164,9 +149,11 @@ Available commands:
 - point(x, y, label): Create a free point at coordinates with label
 - line(p1, p2, label): Create a line through two points
 - segment(p1, p2, label): Create a segment between two points
+- segment(p1, p2, label): Create a GeoSegment2P segment between two points
 - circle(center, point, label): Create a circle with center through point
 - circle(center, radius, label): Create a circle with center and radius
 - circle3(p1, p2, p3, label): Create circumcircle through three points
+- arc3(p1, through, p3, label): Create a circular arc passing through three points
 - perpendicular(line, point, label): Create perpendicular line through point
 - parallel(line, point, label): Create parallel line through point
 - midpoint(p1, p2, label): Create midpoint between two points
@@ -176,7 +163,7 @@ Available commands:
 - regular(n, center, vertex, label): Create regular n-gon
 - perpbisector(p1, p2, label): Perpendicular bisector of segment
 - bisector(p1, vertex, p2, label): Angle bisector
-- tangent(circle, point, label): Tangent from point to circle
+    - tangent(obj1, obj2, label): Create tangents between a point and a circle or two circles
 - reflect(object, line, label): Reflect object about line
 - rotate(object, center, angle, label): Rotate object about center
 - dilate(object, center, factor, label): Scale object from center
@@ -214,10 +201,14 @@ Return only the JSON array:
           // Try to parse as JSON array
           commands = (jsonDecode(result) as List<dynamic>).cast<String>();
         } else {
-          throw FormatException('Unexpected result type: ${result.runtimeType}');
+          throw FormatException(
+            'Unexpected result type: ${result.runtimeType}',
+          );
         }
       } else {
-        throw FormatException('Response missing commands field: ${response.keys}');
+        throw FormatException(
+          'Response missing commands field: ${response.keys}',
+        );
       }
 
       if (commands.isEmpty) {

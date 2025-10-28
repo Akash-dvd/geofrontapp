@@ -11,10 +11,13 @@ extension MultivectorUtils on Multivector {
         return Some(this);
       }
       final result = reversion() * object * this;
-      return Some(result.scalarDivide(absNormValue));
+      return Some(result.scalarDivide(absNormValue).sanitize());
     });
   }
 }
+
+double _sinh(double x) => (math.exp(x) - math.exp(-x)) / 2;
+double _cosh(double x) => (math.exp(x) + math.exp(-x)) / 2;
 
 // ============================================================================
 // GEOMETRIC CONSTRUCTION FUNCTIONS (PLACEHOLDERS)
@@ -55,6 +58,19 @@ Multivector uniForm(Multivector line) {
 Multivector infForm(Multivector circle) {
   if (circle.isCircle()) {
     return circle.scalarDivide(circle.o);
+  } else {
+    throw ArgumentError('constructPointFromCircle: Input is not a circle');
+  }
+}
+
+/// Construct infSignedForm
+Multivector infSignedForm(Multivector circle) {
+  if (circle.isCircle()) {
+    final orientation = circle.o;
+    if (orientation == 0) {
+      throw ArgumentError('infSignedForm: Circle has zero orientation');
+    }
+    return circle.scalarDivide(orientation).scalarMultiply(orientation.sign);
   } else {
     throw ArgumentError('constructPointFromCircle: Input is not a circle');
   }
@@ -248,6 +264,16 @@ Multivector constructCircleThrough3Points(
   return infForm((point1 ^ point2 ^ point3).dual());
 }
 
+/// Construct circle through three points
+/// Returns: Multivector representing the circle
+Multivector constructCircleThrough3PointsSigned(
+  Multivector point1,
+  Multivector point2,
+  Multivector point3,
+) {
+  return infSignedForm((point1 ^ point2 ^ point3).dual());
+}
+
 /// Construct inverse circle with respect to a circle
 /// Returns: Multivector representing the inverted circle
 Multivector constructInverseCircle(
@@ -272,6 +298,18 @@ List<Multivector> constructTangentLines(Multivector point, Multivector circle) {
 // TRANSFORMATION CONSTRUCTIONS
 // ----------------------------------------------------------------------------
 
+/// Construct rotation operator around [center] by [angleRadians]
+/// Returns: Multivector representing the rotor
+Multivector constructRotationOperator(
+  Multivector center,
+  double angleRadians,
+) {
+  final mv = (Multivector(O: 1) ^ center).dual();
+  final halfAngle = angleRadians / 2;
+  return Multivector(s: math.cos(halfAngle)) +
+      mv.scalarMultiply(math.sin(halfAngle));
+}
+
 /// Construct rotation of object around center by angle
 /// Returns: Multivector representing the rotated object
 Multivector constructRotation(
@@ -279,10 +317,26 @@ Multivector constructRotation(
   Multivector center,
   double angleRadians,
 ) {
-  // TODO: Implement using Multivector geometric algebra
-  throw UnimplementedError(
-    'constructRotation: Multivector implementation pending',
-  );
+  final rotor = constructRotationOperator(center, angleRadians);
+  return rotor.reflection(object).getOrElse(() => object);
+}
+
+/// Apply a rotation rotor to an object multivector
+Multivector applyRotationOperator(
+  Multivector rotor,
+  Multivector object,
+) {
+  return rotor.reflection(object).getOrElse(() => object);
+}
+
+/// Construct dilation operator from [center] with [scaleFactor]
+Multivector constructDilationOperator(
+  Multivector center,
+  double scaleFactor,
+) {
+  final mv = (center ^ Multivector(O: 1));
+  final halfAngle = scaleFactor / 2;
+  return Multivector(s: _cosh(halfAngle)) + mv.scalarMultiply(_sinh(halfAngle));
 }
 
 /// Construct dilation of object from center with scale factor
@@ -292,10 +346,31 @@ Multivector constructDilation(
   Multivector center,
   double scaleFactor,
 ) {
-  // TODO: Implement using Multivector geometric algebra
-  throw UnimplementedError(
-    'constructDilation: Multivector implementation pending',
-  );
+  final dilator = constructDilationOperator(center, scaleFactor);
+  return dilator.reflection(object).getOrElse(() => object);
+}
+
+/// Apply a dilation operator to an object multivector
+Multivector applyDilationOperator(
+  Multivector dilator,
+  Multivector object,
+) {
+  return dilator.reflection(object).getOrElse(() => object);
+}
+
+/// Construct reflection operator across a normalized line.
+Multivector constructLineReflectionOperator(Multivector line) {
+  return uniForm(line);
+}
+
+/// Construct reflection operator across a normalized circle.
+Multivector constructCircleReflectionOperator(Multivector circle) {
+  return infForm(circle);
+}
+
+/// Construct reflection operator across a point.
+Multivector constructPointReflectionOperator(Multivector point) {
+  return point ^ Multivector(O: 1);
 }
 
 /// Construct reflection of object across line
@@ -304,7 +379,8 @@ Multivector constructReflectionAcrossLine(
   Multivector object,
   Multivector line,
 ) {
-  return line.reflection(object).getOrElse(() => object);
+  final normalized = constructLineReflectionOperator(line);
+  return normalized.reflection(object).getOrElse(() => object);
 }
 
 /// Construct reflection of object across point
@@ -313,7 +389,18 @@ Multivector constructReflectionAcrossPoint(
   Multivector object,
   Multivector point,
 ) {
-  return (point ^ Multivector(O: 1)).reflection(object).getOrElse(() => object);
+  final operator = constructPointReflectionOperator(point);
+  return operator.reflection(object).getOrElse(() => object);
+}
+
+/// Construct reflection of object across circle
+/// Returns: Multivector representing the reflected object
+Multivector constructReflectionAcrossCircle(
+  Multivector object,
+  Multivector circle,
+) {
+  final normalized = constructCircleReflectionOperator(circle);
+  return normalized.reflection(object).getOrElse(() => object);
 }
 
 // ----------------------------------------------------------------------------
@@ -395,9 +482,9 @@ double distancePointToPoint(Multivector point1, Multivector point2) {
 /// Calculate distance from a point to a line
 /// Returns: double representing the perpendicular distance
 double distancePointToLine(Multivector point, Multivector line) {
-  final l1 = infForm(point);
-  final p1 = uniForm(line);
-  final d = (l1 | p1).s.abs();
+  final p1 = infForm(point);
+  final l1 = uniForm(line);
+  final d = (l1 | p1).s;
   return d;
 }
 

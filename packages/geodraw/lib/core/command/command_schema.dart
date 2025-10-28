@@ -104,6 +104,86 @@ class TypeConstraint {
     return parts.join(' / ');
   }
 
+  static String _mergeDescriptions(Iterable<TypeConstraint> constraints) {
+    final unique = <String>{};
+    for (final constraint in constraints) {
+      unique.add(constraint.description);
+    }
+    return unique.join(' / ');
+  }
+
+  factory TypeConstraint.union(
+    Iterable<TypeConstraint> constraints, {
+    String? description,
+  }) {
+    final list = constraints.toList(growable: false);
+    if (list.isEmpty) {
+      throw ArgumentError('Cannot create union of empty constraint list');
+    }
+
+    final allOptional = list.every((constraint) => constraint.isOptional);
+    final categories = list.map((constraint) => constraint.category).toSet();
+    final resolvedDescription =
+        description ?? _mergeDescriptions(list.where((c) => c.description.isNotEmpty));
+
+    if (categories.length == 1) {
+      switch (categories.first) {
+        case ValueCategory.geometry:
+          final combinedTypes = <Type>{};
+          final combinedLabels = <String>{};
+          for (final constraint in list) {
+            combinedTypes.addAll(constraint.allowedTypes);
+            combinedLabels.addAll(constraint.allowedTypeLabels);
+          }
+          final desc =
+              resolvedDescription.isNotEmpty
+                  ? resolvedDescription
+                  : _describeTypes(combinedTypes, combinedLabels);
+          return TypeConstraint.geometry(
+            allowedTypes: combinedTypes,
+            allowedTypeLabels: combinedLabels,
+            description: desc,
+            optional: allOptional,
+          );
+        case ValueCategory.numeric:
+          return TypeConstraint.numeric(
+            description: resolvedDescription.isNotEmpty
+                ? resolvedDescription
+                : 'Number',
+            optional: allOptional,
+          );
+        case ValueCategory.text:
+          return TypeConstraint.text(
+            description: resolvedDescription.isNotEmpty
+                ? resolvedDescription
+                : 'Text',
+            optional: allOptional,
+          );
+        case ValueCategory.boolean:
+          return TypeConstraint.boolean(
+            description: resolvedDescription.isNotEmpty
+                ? resolvedDescription
+                : 'Boolean',
+            optional: allOptional,
+          );
+        case ValueCategory.any:
+          return TypeConstraint.any(
+            description: resolvedDescription.isNotEmpty
+                ? resolvedDescription
+                : 'Any value',
+            optional: allOptional,
+          );
+      }
+    }
+
+    return TypeConstraint.any(
+      description: resolvedDescription.isNotEmpty
+          ? resolvedDescription
+          : 'Any allowed value',
+      optional: allOptional,
+    );
+  }
+
   /// Check if the supplied [value] satisfies this constraint
   bool accepts(dynamic value) {
     switch (category) {
@@ -146,63 +226,123 @@ class TypeConstraint {
   }
 }
 
-/// Defines the schema for a command (argument expectations, metadata)
+/// Defines the schema for a command (argument expectations, metadata).
+///
+/// Schemas can declare a single ordered list of [TypeConstraint]s via
+/// [argumentTypes] or multiple alternative argument patterns via the
+/// [patterns] parameter. When multiple patterns are provided, validation and
+/// sequential collection will succeed if the supplied arguments satisfy any of
+/// the allowed sequences.
 class CommandSchema {
-  final List<TypeConstraint> argumentTypes;
+  final List<List<TypeConstraint>> argumentPatterns;
   final String description;
   final bool createsObject;
   final String? category;
   final List<String> argumentHints;
+  final List<TypeConstraint> _primaryPattern;
 
-  const CommandSchema({
-    required this.argumentTypes,
+  List<TypeConstraint> get argumentTypes => _primaryPattern;
+
+  CommandSchema({
+    List<TypeConstraint>? argumentTypes,
+    List<List<TypeConstraint>> patterns = const [],
     required this.description,
     this.createsObject = true,
     this.category,
     this.argumentHints = const [],
-  });
+  })  : assert(
+          argumentTypes == null || patterns.isEmpty,
+          'Provide either argumentTypes or patterns, not both.',
+        ),
+        _primaryPattern = List.unmodifiable(
+          patterns.isNotEmpty
+              ? patterns.first
+              : (argumentTypes ?? const <TypeConstraint>[]),
+        ),
+        argumentPatterns = patterns.isNotEmpty
+            ? List.unmodifiable(
+                patterns
+                    .map((pattern) => List.unmodifiable(pattern))
+                    .toList(growable: false),
+              )
+            : argumentTypes != null
+                ? List.unmodifiable(
+                    <List<TypeConstraint>>[
+                      List.unmodifiable(argumentTypes),
+                    ],
+                  )
+                : const <List<TypeConstraint>>[];
 
   /// Validate a full argument list
   ValidationResult validate(List<dynamic> args) {
-    final errors = <String>[];
-
-    final requiredCount = argumentTypes.where((t) => !t.isOptional).length;
-    if (args.length < requiredCount) {
-      errors.add(
-        'Expected at least $requiredCount arguments, got ${args.length}',
+    if (argumentPatterns.isEmpty) {
+      if (args.isEmpty) {
+        return ValidationResult.success();
+      }
+      return ValidationResult.failure(
+        'No arguments expected, but received ${args.length}',
       );
-      return ValidationResult(isValid: false, errors: errors);
     }
 
-    if (args.length > argumentTypes.length) {
-      errors.add(
-        'Expected at most ${argumentTypes.length} arguments, got ${args.length}',
-      );
-      return ValidationResult(isValid: false, errors: errors);
-    }
-
-    for (var i = 0; i < args.length; i++) {
-      final constraint = argumentTypes[i];
-      final value = args[i];
-      if (!constraint.accepts(value)) {
-        errors.add(
-          'Argument ${i + 1}: expected ${constraint.description}, got ${value.runtimeType}',
-        );
+    for (final pattern in argumentPatterns) {
+      if (_matchesPatternExactly(args, pattern)) {
+        return ValidationResult.success();
       }
     }
 
-    return ValidationResult(isValid: errors.isEmpty, errors: errors);
+    final expected = argumentPatterns
+        .map(_patternDescription)
+        .join(' | ');
+
+    return ValidationResult(
+      isValid: false,
+      errors: [
+        'Arguments did not match any allowed pattern. Expected one of: $expected.',
+      ],
+    );
   }
 
   /// Determine if another argument can be accepted sequentially
   bool canAcceptMore(List<dynamic> currentArgs) {
-    return currentArgs.length < argumentTypes.length;
+    if (argumentPatterns.isEmpty) {
+      return false;
+    }
+    for (final pattern in argumentPatterns) {
+      if (!_matchesPatternPrefix(currentArgs, pattern)) {
+        continue;
+      }
+      if (currentArgs.length < pattern.length) {
+        return true;
+      }
+    }
+    return false;
   }
 
   /// Returns the type constraint for the next argument position
   TypeConstraint? nextConstraint(List<dynamic> currentArgs) {
-    if (currentArgs.length >= argumentTypes.length) return null;
-    return argumentTypes[currentArgs.length];
+    if (argumentPatterns.isEmpty) {
+      return null;
+    }
+
+    final candidates = <TypeConstraint>[];
+
+    for (final pattern in argumentPatterns) {
+      if (!_matchesPatternPrefix(currentArgs, pattern)) {
+        continue;
+      }
+      if (currentArgs.length >= pattern.length) {
+        continue;
+      }
+      candidates.add(pattern[currentArgs.length]);
+    }
+
+    if (candidates.isEmpty) {
+      return null;
+    }
+    if (candidates.length == 1) {
+      return candidates.first;
+    }
+    return TypeConstraint.union(candidates);
   }
 
   /// Provide human readable description for the next argument
@@ -215,6 +355,73 @@ class CommandSchema {
       return argumentHints[currentArgs.length];
     }
     return 'Select ${constraint.description}';
+  }
+
+  bool matchesPrefix(List<dynamic> args) {
+    if (argumentPatterns.isEmpty) {
+      return args.isEmpty;
+    }
+    return argumentPatterns.any(
+      (pattern) => _matchesPatternPrefix(args, pattern),
+    );
+  }
+
+  bool isSatisfied(List<dynamic> args) {
+    if (argumentPatterns.isEmpty) {
+      return args.isEmpty;
+    }
+    return argumentPatterns.any(
+      (pattern) => _matchesPatternExactly(args, pattern),
+    );
+  }
+
+  bool _matchesPatternPrefix(
+    List<dynamic> args,
+    List<TypeConstraint> pattern,
+  ) {
+    if (args.length > pattern.length) {
+      return false;
+    }
+    for (var i = 0; i < args.length; i++) {
+      if (!pattern[i].accepts(args[i])) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  bool _matchesPatternExactly(
+    List<dynamic> args,
+    List<TypeConstraint> pattern,
+  ) {
+    if (!_matchesPatternPrefix(args, pattern)) {
+      return false;
+    }
+
+    if (args.length == pattern.length) {
+      return true;
+    }
+
+    for (var i = args.length; i < pattern.length; i++) {
+      if (!pattern[i].isOptional) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  String _patternDescription(List<TypeConstraint> pattern) {
+    if (pattern.isEmpty) {
+      return '(no arguments)';
+    }
+    return pattern
+        .map(
+          (constraint) =>
+              constraint.isOptional
+                  ? '[${constraint.description}]'
+                  : constraint.description,
+        )
+        .join(', ');
   }
 }
 

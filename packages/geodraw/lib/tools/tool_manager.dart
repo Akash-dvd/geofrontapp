@@ -70,6 +70,16 @@ class ToolManager {
           labelGenerator: _pointLabelGenerator,
         );
 
+      case ToolType.lineSegment:
+        return _SegmentTool(
+          dagManager: dagManager,
+          commandHistory: commandHistory,
+          onObjectCreated: onObjectCreated,
+          onObjectSelected: onObjectSelected,
+          onToolStateChanged: onToolStateChanged,
+          createFreePoint: _createFreePoint,
+        );
+
       case ToolType.line:
         return _LineTool(
           dagManager: dagManager,
@@ -92,6 +102,16 @@ class ToolManager {
 
       case ToolType.circleThreePoints:
         return _CircleThreePointsTool(
+          dagManager: dagManager,
+          commandHistory: commandHistory,
+          onObjectCreated: onObjectCreated,
+          onObjectSelected: onObjectSelected,
+          onToolStateChanged: onToolStateChanged,
+          createFreePoint: _createFreePoint,
+        );
+
+      case ToolType.arcThreePoints:
+        return _ArcThreePointsTool(
           dagManager: dagManager,
           commandHistory: commandHistory,
           onObjectCreated: onObjectCreated,
@@ -140,6 +160,16 @@ class ToolManager {
           createFreePoint: _createFreePoint,
         );
 
+      case ToolType.tangent:
+        return _TangentTool(
+          dagManager: dagManager,
+          commandHistory: commandHistory,
+          onObjectCreated: onObjectCreated,
+          onObjectSelected: onObjectSelected,
+          onToolStateChanged: onToolStateChanged,
+          createFreePoint: _createFreePoint,
+        );
+
       case ToolType.select:
       case ToolType.pan:
         // These tools don't create geometry
@@ -169,13 +199,16 @@ class ToolManager {
     ToolType.select,
     ToolType.pan,
     ToolType.point,
+    ToolType.lineSegment,
     ToolType.line,
     ToolType.circle,
     ToolType.circleThreePoints,
+    ToolType.arcThreePoints,
     ToolType.midpoint,
     ToolType.perpendicular,
     ToolType.parallel,
     ToolType.perpBisector,
+    ToolType.tangent,
   ];
 
   /// Check if a tool type is available
@@ -204,6 +237,12 @@ class ToolManager {
           icon: Icons.circle,
           tooltip: 'Create a free point',
         );
+      case ToolType.lineSegment:
+        return const ToolMetadata(
+          name: 'Segment',
+          icon: Icons.show_chart,
+          tooltip: 'Create a segment between two points',
+        );
       case ToolType.line:
         return const ToolMetadata(
           name: 'Line',
@@ -221,6 +260,12 @@ class ToolManager {
           name: 'Circle (3 Points)',
           icon: Icons.circle,
           tooltip: 'Create a circle through three points',
+        );
+      case ToolType.arcThreePoints:
+        return const ToolMetadata(
+          name: 'Arc (3 Points)',
+          icon: Icons.panorama_fish_eye,
+          tooltip: 'Create a circular arc through three points',
         );
       case ToolType.midpoint:
         return const ToolMetadata(
@@ -245,6 +290,12 @@ class ToolManager {
           name: 'Perpendicular Bisector',
           icon: Icons.straighten,
           tooltip: 'Create the perpendicular bisector of two points',
+        );
+      case ToolType.tangent:
+        return const ToolMetadata(
+          name: 'Tangent',
+          icon: Icons.rotate_90_degrees_cw,
+          tooltip: 'Create tangents between a point and circle or two circles',
         );
       default:
         return const ToolMetadata(
@@ -342,6 +393,50 @@ class _PointTool extends UnifiedTool {
 
   @override
   String get stateDescription => 'Click to create a point';
+}
+
+/// Segment tool - creates segments between two points
+class _SegmentTool extends UnifiedTool {
+  final GeoPointer Function(Offset position) createFreePoint;
+
+  _SegmentTool({
+    required super.dagManager,
+    super.commandHistory,
+    super.onObjectCreated,
+    super.onObjectSelected,
+    super.onToolStateChanged,
+    required this.createFreePoint,
+  });
+
+  @override
+  ToolType get type => ToolType.lineSegment;
+
+  @override
+  String get commandName => 'segment';
+
+  @override
+  String get name => 'Segment';
+
+  @override
+  IconData get icon => Icons.show_chart;
+
+  @override
+  String get tooltip => 'Create a segment between two points';
+
+  @override
+  GeometryObject? createObjectAtPosition(Offset position) {
+    final nextType = verifier.schema.nextConstraint(verifier.arguments);
+    if (nextType?.accepts(GeoPointer) ?? false) {
+      return createFreePoint(position);
+    }
+    return null;
+  }
+
+  @override
+  void reset() {
+    super.reset();
+    notifyStateChanged('Click first point for segment');
+  }
 }
 
 /// Line tool - creates lines through two points
@@ -473,6 +568,50 @@ class _CircleThreePointsTool extends UnifiedTool {
   void reset() {
     super.reset();
     notifyStateChanged('Select three points for circle');
+  }
+}
+
+/// Arc through three points tool
+class _ArcThreePointsTool extends UnifiedTool {
+  final GeoPointer Function(Offset position) createFreePoint;
+
+  _ArcThreePointsTool({
+    required super.dagManager,
+    super.commandHistory,
+    super.onObjectCreated,
+    super.onObjectSelected,
+    super.onToolStateChanged,
+    required this.createFreePoint,
+  });
+
+  @override
+  ToolType get type => ToolType.arcThreePoints;
+
+  @override
+  String get commandName => 'arc3';
+
+  @override
+  String get name => 'Arc (3 Points)';
+
+  @override
+  IconData get icon => Icons.panorama_fish_eye;
+
+  @override
+  String get tooltip => 'Create a circular arc through three points';
+
+  @override
+  GeometryObject? createObjectAtPosition(Offset position) {
+    final nextType = verifier.schema.nextConstraint(verifier.arguments);
+    if (nextType?.accepts(GeoPointer) ?? false) {
+      return createFreePoint(position);
+    }
+    return null;
+  }
+
+  @override
+  void reset() {
+    super.reset();
+    notifyStateChanged('Select three points for arc');
   }
 }
 
@@ -649,6 +788,50 @@ class _PerpBisectorTool extends UnifiedTool {
   void reset() {
     super.reset();
     notifyStateChanged('Select two points for perpendicular bisector');
+  }
+}
+
+/// Tangent tool - constructs tangents from point/circle inputs
+class _TangentTool extends UnifiedTool {
+  final GeoPointer Function(Offset position) createFreePoint;
+
+  _TangentTool({
+    required super.dagManager,
+    super.commandHistory,
+    super.onObjectCreated,
+    super.onObjectSelected,
+    super.onToolStateChanged,
+    required this.createFreePoint,
+  });
+
+  @override
+  ToolType get type => ToolType.tangent;
+
+  @override
+  String get commandName => 'tangent';
+
+  @override
+  String get name => 'Tangent';
+
+  @override
+  IconData get icon => Icons.rotate_90_degrees_cw;
+
+  @override
+  String get tooltip => 'Create tangents between point/circle inputs';
+
+  @override
+  GeometryObject? createObjectAtPosition(Offset position) {
+    final nextConstraint = verifier.schema.nextConstraint(verifier.arguments);
+    if (nextConstraint?.accepts(GeoPointer) ?? false) {
+      return createFreePoint(position);
+    }
+    return null;
+  }
+
+  @override
+  void reset() {
+    super.reset();
+    notifyStateChanged('Select point or circle for tangent');
   }
 }
 

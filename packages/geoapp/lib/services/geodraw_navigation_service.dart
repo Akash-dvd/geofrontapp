@@ -54,7 +54,62 @@ class _GeoDrawCreateScreenState extends State<GeoDrawCreateScreen> {
   late ToolManager _toolManager;
   late UnifiedCLIExecutor _commandExecutor;
   late AIService _aiService;
+  late AIAdapter _aiAdapter;
   final Set<String> _selectedIds = {};
+
+  Future<void> _handleDeleteObject(String id) async {
+    final node = _dagManager.getNode(id);
+    if (node == null) {
+      return;
+    }
+
+    final hasChildren = node.childIds.isNotEmpty;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(hasChildren ? 'Delete object and dependents?' : 'Delete object?'),
+        content: Text(
+          hasChildren
+              ? 'Removing this object will also delete ${node.childIds.length} dependent items. Continue?'
+              : 'Remove the selected object from the construction?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(dialogContext).colorScheme.error,
+              foregroundColor: Theme.of(dialogContext).colorScheme.onError,
+            ),
+            child: Text(hasChildren ? 'Delete all' : 'Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) {
+      return;
+    }
+
+    try {
+      setState(() {
+        _dagManager.deleteObject(id, cascade: hasChildren);
+        _selectedIds.remove(id);
+      });
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Object deleted.')),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to delete object: $error')),
+      );
+    }
+  }
 
   @override
   void initState() {
@@ -75,6 +130,7 @@ class _GeoDrawCreateScreenState extends State<GeoDrawCreateScreen> {
     _aiService = AIService(
       config: AIServiceConfig.production(EnvConfig.edgeLlmEndpoint),
     );
+    _aiAdapter = AIAdapter(dagManager: _dagManager);
   }
 
   void _handleSave() {
@@ -103,17 +159,32 @@ class _GeoDrawCreateScreenState extends State<GeoDrawCreateScreen> {
         ],
       ),
       body: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Tool Palette
-          ToolPalette(
+          GeoDrawSidePanel(
+            dagManager: _dagManager,
             toolManager: _toolManager,
+            selectedIds: _selectedIds,
+            onSelectionChanged: (newSelection) {
+              setState(() {
+                _selectedIds
+                  ..clear()
+                  ..addAll(newSelection);
+              });
+            },
             onToolSelected: (toolType) {
               setState(() {
                 _toolManager.selectTool(toolType);
               });
             },
+            onDeleteObject: (id) {
+              _handleDeleteObject(id);
+            },
+            cliExecutor: _commandExecutor,
+            aiService: _aiService,
+            aiAdapter: _aiAdapter,
+            onPromptConstructionComplete: () => setState(() {}),
           ),
-          // Main content area (Canvas only)
           Expanded(
             child: GeoDrawCanvas(
               dagManager: _dagManager,
@@ -121,41 +192,12 @@ class _GeoDrawCreateScreenState extends State<GeoDrawCreateScreen> {
               selectedIds: _selectedIds,
               onSelectionChanged: (newSelection) {
                 setState(() {
-                  _selectedIds.clear();
-                  _selectedIds.addAll(newSelection);
+                  _selectedIds
+                    ..clear()
+                    ..addAll(newSelection);
                 });
               },
               showGrid: true,
-            ),
-          ),
-          // Right sidebar: Object Browser + Unified Prompt (like chat)
-          SizedBox(
-            width: 300,
-            child: Column(
-              children: [
-                // Object Browser - DAG elements list (history at top)
-                Expanded(
-                  child: ObjectBrowser(
-                    dagManager: _dagManager,
-                    selectedIds: _selectedIds,
-                    onSelectionChanged: (newSelection) {
-                      setState(() {
-                        _selectedIds.clear();
-                        _selectedIds.addAll(newSelection);
-                      });
-                    },
-                  ),
-                ),
-                // Unified Prompt Panel - CLI/AI input (prompt at bottom)
-                UnifiedPromptPanel(
-                  dagManager: _dagManager,
-                  cliExecutor: _commandExecutor,
-                  aiService: _aiService,
-                  aiAdapter: AIAdapter(dagManager: _dagManager),
-                  onConstructionComplete: () => setState(() {}),
-                  height: 180,
-                ),
-              ],
             ),
           ),
         ],
@@ -179,7 +221,62 @@ class _GeoDrawEditScreenState extends State<GeoDrawEditScreen> {
   late ToolManager _toolManager;
   late UnifiedCLIExecutor _commandExecutor;
   late AIService _aiService;
+  late AIAdapter _aiAdapter;
   final Set<String> _selectedIds = {};
+
+  Future<void> _handleDeleteObject(String id) async {
+    final node = _dagManager.getNode(id);
+    if (node == null) {
+      return;
+    }
+
+    final hasChildren = node.childIds.isNotEmpty;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(hasChildren ? 'Delete object and dependents?' : 'Delete object?'),
+        content: Text(
+          hasChildren
+              ? 'Removing this object will also delete ${node.childIds.length} dependent items. Continue?'
+              : 'Remove the selected object from the construction?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(dialogContext).colorScheme.error,
+              foregroundColor: Theme.of(dialogContext).colorScheme.onError,
+            ),
+            child: Text(hasChildren ? 'Delete all' : 'Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) {
+      return;
+    }
+
+    try {
+      setState(() {
+        _dagManager.deleteObject(id, cascade: hasChildren);
+        _selectedIds.remove(id);
+      });
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Object deleted.')),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to delete object: $error')),
+      );
+    }
+  }
 
   @override
   void initState() {
@@ -214,6 +311,7 @@ class _GeoDrawEditScreenState extends State<GeoDrawEditScreen> {
     _aiService = AIService(
       config: AIServiceConfig.production(EnvConfig.edgeLlmEndpoint),
     );
+    _aiAdapter = AIAdapter(dagManager: _dagManager);
   }
 
   void _handleSave() {
@@ -242,17 +340,32 @@ class _GeoDrawEditScreenState extends State<GeoDrawEditScreen> {
         ],
       ),
       body: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Tool Palette
-          ToolPalette(
+          GeoDrawSidePanel(
+            dagManager: _dagManager,
             toolManager: _toolManager,
+            selectedIds: _selectedIds,
+            onSelectionChanged: (newSelection) {
+              setState(() {
+                _selectedIds
+                  ..clear()
+                  ..addAll(newSelection);
+              });
+            },
             onToolSelected: (toolType) {
               setState(() {
                 _toolManager.selectTool(toolType);
               });
             },
+            onDeleteObject: (id) {
+              _handleDeleteObject(id);
+            },
+            cliExecutor: _commandExecutor,
+            aiService: _aiService,
+            aiAdapter: _aiAdapter,
+            onPromptConstructionComplete: () => setState(() {}),
           ),
-          // Main content area (Canvas only)
           Expanded(
             child: GeoDrawCanvas(
               dagManager: _dagManager,
@@ -260,41 +373,12 @@ class _GeoDrawEditScreenState extends State<GeoDrawEditScreen> {
               selectedIds: _selectedIds,
               onSelectionChanged: (newSelection) {
                 setState(() {
-                  _selectedIds.clear();
-                  _selectedIds.addAll(newSelection);
+                  _selectedIds
+                    ..clear()
+                    ..addAll(newSelection);
                 });
               },
               showGrid: true,
-            ),
-          ),
-          // Right sidebar: Object Browser + Unified Prompt (like chat)
-          SizedBox(
-            width: 300,
-            child: Column(
-              children: [
-                // Object Browser - DAG elements list (history at top)
-                Expanded(
-                  child: ObjectBrowser(
-                    dagManager: _dagManager,
-                    selectedIds: _selectedIds,
-                    onSelectionChanged: (newSelection) {
-                      setState(() {
-                        _selectedIds.clear();
-                        _selectedIds.addAll(newSelection);
-                      });
-                    },
-                  ),
-                ),
-                // Unified Prompt Panel - CLI/AI input (prompt at bottom)
-                UnifiedPromptPanel(
-                  dagManager: _dagManager,
-                  cliExecutor: _commandExecutor,
-                  aiService: _aiService,
-                  aiAdapter: AIAdapter(dagManager: _dagManager),
-                  onConstructionComplete: () => setState(() {}),
-                  height: 180,
-                ),
-              ],
             ),
           ),
         ],

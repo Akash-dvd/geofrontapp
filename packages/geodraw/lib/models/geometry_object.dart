@@ -174,13 +174,14 @@ abstract class SimpleGeometryObject extends GeometryObject {
   }
 }
 
-/// Base class for lists of simple geometry objects
-abstract class SimpleGeometryObjectList<T extends SimpleGeometryObject>
+/// Generates collections of simple geometry objects derived algebraically
+/// from other inputs (e.g. intersections, tangents).
+abstract class GenSimpleGeometryObjectList<T extends SimpleGeometryObject>
     extends GeometryObject {
   /// The objects in this list
   final List<T> objects;
 
-  SimpleGeometryObjectList({
+  GenSimpleGeometryObjectList({
     required super.id,
     required super.label,
     required super.dependencies,
@@ -232,116 +233,6 @@ abstract class SimpleGeometryObjectList<T extends SimpleGeometryObject>
   Map<String, dynamic> toJson() {
     final json = super.toJson();
     json['objects'] = objects.map((obj) => obj.toJson()).toList();
-    return json;
-  }
-}
-
-/// Base class for objects requiring boundary points + underlying simple object
-abstract class ComplexGeometryObject extends GeometryObject {
-  /// Starting boundary point
-  final String startPointId;
-
-  /// Ending boundary point
-  final String endPointId;
-
-  /// ID of the underlying simple object
-  final String underlyingObjectId;
-
-  ComplexGeometryObject({
-    required super.id,
-    required super.label,
-    required super.dependencies,
-    required this.startPointId,
-    required this.endPointId,
-    required this.underlyingObjectId,
-    super.visible,
-    super.styleOverrides,
-  });
-
-  /// Calculate the length of this object
-  double length();
-
-  @override
-  List<Object?> get props => [
-    ...super.props,
-    startPointId,
-    endPointId,
-    underlyingObjectId,
-  ];
-
-  @override
-  Map<String, dynamic> toJson() {
-    final json = super.toJson();
-    json['properties'] = {
-      'startPointId': startPointId,
-      'endPointId': endPointId,
-      'underlyingObjectId': underlyingObjectId,
-    };
-    return json;
-  }
-}
-
-/// Base class for collections forming composite shapes
-abstract class ComplexGeometryObjectList<T extends ComplexGeometryObject>
-    extends GeometryObject {
-  /// The elements in this list
-  final List<T> elements;
-
-  ComplexGeometryObjectList({
-    required super.id,
-    required super.label,
-    required super.dependencies,
-    required this.elements,
-    super.visible,
-    super.styleOverrides,
-  });
-
-  /// Number of vertices in this shape
-  int get vertexCount;
-
-  /// Calculate the area of this shape
-  double area();
-
-  /// Calculate the perimeter of this shape
-  double perimeter();
-
-  @override
-  void draw(Canvas canvas, Paint paint) {
-    for (final element in elements) {
-      element.draw(canvas, paint);
-    }
-  }
-
-  @override
-  bool contains(Offset position) {
-    return elements.any((element) => element.contains(position));
-  }
-
-  @override
-  Rect getBounds() {
-    if (elements.isEmpty) return Rect.zero;
-
-    return elements
-        .map((element) => element.getBounds())
-        .reduce((a, b) => a.expandToInclude(b));
-  }
-
-  @override
-  double distanceTo(Offset point) {
-    if (elements.isEmpty) return double.infinity;
-
-    return elements
-        .map((element) => element.distanceTo(point))
-        .reduce((a, b) => a < b ? a : b);
-  }
-
-  @override
-  List<Object?> get props => [...super.props, elements];
-
-  @override
-  Map<String, dynamic> toJson() {
-    final json = super.toJson();
-    json['elements'] = elements.map((element) => element.toJson()).toList();
     return json;
   }
 }

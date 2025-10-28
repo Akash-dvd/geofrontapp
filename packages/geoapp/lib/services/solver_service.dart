@@ -517,26 +517,29 @@ class ConstraintResult {
 
 class ConstructionStep {
   final int stepNumber;
-  final String command;
+  final String? command;
   final String description;
   final String? theoremApplied;
-  final String justification;
+  final String? justification;
 
   ConstructionStep({
     required this.stepNumber,
-    required this.command,
+    this.command,
     required this.description,
     this.theoremApplied,
-    required this.justification,
+    this.justification,
   });
 
   factory ConstructionStep.fromJson(Map<String, dynamic> json) {
+    final description = (json['description'] as String?)?.trim();
     return ConstructionStep(
       stepNumber: json['stepNumber'] as int,
-      command: json['command'] as String,
-      description: json['description'] as String,
-      theoremApplied: json['theoremApplied'] as String?,
-      justification: json['justification'] as String,
+      command: (json['command'] as String?)?.trim(),
+      description: description != null && description.isNotEmpty
+          ? description
+          : 'Solver step ${json['stepNumber']}',
+      theoremApplied: (json['theoremApplied'] as String?)?.trim(),
+      justification: (json['justification'] as String?)?.trim(),
     );
   }
 }

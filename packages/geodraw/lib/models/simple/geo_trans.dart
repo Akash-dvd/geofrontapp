@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:geocalc/Multivector.dart';
 
@@ -113,6 +115,61 @@ class GeoInverse extends GeoTrans {
       styleOverrides: styleOverrides,
     );
   }
+
+  @override
+  GeometryObject? rebuildFromParents(List<GeometryObject> parents) {
+    final parentsById = {for (final parent in parents) parent.id: parent};
+
+    Multivector? subjectMv;
+
+    for (final depId in dependencies) {
+      if (depId == centerPointId) {
+        continue;
+      }
+      final parent = parentsById[depId];
+      if (parent is SimpleGeometryObject) {
+        subjectMv = _subjectFromSimple(parent);
+        if (subjectMv != null) {
+          break;
+        }
+      }
+    }
+
+      if (subjectMv == null && centerPointId.isNotEmpty) {
+        final centerParent = parentsById[centerPointId];
+        if (centerParent is SimpleGeometryObject) {
+          final centerMv = centerParent.multivector;
+          if (centerMv.isPoint() && power > 0) {
+            final radius = math.sqrt(power);
+            final circleMv = constructCircleFromCenterAndRadius(
+              centerMv,
+              radius,
+            );
+            subjectMv = constructCircleReflectionOperator(circleMv);
+          }
+        }
+    }
+
+    if (subjectMv == null) {
+      return null;
+    }
+
+    return copyWith(multivector: subjectMv);
+  }
+
+  Multivector? _subjectFromSimple(SimpleGeometryObject subject) {
+    final subjectMv = subject.multivector;
+      if (subjectMv.isLine()) {
+      return constructLineReflectionOperator(subjectMv);
+    }
+    if (subjectMv.isCircle()) {
+      return constructCircleReflectionOperator(subjectMv);
+    }
+    if (subjectMv.isPoint()) {
+      return constructPointReflectionOperator(subjectMv);
+    }
+    return null;
+  }
 }
 
 /// Rotation transformation
@@ -193,6 +250,29 @@ class GeoRotate extends GeoTrans {
       styleOverrides: styleOverrides,
     );
   }
+
+  @override
+  GeometryObject? rebuildFromParents(List<GeometryObject> parents) {
+    final centerMv = _findPointMv(parents, centerPointId);
+    if (centerMv == null) {
+      return null;
+    }
+
+    final rotor = constructRotationOperator(centerMv, angle);
+    return copyWith(multivector: rotor);
+  }
+
+  Multivector? _findPointMv(List<GeometryObject> parents, String targetId) {
+    for (final parent in parents) {
+      if (parent is SimpleGeometryObject && parent.id == targetId) {
+        final mv = parent.multivector;
+        if (mv.isPoint()) {
+          return mv;
+        }
+      }
+    }
+    return null;
+  }
 }
 
 /// Dilation (scaling) transformation
@@ -272,6 +352,29 @@ class GeoDilate extends GeoTrans {
       visible: json['visible'] as bool? ?? true,
       styleOverrides: styleOverrides,
     );
+  }
+
+  @override
+  GeometryObject? rebuildFromParents(List<GeometryObject> parents) {
+    final centerMv = _findPointMv(parents, centerPointId);
+    if (centerMv == null) {
+      return null;
+    }
+
+    final dilator = constructDilationOperator(centerMv, factor);
+    return copyWith(multivector: dilator);
+  }
+
+  Multivector? _findPointMv(List<GeometryObject> parents, String targetId) {
+    for (final parent in parents) {
+      if (parent is SimpleGeometryObject && parent.id == targetId) {
+        final mv = parent.multivector;
+        if (mv.isPoint()) {
+          return mv;
+        }
+      }
+    }
+    return null;
   }
 }
 

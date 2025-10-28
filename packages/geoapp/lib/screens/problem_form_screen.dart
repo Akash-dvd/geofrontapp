@@ -1,7 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:geodraw/geodraw.dart';
@@ -13,11 +11,13 @@ import '../bloc/problem_state.dart';
 import '../config/build_flags.dart';
 import '../config/env_config.dart';
 import '../models/problem.dart';
+import '../models/solver_command_catalog.dart';
 import '../services/directus_file_service.dart';
 import '../services/supabase_file_service.dart';
 import '../utils/canvas_capture.dart';
 import '../services/app_services.dart';
 import '../services/solver_service.dart';
+import '../widgets/solver_command_editor.dart';
 
 /// Screen for creating and editing problems with a GeoDraw-first workflow.
 class ProblemFormScreen extends StatefulWidget {
@@ -45,6 +45,7 @@ class _ProblemFormScreenState extends State<ProblemFormScreen> {
   late ToolManager _toolManager;
   late UnifiedCLIExecutor _commandExecutor;
   late AIService _aiService;
+  late AIAdapter _aiAdapter;
   late SolverService _solverService;
   final Set<String> _selectedIds = {};
 
@@ -56,10 +57,6 @@ class _ProblemFormScreenState extends State<ProblemFormScreen> {
   bool _isSavingThumbnail = false;
   bool _isSolving = false;
   String? _thumbnailPendingDeletion;
-  double _paletteWidth = 330;
-  static const double _minPaletteWidth = 220;
-  static const double _paletteHandleWidth = 12;
-  static const double _minCanvasWidth = 360;
 
   String? _canonicalizeJsonString(String? raw) {
     if (raw == null) {
@@ -91,21 +88,51 @@ class _ProblemFormScreenState extends State<ProblemFormScreen> {
     ScaffoldMessenger.of(context).showSnackBar(snackBar);
   }
 
-  String? _stringifySolverPayload(dynamic value) {
-    if (value == null) {
-      return null;
+  Future<void> _handleDeleteObject(String id) async {
+    final node = _dagManager.getNode(id);
+    if (node == null) {
+      return;
     }
 
-    if (value is String) {
-      final trimmed = value.trim();
-      return trimmed.isEmpty ? null : trimmed;
+    final hasChildren = node.childIds.isNotEmpty;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(hasChildren ? 'Delete object and dependents?' : 'Delete object?'),
+        content: Text(
+          hasChildren
+              ? 'Removing this object will also delete ${node.childIds.length} dependent items. Continue?'
+              : 'Remove the selected object from the construction?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(dialogContext).colorScheme.error,
+              foregroundColor: Theme.of(dialogContext).colorScheme.onError,
+            ),
+            child: Text(hasChildren ? 'Delete all' : 'Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) {
+      return;
     }
 
     try {
-      const encoder = JsonEncoder.withIndent('  ');
-      return encoder.convert(value);
-    } catch (_) {
-      return value.toString();
+      setState(() {
+        _dagManager.deleteObject(id, cascade: hasChildren);
+        _selectedIds.remove(id);
+      });
+      _showSnack('Object deleted.');
+    } catch (error) {
+      _showSnack('Failed to delete object: $error', error: true);
     }
   }
 
@@ -144,6 +171,7 @@ class _ProblemFormScreenState extends State<ProblemFormScreen> {
     _aiService = AIService(
       config: AIServiceConfig.production(aiEndpoint),
     );
+    _aiAdapter = AIAdapter(dagManager: _dagManager);
 
     _solverService = SolverService(
       endpoint: BuildFlags.useDirectus ? null : EnvConfig.edgeSolverEndpoint,
@@ -279,64 +307,35 @@ class _ProblemFormScreenState extends State<ProblemFormScreen> {
   Widget _buildWorkspace() {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final showSidePanel = constraints.maxWidth > 960;
-        final sidePanelWidth = showSidePanel ? 320.0 : 280.0;
-
-        final maxPaletteSpace = constraints.maxWidth -
-            sidePanelWidth -
-            _paletteHandleWidth -
-            _minCanvasWidth;
-
-        final maxAllowedPaletteWidth = math.max(
-          _minPaletteWidth,
-          math.min(
-            constraints.maxWidth * 0.65,
-            maxPaletteSpace,
-          ),
-        );
-
-        final minAllowedPaletteWidth = math.min(
-          _minPaletteWidth,
-          maxAllowedPaletteWidth,
-        );
-
-        final clampedPaletteWidth = _paletteWidth.clamp(
-          minAllowedPaletteWidth,
-          maxAllowedPaletteWidth,
-        );
         final solutionSteps =
             _lastSolverResult?.solutionSteps ?? const <SolverSolutionStep>[];
-
-        if (clampedPaletteWidth != _paletteWidth) {
-          _paletteWidth = clampedPaletteWidth;
-        }
 
         return Row(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            SizedBox(
-              width: _paletteWidth,
-              child: ToolPalette(
-                toolManager: _toolManager,
-                onToolSelected: (tool) {
-                  setState(() {
-                    _toolManager.selectTool(tool);
-                  });
-                },
-              ),
-            ),
-            _PaletteResizeHandle(
-              width: _paletteHandleWidth,
-              onDrag: (delta) {
-                if (delta == 0) return;
+            GeoDrawSidePanel(
+              dagManager: _dagManager,
+              toolManager: _toolManager,
+              selectedIds: _selectedIds,
+              onSelectionChanged: (selection) {
                 setState(() {
-                  final newWidth = (_paletteWidth + delta).clamp(
-                    minAllowedPaletteWidth,
-                    maxAllowedPaletteWidth,
-                  );
-                  _paletteWidth = newWidth;
+                  _selectedIds
+                    ..clear()
+                    ..addAll(selection);
                 });
               },
+              onToolSelected: (tool) {
+                setState(() {
+                  _toolManager.selectTool(tool);
+                });
+              },
+              onDeleteObject: (id) {
+                _handleDeleteObject(id);
+              },
+              cliExecutor: _commandExecutor,
+              aiService: _aiService,
+              aiAdapter: _aiAdapter,
+              onPromptConstructionComplete: () => setState(() {}),
             ),
             Expanded(
               child: _CanvasAndSolutions(
@@ -351,48 +350,6 @@ class _ProblemFormScreenState extends State<ProblemFormScreen> {
                   });
                 },
                 solutionSteps: solutionSteps,
-              ),
-            ),
-            SizedBox(
-              width: sidePanelWidth,
-              child: Column(
-                children: [
-                  Expanded(
-                    child: ObjectBrowser(
-                      dagManager: _dagManager,
-                      selectedIds: _selectedIds,
-                      onSelectionChanged: (selection) {
-                        setState(() {
-                          _selectedIds
-                            ..clear()
-                            ..addAll(selection);
-                        });
-                      },
-                    ),
-                  ),
-                  if (_metadata != null) ...[
-                    const SizedBox(height: 12),
-                    _MetadataPreviewCard(
-                      metadata: _metadata,
-                      onEdit: _openMetadataSheet,
-                    ),
-                  ],
-                  if (_lastSolverResult != null) ...[
-                    const SizedBox(height: 12),
-                    _SolverResultCard(result: _lastSolverResult!),
-                  ],
-                  const SizedBox(height: 12),
-                  SizedBox(
-                    height: 130,
-                    child: UnifiedPromptPanel(
-                      dagManager: _dagManager,
-                      cliExecutor: _commandExecutor,
-                      aiService: _aiService,
-                      aiAdapter: AIAdapter(dagManager: _dagManager),
-                      onConstructionComplete: () => setState(() {}),
-                    ),
-                  ),
-                ],
               ),
             ),
           ],
@@ -618,6 +575,10 @@ class _ProblemFormScreenState extends State<ProblemFormScreen> {
       proofGoal: proofGoal,
     );
 
+    debugPrint('Solver response success=${result.success} '
+        'steps=${result.solutionSteps.length} '
+        'objectProof=${result.objectProof}');
+
     if (!mounted) {
       return result.success;
     }
@@ -634,13 +595,22 @@ class _ProblemFormScreenState extends State<ProblemFormScreen> {
       return false;
     }
 
+    final scalarProofSet =
+        SolverCommandSet.fromSolverPayload(result.scalarProof);
+    final objectProofSet =
+        SolverCommandSet.fromSolverPayload(result.objectProof);
+    final scalarProofJson = scalarProofSet.isNotEmpty
+        ? scalarProofSet.toJsonString(pretty: true)
+        : metadata.scalarProof;
+    final objectProofJson = objectProofSet.isNotEmpty
+        ? objectProofSet.toJsonString(pretty: true)
+        : metadata.objectProof;
+
     final updatedMetadata = metadata.copyWith(
       scalarConstraints: _canonicalizeJsonString(metadata.scalarConstraints),
       objectConstraints: _canonicalizeJsonString(metadata.objectConstraints),
-      scalarProof:
-          _stringifySolverPayload(result.scalarProof) ?? metadata.scalarProof,
-      objectProof:
-          _stringifySolverPayload(result.objectProof) ?? metadata.objectProof,
+      scalarProof: scalarProofJson,
+      objectProof: objectProofJson,
       proofGoal: proofGoal,
     );
 
@@ -697,6 +667,7 @@ class _ProblemFormScreenState extends State<ProblemFormScreen> {
           child: ProblemMetadataSheet(
             initial: _metadata,
             isEditing: widget.isEditing,
+            dagManager: _dagManager,
           ),
         );
       },
@@ -868,40 +839,6 @@ class _ProblemFormScreenState extends State<ProblemFormScreen> {
   }
 }
 
-class _PaletteResizeHandle extends StatelessWidget {
-  const _PaletteResizeHandle({required this.width, required this.onDrag});
-
-  final double width;
-  final ValueChanged<double> onDrag;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return MouseRegion(
-      cursor: SystemMouseCursors.resizeColumn,
-      child: GestureDetector(
-        behavior: HitTestBehavior.translucent,
-        onPanUpdate: (details) => onDrag(details.delta.dx),
-        child: Container(
-          width: width,
-          color: Colors.transparent,
-          child: Center(
-            child: Container(
-              width: 2,
-              height: 48,
-              decoration: BoxDecoration(
-                color: theme.dividerColor.withOpacity(0.8),
-                borderRadius: BorderRadius.circular(999),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 class ProblemMetadata {
   const ProblemMetadata({
     required this.title,
@@ -958,245 +895,6 @@ class ProblemMetadata {
       objectProof: objectProof ?? this.objectProof,
       proofGoal: proofGoal ?? this.proofGoal,
       autoRunSolverOnSave: autoRunSolverOnSave ?? this.autoRunSolverOnSave,
-    );
-  }
-}
-
-class _MetadataPreviewCard extends StatelessWidget {
-  const _MetadataPreviewCard({required this.metadata, required this.onEdit});
-
-  final ProblemMetadata? metadata;
-  final VoidCallback onEdit;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    if (metadata == null) {
-      return const SizedBox.shrink();
-    }
-
-    final solverChips = <Widget>[];
-    if (metadata!.scalarConstraints != null &&
-        metadata!.scalarConstraints!.isNotEmpty) {
-      solverChips.add(
-        const _ChipLabel(
-          icon: Icons.straighten_outlined,
-          label: 'Scalar constraints',
-        ),
-      );
-    }
-
-    if (metadata!.objectConstraints != null &&
-        metadata!.objectConstraints!.isNotEmpty) {
-      solverChips.add(
-        const _ChipLabel(
-          icon: Icons.all_out_outlined,
-          label: 'Object constraints',
-        ),
-      );
-    }
-
-    if (metadata!.autoRunSolverOnSave) {
-      solverChips.add(
-        const _ChipLabel(
-          icon: Icons.bolt_outlined,
-          label: 'Auto-run solver',
-        ),
-      );
-    }
-
-    return Card(
-      margin: EdgeInsets.zero,
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    metadata!.title,
-                    style: theme.textTheme.titleMedium,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-                IconButton(
-                  tooltip: 'Edit details',
-                  icon: const Icon(Icons.edit_outlined),
-                  onPressed: onEdit,
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Text(
-              metadata!.description,
-              style: theme.textTheme.bodyMedium,
-              maxLines: 4,
-              overflow: TextOverflow.ellipsis,
-            ),
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                _ChipLabel(
-                  icon: Icons.emoji_objects_outlined,
-                  label: metadata!.difficulty.displayName,
-                ),
-                _ChipLabel(
-                  icon: Icons.category_outlined,
-                  label: metadata!.category.displayName,
-                ),
-                _ChipLabel(
-                  icon: metadata!.status.isPublished
-                      ? Icons.public_outlined
-                      : Icons.lock_clock,
-                  label: metadata!.status.displayName,
-                ),
-              ],
-            ),
-            if (metadata!.proofGoal != null && metadata!.proofGoal!.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.only(top: 12),
-                child: Text(
-                  'Proof goal: ${metadata!.proofGoal}',
-                  style: theme.textTheme.bodySmall,
-                  maxLines: 3,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            if (solverChips.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.only(top: 12),
-                child: Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: solverChips,
-                ),
-              ),
-            if (metadata!.solution != null && metadata!.solution!.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.only(top: 12),
-                child: Text(
-                  metadata!.solution!,
-                  style: theme.textTheme.bodySmall,
-                  maxLines: 3,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            if (metadata!.scalarProof != null &&
-                metadata!.scalarProof!.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.only(top: 12),
-                child: Text(
-                  metadata!.scalarProof!,
-                  style: theme.textTheme.bodySmall,
-                  maxLines: 3,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            if (metadata!.objectProof != null &&
-                metadata!.objectProof!.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.only(top: 12),
-                child: Text(
-                  metadata!.objectProof!,
-                  style: theme.textTheme.bodySmall,
-                  maxLines: 3,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _ChipLabel extends StatelessWidget {
-  const _ChipLabel({required this.icon, required this.label});
-
-  final IconData icon;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Chip(
-      avatar: Icon(icon, size: 16),
-      label: Text(label),
-    );
-  }
-}
-
-class _SolverResultCard extends StatelessWidget {
-  const _SolverResultCard({required this.result});
-
-  final SolverResult result;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final success = result.success;
-    final satisfied = result.constraintResults
-        .where((constraint) => constraint.satisfied)
-        .length;
-    final total = result.constraintResults.length;
-    final computationTime = result.computationTime;
-
-    return Card(
-      margin: EdgeInsets.zero,
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(
-                  success ? Icons.check_circle_outline : Icons.error_outline,
-                  color: success
-                      ? theme.colorScheme.primary
-                      : theme.colorScheme.error,
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  success ? 'Solver succeeded' : 'Solver failed',
-                  style: theme.textTheme.titleMedium,
-                ),
-              ],
-            ),
-            if (total > 0)
-              Padding(
-                padding: const EdgeInsets.only(top: 8),
-                child: Text(
-                  'Constraints satisfied: $satisfied / $total',
-                  style: theme.textTheme.bodySmall,
-                ),
-              ),
-            if (!success && result.errorMessage != null)
-              Padding(
-                padding: const EdgeInsets.only(top: 8),
-                child: Text(
-                  result.errorMessage!,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.error,
-                  ),
-                ),
-              ),
-            if (computationTime != null)
-              Padding(
-                padding: const EdgeInsets.only(top: 8),
-                child: Text(
-                  'Computation time: ${computationTime.toStringAsFixed(1)} ms',
-                  style: theme.textTheme.bodySmall,
-                ),
-              ),
-          ],
-        ),
-      ),
     );
   }
 }
@@ -1276,10 +974,12 @@ class _SolutionStepsList extends StatefulWidget {
 
 class _SolutionStepsListState extends State<_SolutionStepsList> {
   late List<_SolutionStepPresentation> _presentations;
+  late final ScrollController _scrollController;
 
   @override
   void initState() {
     super.initState();
+    _scrollController = ScrollController();
     _presentations = _generatePresentations();
   }
 
@@ -1298,6 +998,7 @@ class _SolutionStepsListState extends State<_SolutionStepsList> {
     return widget.steps.map((step) {
       final geometry = step.geometryAsMap();
       if (geometry == null) {
+        debugPrint('Solver step ${step.description} missing geometry payload');
         return _SolutionStepPresentation(
           step: step,
           dagManager: DAGManager(),
@@ -1314,6 +1015,7 @@ class _SolutionStepsListState extends State<_SolutionStepsList> {
         );
       } catch (error) {
         debugPrint('Failed to decode solver solution: $error');
+        debugPrint('Raw geometry payload: $geometry');
         return _SolutionStepPresentation(
           step: step,
           dagManager: DAGManager(),
@@ -1330,8 +1032,10 @@ class _SolutionStepsListState extends State<_SolutionStepsList> {
     }
 
     return Scrollbar(
+      controller: _scrollController,
       thumbVisibility: true,
       child: ListView.builder(
+        controller: _scrollController,
         padding: const EdgeInsets.only(bottom: 16),
         physics: const ClampingScrollPhysics(),
         itemCount: _presentations.length,
@@ -1347,6 +1051,12 @@ class _SolutionStepsListState extends State<_SolutionStepsList> {
         },
       ),
     );
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
   }
 }
 
@@ -1493,11 +1203,16 @@ class _AuthStatusChip extends StatelessWidget {
 }
 
 class ProblemMetadataSheet extends StatefulWidget {
-  const ProblemMetadataSheet(
-      {super.key, this.initial, required this.isEditing});
+  const ProblemMetadataSheet({
+    super.key,
+    this.initial,
+    required this.isEditing,
+    required this.dagManager,
+  });
 
   final ProblemMetadata? initial;
   final bool isEditing;
+  final DAGManager dagManager;
 
   @override
   State<ProblemMetadataSheet> createState() => _ProblemMetadataSheetState();
@@ -1508,15 +1223,15 @@ class _ProblemMetadataSheetState extends State<ProblemMetadataSheet> {
   late final TextEditingController _titleController;
   late final TextEditingController _descriptionController;
   late final TextEditingController _solutionController;
-  late final TextEditingController _scalarConstraintsController;
-  late final TextEditingController _objectConstraintsController;
-  late final TextEditingController _scalarProofController;
-  late final TextEditingController _objectProofController;
   late final TextEditingController _proofGoalController;
   late ProblemDifficulty _difficulty;
   late ProblemCategory _category;
   late ProblemStatus _status;
   late bool _autoRunSolver;
+  late SolverCommandSet _scalarConstraintSet;
+  late SolverCommandSet _objectConstraintSet;
+  late SolverCommandSet _scalarProofSet;
+  late SolverCommandSet _objectProofSet;
 
   @override
   void initState() {
@@ -1526,20 +1241,20 @@ class _ProblemMetadataSheetState extends State<ProblemMetadataSheet> {
         TextEditingController(text: widget.initial?.description ?? '');
     _solutionController =
         TextEditingController(text: widget.initial?.solution ?? '');
-    _scalarConstraintsController = TextEditingController(
-      text: widget.initial?.scalarConstraints ?? '',
-    );
-    _objectConstraintsController = TextEditingController(
-      text: widget.initial?.objectConstraints ?? '',
-    );
-    _scalarProofController = TextEditingController(
-      text: widget.initial?.scalarProof ?? '',
-    );
-    _objectProofController = TextEditingController(
-      text: widget.initial?.objectProof ?? '',
-    );
     _proofGoalController = TextEditingController(
       text: widget.initial?.proofGoal ?? '',
+    );
+    _scalarConstraintSet = SolverCommandSet.fromJsonString(
+      widget.initial?.scalarConstraints,
+    );
+    _objectConstraintSet = SolverCommandSet.fromJsonString(
+      widget.initial?.objectConstraints,
+    );
+    _scalarProofSet = SolverCommandSet.fromJsonString(
+      widget.initial?.scalarProof,
+    );
+    _objectProofSet = SolverCommandSet.fromJsonString(
+      widget.initial?.objectProof,
     );
     _difficulty = widget.initial?.difficulty ?? ProblemDifficulty.beginner;
     _category = widget.initial?.category ?? ProblemCategory.geometry;
@@ -1552,10 +1267,6 @@ class _ProblemMetadataSheetState extends State<ProblemMetadataSheet> {
     _titleController.dispose();
     _descriptionController.dispose();
     _solutionController.dispose();
-    _scalarConstraintsController.dispose();
-    _objectConstraintsController.dispose();
-    _scalarProofController.dispose();
-    _objectProofController.dispose();
     _proofGoalController.dispose();
     super.dispose();
   }
@@ -1722,52 +1433,52 @@ class _ProblemMetadataSheetState extends State<ProblemMetadataSheet> {
                           ),
                         ),
                         const SizedBox(height: 16),
-                        TextFormField(
-                          controller: _scalarConstraintsController,
-                          minLines: 4,
-                          maxLines: 10,
-                          decoration: const InputDecoration(
-                            labelText: 'Scalar constraints (JSON)',
-                            hintText:
-                                '{ "distances": [{"id": "d1", "from": "A", "to": "B", "value": 5.0}] }',
-                          ),
-                          validator: _validateJsonField,
+                        SolverCommandListEditor(
+                          title: 'Scalar constraints',
+                          emptyLabel:
+                              'Define scalar relationships your solver should satisfy.',
+                          catalog: SolverCommandCatalog.scalarConstraints,
+                          value: _scalarConstraintSet,
+                          dagManager: widget.dagManager,
+                          onChanged: (set) {
+                            setState(() => _scalarConstraintSet = set);
+                          },
                         ),
                         const SizedBox(height: 16),
-                        TextFormField(
-                          controller: _objectConstraintsController,
-                          minLines: 4,
-                          maxLines: 10,
-                          decoration: const InputDecoration(
-                            labelText: 'Object constraints (JSON)',
-                            hintText:
-                                '{ "parallel": [{"id": "p1", "line1": "l1", "line2": "l2"}] }',
-                          ),
-                          validator: _validateJsonField,
+                        SolverCommandListEditor(
+                          title: 'Object constraints',
+                          emptyLabel:
+                              'Add geometric relationships between constructed objects.',
+                          catalog: SolverCommandCatalog.objectConstraints,
+                          value: _objectConstraintSet,
+                          dagManager: widget.dagManager,
+                          onChanged: (set) {
+                            setState(() => _objectConstraintSet = set);
+                          },
                         ),
                         const SizedBox(height: 16),
-                        TextFormField(
-                          controller: _scalarProofController,
-                          minLines: 3,
-                          maxLines: 8,
-                          decoration: const InputDecoration(
-                            labelText:
-                                'Scalar proof (markdown or JSON payload)',
-                            hintText:
-                                'Paste solver output or add notes for algebraic proof.',
-                          ),
+                        SolverCommandListEditor(
+                          title: 'Scalar proof goals',
+                          emptyLabel:
+                              'No scalar proof commands yet. Add one to guide the solver.',
+                          catalog: SolverCommandCatalog.scalarProofGoals,
+                          value: _scalarProofSet,
+                          dagManager: widget.dagManager,
+                          onChanged: (set) {
+                            setState(() => _scalarProofSet = set);
+                          },
                         ),
                         const SizedBox(height: 16),
-                        TextFormField(
-                          controller: _objectProofController,
-                          minLines: 3,
-                          maxLines: 8,
-                          decoration: const InputDecoration(
-                            labelText:
-                                'Geometric proof (markdown or JSON payload)',
-                            hintText:
-                                'Paste solver output or add notes for geometric proof.',
-                          ),
+                        SolverCommandListEditor(
+                          title: 'Object proof goals',
+                          emptyLabel:
+                              'No object proof commands yet. Add one to guide the solver.',
+                          catalog: SolverCommandCatalog.objectProofGoals,
+                          value: _objectProofSet,
+                          dagManager: widget.dagManager,
+                          onChanged: (set) {
+                            setState(() => _objectProofSet = set);
+                          },
                         ),
                         const SizedBox(height: 12),
                         SwitchListTile.adaptive(
@@ -1810,34 +1521,6 @@ class _ProblemMetadataSheetState extends State<ProblemMetadataSheet> {
     );
   }
 
-  String? _validateJsonField(String? value) {
-    final trimmed = value?.trim() ?? '';
-    if (trimmed.isEmpty) {
-      return null;
-    }
-
-    try {
-      jsonDecode(trimmed);
-      return null;
-    } catch (error) {
-      if (error is FormatException) {
-        return 'Invalid JSON: ${error.message}';
-      }
-      return 'Invalid JSON: $error';
-    }
-  }
-
-  String? _normalizeJsonOrNull(String text) {
-    final trimmed = text.trim();
-    if (trimmed.isEmpty) {
-      return null;
-    }
-
-    final decoded = jsonDecode(trimmed);
-    const encoder = JsonEncoder.withIndent('  ');
-    return encoder.convert(decoded);
-  }
-
   String? _trimToNull(String text) {
     final trimmed = text.trim();
     if (trimmed.isEmpty) {
@@ -1851,19 +1534,12 @@ class _ProblemMetadataSheetState extends State<ProblemMetadataSheet> {
       return;
     }
 
-    String? scalarConstraints;
-    String? objectConstraints;
-    try {
-      scalarConstraints =
-          _normalizeJsonOrNull(_scalarConstraintsController.text);
-      objectConstraints =
-          _normalizeJsonOrNull(_objectConstraintsController.text);
-    } catch (error) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to normalize JSON: $error')),
-      );
-      return;
-    }
+    final scalarConstraintsJson =
+        _scalarConstraintSet.toJsonString(pretty: true);
+    final objectConstraintsJson =
+        _objectConstraintSet.toJsonString(pretty: true);
+    final scalarProofJson = _scalarProofSet.toJsonString(pretty: true);
+    final objectProofJson = _objectProofSet.toJsonString(pretty: true);
 
     final metadata = ProblemMetadata(
       title: _titleController.text.trim(),
@@ -1874,10 +1550,10 @@ class _ProblemMetadataSheetState extends State<ProblemMetadataSheet> {
       solution: _solutionController.text.trim().isEmpty
           ? null
           : _solutionController.text.trim(),
-      scalarConstraints: scalarConstraints,
-      objectConstraints: objectConstraints,
-      scalarProof: _trimToNull(_scalarProofController.text),
-      objectProof: _trimToNull(_objectProofController.text),
+      scalarConstraints: scalarConstraintsJson,
+      objectConstraints: objectConstraintsJson,
+      scalarProof: scalarProofJson,
+      objectProof: objectProofJson,
       proofGoal: _trimToNull(_proofGoalController.text),
       autoRunSolverOnSave: _autoRunSolver,
     );

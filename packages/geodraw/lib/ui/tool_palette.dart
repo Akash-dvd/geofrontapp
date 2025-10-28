@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 
 import '../tools/tool.dart';
 import '../tools/tool_catalog.dart';
@@ -9,12 +10,14 @@ class ToolPalette extends StatefulWidget {
   final ToolManager toolManager;
   final ValueChanged<ToolType> onToolSelected;
   final Axis direction;
+  final bool embedded;
 
   const ToolPalette({
     super.key,
     required this.toolManager,
     required this.onToolSelected,
     this.direction = Axis.vertical,
+    this.embedded = false,
   });
 
   @override
@@ -73,15 +76,21 @@ class _ToolPaletteState extends State<ToolPalette> {
 
     final Color background = theme.colorScheme.surfaceContainerHighest.withOpacity(0.92);
 
+    final Widget content = ConstrainedBox(
+      constraints: isHorizontal
+          ? const BoxConstraints(minHeight: 180)
+          : const BoxConstraints(minWidth: 220),
+      child: scrollable,
+    );
+
+    if (widget.embedded) {
+      return content;
+    }
+
     return Material(
       elevation: 4,
       color: background,
-      child: ConstrainedBox(
-        constraints: isHorizontal
-            ? const BoxConstraints(minHeight: 180)
-            : const BoxConstraints(minWidth: 220),
-        child: scrollable,
-      ),
+      child: content,
     );
   }
 }
@@ -94,7 +103,7 @@ class _LevelSelector extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final labels = ['Level 1', 'Level 2', 'Level 3'];
+    final labels = ['L 1', 'L 2', 'L 3'];
     final selectedIndex = selectedLevel.index;
     return ToggleButtons(
       isSelected: List.generate(
@@ -221,6 +230,22 @@ class _ToolButton extends StatelessWidget {
     required this.onPressed,
   });
 
+  Widget _buildIcon(Color color) {
+    if (entry.assetIcon != null) {
+      return SvgPicture.asset(
+        entry.assetIcon!,
+        package: 'geodraw',
+        colorFilter: ColorFilter.mode(color, BlendMode.srcIn),
+        width: 26,
+        height: 26,
+      );
+    }
+    if (entry.icon != null) {
+      return Icon(entry.icon, size: 26, color: color);
+    }
+    return const SizedBox.shrink();
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -285,7 +310,7 @@ class _ToolButton extends StatelessWidget {
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(color: borderColor, width: 1.1),
                   ),
-                  child: Icon(entry.icon, size: 26, color: iconColor),
+                  child: Center(child: _buildIcon(iconColor)),
                 ),
                 const SizedBox(height: 6),
                 AnimatedDefaultTextStyle(

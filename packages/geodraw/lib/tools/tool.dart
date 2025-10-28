@@ -10,10 +10,12 @@ enum ToolType {
   line,
   circle,
   circleThreePoints,
+  arcThreePoints,
   midpoint,
   perpendicular,
   parallel,
   perpBisector,
+  tangent,
   intersection,
   text,
 }

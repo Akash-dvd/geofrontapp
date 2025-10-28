@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'dart:math' as math;
+import 'package:geocalc/Multivector.dart';
 
 import '../canvas_style.dart';
 import '../canvas_style_defaults.dart';
@@ -7,9 +7,11 @@ import '../geometry_object.dart';
 import '../simple/geo_point.dart';
 import '../simple/geo_line.dart';
 import '../simple/geo_circle.dart';
+import '../simple/geo_transformed_simple.dart';
+import 'simple_list_utils.dart';
 
 /// List of intersection points between two objects
-class GeoIntersection extends SimpleGeometryObjectList<GeoPoint> {
+class GeoIntersection extends GenSimpleGeometryObjectList<GeoPoint> {
   GeoIntersection({
     required super.id,
     required super.label,
@@ -24,7 +26,7 @@ class GeoIntersection extends SimpleGeometryObjectList<GeoPoint> {
          'Intersection requires exactly 2 object dependencies',
        ),
        super(
-         styleOverrides: _styleOverridesForType(
+         styleOverrides: styleOverridesForType(
            type: GeoIntersection,
            style: style,
            overrides: styleOverrides,
@@ -35,7 +37,46 @@ class GeoIntersection extends SimpleGeometryObjectList<GeoPoint> {
   @override
   String get type => 'intersection';
 
-  /// Calculate intersection between line and line
+  @override
+  Map<String, dynamic> toJson() {
+    final json = super.toJson();
+    json['properties'] = {'count': objects.length};
+    return json;
+  }
+
+  static GeoIntersection fromJson(Map<String, dynamic> json) {
+    final deps = (json['dependencies'] as List?)?.cast<String>() ?? const [];
+    final objectsJson = (json['objects'] as List?) ?? const [];
+    final points = <GeoPoint>[];
+
+    for (final entry in objectsJson) {
+      final map = castJsonObject(entry);
+      if (map == null) {
+        continue;
+      }
+      final point = _decodePoint(map);
+      if (point != null) {
+        points.add(point);
+      }
+    }
+
+    final defaults = CanvasStyleDefaults.instance.resolveForType(
+      GeoIntersection,
+    );
+    final overrides = styleOverridesFromJson(json);
+
+    return GeoIntersection(
+      id: json['id'] as String,
+      label: (json['label'] as String?) ?? '',
+      dependencies: deps,
+      objects: points,
+      visible: json['visible'] as bool? ?? true,
+      color: defaults.strokeColor,
+      styleOverrides: overrides,
+    );
+  }
+
+  /// Calculate intersection between line and line using multivector algebra.
   static GeoIntersection? lineLine({
     required String id,
     required String label,
@@ -44,27 +85,32 @@ class GeoIntersection extends SimpleGeometryObjectList<GeoPoint> {
     Color color = Colors.orange,
     bool visible = true,
   }) {
-    // Solve system: a1*x + b1*y + c1 = 0, a2*x + b2*y + c2 = 0
-    final det = line1.a * line2.b - line1.b * line2.a;
-
-    if (det.abs() < 0.001) {
-      // Lines are parallel
+    final wedge = line1.multivector ^ line2.multivector;
+    if (wedge.isZero()) {
       return null;
     }
 
-    final x = (line1.b * line2.c - line2.b * line1.c) / det;
-    final y = (line2.a * line1.c - line1.a * line2.c) / det;
+    final intersectionMv = constructLineLineIntersection(
+      line1.multivector,
+      line2.multivector,
+    );
 
-    final point = GeoPointer(
-      id: '${id}_0',
+    if (!isPointOnLine(intersectionMv, line1.multivector) ||
+        !isPointOnLine(intersectionMv, line2.multivector)) {
+      return null;
+    }
+
+    if (!_isFinitePoint(intersectionMv)) {
+      return null;
+    }
+
+    final point = _pointFromMultivector(
+      idSeed: id,
+      index: 0,
       label: label,
-      x: x,
-      y: y,
+      multivector: intersectionMv,
+      color: color,
       visible: visible,
-      styleOverrides: _styleOverridesForType(
-        type: GeoPointer,
-        fallbackColor: color,
-      ),
     );
 
     return GeoIntersection(
@@ -77,7 +123,7 @@ class GeoIntersection extends SimpleGeometryObjectList<GeoPoint> {
     );
   }
 
-  /// Calculate intersection between line and circle
+  /// Calculate intersection between line and circle using multivector algebra.
   static GeoIntersection lineCircle({
     required String id,
     required String label,
@@ -86,12 +132,38 @@ class GeoIntersection extends SimpleGeometryObjectList<GeoPoint> {
     Color color = Colors.orange,
     bool visible = true,
   }) {
-    // Substitute line equation into circle equation
-    // This is a simplified placeholder
+    final intersections = constructLineCircleIntersection(
+      line.multivector,
+      circle.multivector,
+    );
+
     final points = <GeoPoint>[];
 
-    // Complex calculation would go here
-    // For now, return empty intersection
+    for (final candidate in intersections) {
+      if (!_isFinitePoint(candidate)) {
+        continue;
+      }
+      if (!isPointOnLine(candidate, line.multivector) ||
+          !isPointOnCircle(candidate, circle.multivector)) {
+        continue;
+      }
+      if (_containsPoint(points, candidate)) {
+        continue;
+      }
+      final displayLabel = intersections.length == 1
+          ? label
+          : '${label}_${points.length + 1}';
+      points.add(
+        _pointFromMultivector(
+          idSeed: id,
+          index: points.length,
+          label: displayLabel,
+          multivector: candidate,
+          color: color,
+          visible: visible,
+        ),
+      );
+    }
 
     return GeoIntersection(
       id: id,
@@ -103,7 +175,7 @@ class GeoIntersection extends SimpleGeometryObjectList<GeoPoint> {
     );
   }
 
-  /// Calculate intersection between circle and circle
+  /// Calculate intersection between circle and circle using multivector algebra.
   static GeoIntersection circleCircle({
     required String id,
     required String label,
@@ -112,69 +184,35 @@ class GeoIntersection extends SimpleGeometryObjectList<GeoPoint> {
     Color color = Colors.orange,
     bool visible = true,
   }) {
-    final points = <GeoPoint>[];
-
-    final dx = circle2.centerX - circle1.centerX;
-    final dy = circle2.centerY - circle1.centerY;
-    final d = math.sqrt(dx * dx + dy * dy);
-
-    // Check if circles intersect
-    if (d > circle1.radius + circle2.radius ||
-        d < (circle1.radius - circle2.radius).abs() ||
-        d < 0.001) {
-      // No intersection
-      return GeoIntersection(
-        id: id,
-        label: label,
-        dependencies: [circle1.id, circle2.id],
-        objects: points,
-        color: color,
-        visible: visible,
-      );
-    }
-
-    // Calculate intersection points
-    final a =
-        (circle1.radius * circle1.radius -
-            circle2.radius * circle2.radius +
-            d * d) /
-        (2 * d);
-    final h = math.sqrt(circle1.radius * circle1.radius - a * a);
-
-    final px = circle1.centerX + a * dx / d;
-    final py = circle1.centerY + a * dy / d;
-
-    final x1 = px + h * dy / d;
-    final y1 = py - h * dx / d;
-    final x2 = px - h * dy / d;
-    final y2 = py + h * dx / d;
-
-    points.add(
-      GeoPointer(
-        id: '${id}_0',
-        label: '${label}_1',
-        x: x1,
-        y: y1,
-        visible: visible,
-        styleOverrides: _styleOverridesForType(
-          type: GeoPointer,
-          fallbackColor: color,
-        ),
-      ),
+    final intersections = constructCircleCircleIntersection(
+      circle1.multivector,
+      circle2.multivector,
     );
 
-    if (h.abs() > 0.001) {
+    final points = <GeoPoint>[];
+
+    for (final candidate in intersections) {
+      if (!_isFinitePoint(candidate)) {
+        continue;
+      }
+      if (!isPointOnCircle(candidate, circle1.multivector) ||
+          !isPointOnCircle(candidate, circle2.multivector)) {
+        continue;
+      }
+      if (_containsPoint(points, candidate)) {
+        continue;
+      }
+      final displayLabel = intersections.length == 1
+          ? label
+          : '${label}_${points.length + 1}';
       points.add(
-        GeoPointer(
-          id: '${id}_1',
-          label: '${label}_2',
-          x: x2,
-          y: y2,
+        _pointFromMultivector(
+          idSeed: id,
+          index: points.length,
+          label: displayLabel,
+          multivector: candidate,
+          color: color,
           visible: visible,
-          styleOverrides: _styleOverridesForType(
-            type: GeoPointer,
-            fallbackColor: color,
-          ),
         ),
       );
     }
@@ -203,12 +241,9 @@ class GeoIntersection extends SimpleGeometryObjectList<GeoPoint> {
     final candidateOverrides =
         styleOverrides ??
         (style != null
-            ? _styleOverridesForType(type: GeoIntersection, style: style)
+            ? styleOverridesForType(type: GeoIntersection, style: style)
             : color != null
-            ? _styleOverridesForType(
-                type: GeoIntersection,
-                fallbackColor: color,
-              )
+            ? styleOverridesForType(type: GeoIntersection, fallbackColor: color)
             : null);
     final resolvedOverrides = candidateOverrides ?? this.styleOverrides;
     return GeoIntersection(
@@ -222,87 +257,54 @@ class GeoIntersection extends SimpleGeometryObjectList<GeoPoint> {
   }
 }
 
-/// List of tangent lines from a point to a circle or between circles
-class GeoTangent extends SimpleGeometryObjectList<GeoLine> {
-  GeoTangent({
-    required super.id,
-    required super.label,
-    required super.dependencies,
-    required super.objects,
-    Color color = Colors.pink,
-    super.visible,
-    CanvasStyle? style,
-    Map<String, dynamic>? styleOverrides,
-  }) : super(
-         styleOverrides: _styleOverridesForType(
-           type: GeoTangent,
-           style: style,
-           overrides: styleOverrides,
-           fallbackColor: color,
-         ),
-       );
+const double _intersectionTolerance = 1e-8;
 
-  @override
-  String get type => 'tangent';
-
-  @override
-  GeoTangent copyWith({
-    String? id,
-    String? label,
-    List<String>? dependencies,
-    List<GeoLine>? objects,
-    Color? color,
-    bool? visible,
-    CanvasStyle? style,
-    Map<String, dynamic>? styleOverrides,
-  }) {
-    final candidateOverrides =
-        styleOverrides ??
-        (style != null
-            ? _styleOverridesForType(type: GeoTangent, style: style)
-            : color != null
-            ? _styleOverridesForType(type: GeoTangent, fallbackColor: color)
-            : null);
-    final resolvedOverrides = candidateOverrides ?? this.styleOverrides;
-    return GeoTangent(
-      id: id ?? this.id,
-      label: label ?? this.label,
-      dependencies: dependencies ?? this.dependencies,
-      objects: objects ?? this.objects,
-      visible: visible ?? this.visible,
-      styleOverrides: resolvedOverrides,
-    );
-  }
+GeoPointer _pointFromMultivector({
+  required String idSeed,
+  required int index,
+  required String label,
+  required Multivector multivector,
+  required Color color,
+  required bool visible,
+}) {
+  return GeoPointer(
+    id: '${idSeed}_$index',
+    label: label,
+    x: multivector.e1,
+    y: multivector.e2,
+    visible: visible,
+    styleOverrides: styleOverridesForType(
+      type: GeoPointer,
+      fallbackColor: color,
+    ),
+  );
 }
 
-Map<String, dynamic>? _styleOverridesForType({
-  required Type type,
-  CanvasStyle? style,
-  Map<String, dynamic>? overrides,
-  Color? fallbackColor,
-}) {
-  if (overrides != null) {
-    return Map<String, dynamic>.unmodifiable(overrides);
-  }
+bool _isFinitePoint(Multivector multivector) {
+  return multivector.e1.isFinite && multivector.e2.isFinite;
+}
 
-  if (style != null) {
-    final defaults = CanvasStyleDefaults.instance.resolveForType(type);
-    final diff = style.diff(defaults);
-    if (diff.isEmpty) {
-      return null;
+bool _containsPoint(List<GeoPoint> points, Multivector candidate) {
+  for (final point in points) {
+    if ((point.x - candidate.e1).abs() <= _intersectionTolerance &&
+        (point.y - candidate.e2).abs() <= _intersectionTolerance) {
+      return true;
     }
-    return Map<String, dynamic>.unmodifiable(diff);
   }
+  return false;
+}
 
-  if (fallbackColor != null) {
-    final defaults = CanvasStyleDefaults.instance.resolveForType(type);
-    if (fallbackColor.value == defaults.strokeColor.value) {
+GeoPoint? _decodePoint(Map<String, dynamic> json) {
+  switch (json['type'] as String?) {
+    case 'GeoPointer':
+      return GeoPointer.fromJson(json);
+    case 'GeoMidpoint':
+      return GeoMidpoint.fromJson(json);
+    case 'GeoInvPoint':
+      return GeoTransPoint.fromJson(json);
+    case 'GeoTransPoint':
+      return GeoTransPoint.fromJson(json);
+    default:
       return null;
-    }
-    return Map<String, dynamic>.unmodifiable({
-      'strokeColor': CanvasStyle.colorToHex(fallbackColor),
-    });
   }
-
-  return null;
 }

@@ -1,6 +1,6 @@
 from api import app
 from ariadne import load_schema_from_path, make_executable_schema, \
-  graphql_sync, snake_case_fallback_resolvers, ObjectType, ScalarType
+  graphql_sync, ObjectType, ScalarType
 from ariadne.explorer import ExplorerGraphiQL
 # from ariadne.constants import PLAYGROUND_HTML
 from flask import request, jsonify
@@ -26,9 +26,7 @@ def parse_json(value):
   return value
 
 type_defs = load_schema_from_path("schema.graphql")
-schema = make_executable_schema(
-  type_defs, query, mutation, json_scalar, snake_case_fallback_resolvers
-)
+schema = make_executable_schema(type_defs, query, mutation, json_scalar)
 
 explorer_html = ExplorerGraphiQL().html(None)
 @app.route("/graphql", methods=["GET"])

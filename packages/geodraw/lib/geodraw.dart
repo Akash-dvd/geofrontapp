@@ -14,12 +14,17 @@ export 'models/simple/geo_point.dart';
 export 'models/simple/geo_line.dart';
 export 'models/simple/geo_circle.dart';
 export 'models/simple/geo_trans.dart';
+export 'models/simple/geo_transformed_simple.dart';
 
 // Simple geometry object lists
 export 'models/simple_lists/geo_intersection.dart';
+export 'models/simple_lists/geo_tangent.dart';
 
 // Complex geometry objects
+export 'models/complex/complex_geometry_object.dart';
 export 'models/complex/geo_shapes.dart';
+export 'models/complex/geo_shapes_list.dart';
+export 'models/complex/geo_transformed_complex.dart';
 
 // DAG system
 export 'core/dag/dag_node.dart';
@@ -27,10 +32,10 @@ export 'core/dag/dag_manager.dart';
 
 // UI components
 export 'ui/geodraw_canvas.dart';
+export 'ui/geodraw_side_panel.dart';
 export 'ui/tool_palette.dart';
 export 'ui/object_browser.dart';
-export 'ui/unified_prompt_panel.dart'
-    hide CommandParser; // Has internal CommandParser helper
+export 'ui/unified_prompt_panel.dart';
 
 // Codec system
 export 'codec/json_codec.dart';

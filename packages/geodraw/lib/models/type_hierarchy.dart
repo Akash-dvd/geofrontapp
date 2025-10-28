@@ -8,9 +8,14 @@ import 'geometry_object.dart';
 import 'simple/geo_circle.dart';
 import 'simple/geo_line.dart';
 import 'simple/geo_point.dart';
+import 'simple/geo_transformed_simple.dart';
 import 'simple/geo_trans.dart';
 import 'simple_lists/geo_intersection.dart';
+import 'simple_lists/geo_tangent.dart';
 import 'complex/geo_shapes.dart';
+import 'complex/complex_geometry_object.dart';
+import 'complex/geo_shapes_list.dart';
+import 'complex/geo_transformed_complex.dart';
 import 'text/canvas_text.dart';
 
 /// Maintains runtime type relationships for canvas objects.
@@ -35,15 +40,17 @@ class TypeHierarchy {
     _registerType(GeometryObject, {CanvasObject});
     _registerType(CanvasText, {CanvasObject});
     _registerType(SimpleGeometryObject, {GeometryObject});
-    _registerType(SimpleGeometryObjectList, {GeometryObject});
+    _registerType(GenSimpleGeometryObjectList, {GeometryObject});
     _registerType(ComplexGeometryObject, {GeometryObject});
-    _registerType(ComplexGeometryObjectList, {GeometryObject});
+    _registerType(UnionGeometryObjectList, {GeometryObject});
+    _registerType(UnionComplexObjectList, {UnionGeometryObjectList});
+    _registerType(RecursiveUnionGeo, {GeometryObject});
 
     // Point family
     _registerType(GeoPoint, {SimpleGeometryObject});
     _registerType(GeoPointer, {GeoPoint});
     _registerType(GeoMidpoint, {GeoPoint});
-    _registerType(GeoInvPoint, {GeoPoint});
+    _registerType(GeoTransPoint, {GeoPoint});
 
     // Line family
     _registerType(GeoLine, {SimpleGeometryObject});
@@ -56,22 +63,36 @@ class TypeHierarchy {
     _registerType(GeoCircle, {SimpleGeometryObject});
     _registerType(GeoCircle2P, {GeoCircle});
     _registerType(GeoCircle3P, {GeoCircle});
-    _registerType(GeoInvCircle, {GeoCircle});
+    _registerType(GeoTransCircle, {GeoCircle});
 
     // Transformation family
     _registerType(GeoTrans, {SimpleGeometryObject});
     _registerType(GeoInverse, {GeoTrans});
     _registerType(GeoRotate, {GeoTrans});
     _registerType(GeoDilate, {GeoTrans});
+    _registerType(GeoTransLine, {GeoLine});
+    _registerType(GeoTransSegment, {GeoSegment});
+    _registerType(GeoTransArc, {GeoArc});
+    _registerType(GeoTransUnionGeometryObjectList, {UnionGeometryObjectList});
 
     // Simple geometry lists
-    _registerType(GeoIntersection, {SimpleGeometryObjectList});
-    _registerType(GeoTangent, {SimpleGeometryObjectList});
+    _registerType(GeoIntersection, {GenSimpleGeometryObjectList});
+    _registerType(GeoTangent, {GenSimpleGeometryObjectList});
 
     // Complex geometry
+    _registerType(GeoArc, {ComplexGeometryObject});
+    _registerType(GeoArc3P, {GeoArc});
     _registerType(GeoSegment, {ComplexGeometryObject});
-    _registerType(GeoTriangle, {ComplexGeometryObjectList});
-    _registerType(GeoPolygon, {ComplexGeometryObjectList});
+    _registerType(GeoSegment2P, {GeoSegment});
+    _registerType(GeoPolyArcBase, {UnionComplexObjectList});
+    _registerType(GeoPolyArc, {GeoPolyArcBase});
+    _registerType(GeoPolyArcGon, {GeoPolyArcBase});
+    _registerType(GeoPolyLine, {GeoPolyArcBase});
+    _registerType(GeoPolygon, {GeoPolyArcGon});
+    _registerType(GeoTriangle, {GeoPolygon});
+    _registerType(GeoRegularPolygon, {GeoPolygon});
+    _registerType(GeoRegularPolygon2P, {GeoRegularPolygon});
+    _registerType(GeoRegularPolygonSegment, {GeoRegularPolygon});
   }
 
   /// Register a runtime type and its direct parents.
