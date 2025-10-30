@@ -11,6 +11,10 @@ enum ToolType {
   circle,
   circleThreePoints,
   arcThreePoints,
+  polyArc,
+  polygon,
+  polyLine,
+  polyArcGon,
   midpoint,
   perpendicular,
   parallel,
@@ -18,6 +22,12 @@ enum ToolType {
   tangent,
   intersection,
   text,
+  reflectLine,
+  reflectPoint,
+  reflectCircle,
+  rotate,
+  translate,
+  dilate,
 }
 
 /// Abstract base class for all construction tools

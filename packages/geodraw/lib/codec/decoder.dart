@@ -14,6 +14,7 @@ import '../models/complex/geo_transformed_complex.dart';
 import '../models/simple_lists/geo_intersection.dart';
 import '../models/simple_lists/geo_tangent.dart';
 import '../models/complex/geo_shapes.dart';
+import '../models/complex/geo_shapes_list.dart';
 
 /// Decodes JSON format back to geometry objects and DAG
 ///
@@ -66,6 +67,35 @@ class GeoDrawDecoder {
       json,
       (id) => _resolvePoint(dagManager, 'GeoArc3P', id),
     ),
+    'polyArc': (json, dagManager) => GeoPolyArc.fromJson(
+      json,
+      (id) => _resolvePoint(dagManager, 'GeoPolyArc', id),
+    ),
+    'polyArcGon': (json, dagManager) => GeoPolyArcGon.fromJson(
+      json,
+      (id) => _resolvePoint(dagManager, 'GeoPolyArcGon', id),
+    ),
+    'polyLine': (json, dagManager) => GeoPolyLine.fromJson(
+      json,
+      (id) => _resolvePoint(dagManager, 'GeoPolyLine', id),
+    ),
+    'polygon': (json, dagManager) => GeoPolygon.fromJson(
+      json,
+      (id) => _resolvePoint(dagManager, 'GeoPolygon', id),
+    ),
+    'triangle': (json, dagManager) => GeoTriangle.fromJson(
+      json,
+      (id) => _resolvePoint(dagManager, 'GeoTriangle', id),
+    ),
+    'regularPolygonCenter': (json, dagManager) => GeoRegularPolygon2P.fromJson(
+      json,
+      (id) => _resolvePoint(dagManager, 'GeoRegularPolygon2P', id),
+    ),
+    'regularPolygonSegment': (json, dagManager) =>
+        GeoRegularPolygonSegment.fromJson(
+          json,
+          (id) => _resolveSegment(dagManager, 'GeoRegularPolygonSegment', id),
+        ),
 
     // Simple geometry lists
     'GeoIntersection': (json, _) => GeoIntersection.fromJson(json),
@@ -222,6 +252,18 @@ class GeoDrawDecoder {
       return object;
     }
     throw StateError('$ownerType dependency $dependencyId is not a point');
+  }
+
+  static GeoSegment2P _resolveSegment(
+    dag.DAGManager dagManager,
+    String ownerType,
+    String dependencyId,
+  ) {
+    final object = dagManager.getObject(dependencyId);
+    if (object is GeoSegment2P) {
+      return object;
+    }
+    throw StateError('$ownerType dependency $dependencyId is not a segment');
   }
 }
 

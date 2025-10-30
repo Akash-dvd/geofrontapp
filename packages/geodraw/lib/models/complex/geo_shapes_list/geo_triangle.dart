@@ -11,20 +11,20 @@ class GeoTriangle extends GeoPolygon {
     Color color = Colors.purple,
     List<String>? dependencies,
   }) : super._fromChain(
-          id: id,
-          label: label,
-          chain: _prepareClosedChain(
-            id,
-            label,
-            _validateTriangle(points),
-            color,
-          ),
-          visible: visible,
-          style: style,
-          styleOverrides: styleOverrides,
-          color: color,
-          dependencyIds: dependencies,
-        );
+         id: id,
+         label: label,
+         chain: _prepareClosedChain(
+           id,
+           label,
+           _validateTriangle(points),
+           color,
+         ),
+         visible: visible,
+         style: style,
+         styleOverrides: styleOverrides,
+         color: color,
+         dependencyIds: dependencies,
+       );
 
   static List<GeoPoint> _validateTriangle(List<GeoPoint> points) {
     final unique = <String, GeoPoint>{};
@@ -61,14 +61,12 @@ class GeoTriangle extends GeoPolygon {
         (style != null
             ? _shapeStyleOverrides(type: GeoTriangle, style: style)
             : color != null
-                ? _shapeStyleOverrides(
-                    type: GeoTriangle,
-                    fallbackColor: color,
-                  )
-                : null);
+            ? _shapeStyleOverrides(type: GeoTriangle, fallbackColor: color)
+            : null);
     final resolvedOverrides = candidateOverrides ?? this.styleOverrides;
 
-    final nextPoints = points ??
+    final nextPoints =
+        points ??
         (elements != null ? _segmentsToVertices(elements) : uniqueVertices);
 
     return GeoTriangle(
@@ -80,6 +78,34 @@ class GeoTriangle extends GeoPolygon {
       styleOverrides: resolvedOverrides,
       color: color ?? Colors.purple,
       dependencies: dependencies ?? this.dependencies,
+    );
+  }
+
+  static GeoTriangle fromJson(
+    Map<String, dynamic> json,
+    GeoPoint Function(String id) resolvePoint,
+  ) {
+    final props = (json['properties'] as Map<String, dynamic>? ?? const {});
+    final orderedIds =
+        (props['pointOrder'] as List?)?.cast<String>() ??
+        (json['dependencies'] as List?)?.cast<String>() ??
+        const <String>[];
+
+    if (orderedIds.length < 3) {
+      throw FormatException('GeoTriangle requires three point references');
+    }
+
+    final points = orderedIds.map(resolvePoint).toList(growable: false);
+    final overrides = GeometryObject.extractStyleOverrides(json);
+
+    return GeoTriangle(
+      id: json['id'] as String,
+      label: json['label'] as String? ?? '',
+      points: points,
+      visible: json['visible'] as bool? ?? true,
+      styleOverrides: overrides,
+      color: Colors.purple,
+      dependencies: (json['dependencies'] as List?)?.cast<String>(),
     );
   }
 }

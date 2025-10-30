@@ -88,6 +88,81 @@ class DAGManager {
     _markDescendantsDirty(id);
   }
 
+  void replaceObjectWithDependencies(
+    String id,
+    CanvasObject updatedObject,
+    List<String> dependencies,
+  ) {
+    final node = _nodes[id];
+    if (node == null) {
+      throw ArgumentError('Object not found: $id');
+    }
+
+    for (final depId in dependencies) {
+      if (!_nodes.containsKey(depId)) {
+        throw ArgumentError('Dependency not found: $depId');
+      }
+    }
+
+    if (_wouldCreateCycle(dependencies)) {
+      throw StateError('Replacing object would create a cycle');
+    }
+
+    history.record();
+
+    final oldParents = Set<String>.from(node.parentIds);
+    final newParents = <String>{};
+    final orderedParents = <String>[];
+    for (final depId in dependencies) {
+      if (newParents.add(depId)) {
+        orderedParents.add(depId);
+      }
+    }
+
+    for (final oldParent in oldParents) {
+      if (newParents.contains(oldParent)) {
+        continue;
+      }
+
+      final parentNode = _nodes[oldParent];
+      if (parentNode == null) {
+        continue;
+      }
+
+      final updatedChildren = parentNode.childIds
+          .where((child) => child != id)
+          .toList();
+      _nodes[oldParent] = parentNode.copyWith(childIds: updatedChildren);
+    }
+
+    for (final newParent in newParents) {
+      final parentNode = _nodes[newParent];
+      if (parentNode == null) {
+        throw ArgumentError('Dependency not found: $newParent');
+      }
+
+      if (!parentNode.childIds.contains(id)) {
+        final updatedChildren = List<String>.from(parentNode.childIds)..add(id);
+        _nodes[newParent] = parentNode.copyWith(childIds: updatedChildren);
+      }
+    }
+
+    final depth = orderedParents.isEmpty
+        ? 0
+        : orderedParents.map((depId) => _nodes[depId]!.depth).reduce(math.max) +
+              1;
+
+    _nodes[id] = node.copyWith(
+      object: updatedObject,
+      parentIds: orderedParents,
+      depth: depth,
+      isDirty: true,
+      lastModified: DateTime.now(),
+    );
+
+    _markDescendantsDirty(id);
+  }
+
   void deleteObject(String id, {bool cascade = false}) {
     final node = _nodes[id];
     if (node == null) {

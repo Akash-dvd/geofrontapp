@@ -14,14 +14,14 @@ abstract class GeoPolyArcBase<T extends ComplexGeometryObject>
     Map<String, dynamic>? styleOverrides,
     Color? color,
   }) : super(
-          elements: elements,
-          styleOverrides: _shapeStyleOverrides(
-            type: styleType,
-            style: style,
-            overrides: styleOverrides,
-            fallbackColor: color,
-          ),
-        ) {
+         elements: elements,
+         styleOverrides: _shapeStyleOverrides(
+           type: styleType,
+           style: style,
+           overrides: styleOverrides,
+           fallbackColor: color,
+         ),
+       ) {
     if (elements.isEmpty) {
       throw ArgumentError(
         '${styleType.toString()} requires at least one element',
@@ -108,5 +108,19 @@ abstract class GeoPolyArcBase<T extends ComplexGeometryObject>
         '$runtimeType expects an open chain with distinct endpoints.',
       );
     }
+  }
+
+  @override
+  List<Object?> get props => [...super.props, isClosedLoop];
+
+  @override
+  Map<String, dynamic> toJson() {
+    final json = super.toJson();
+    final props = Map<String, dynamic>.from(
+      (json['properties'] as Map<String, dynamic>? ?? const {}),
+    );
+    props['isClosedLoop'] = isClosedLoop;
+    json['properties'] = props;
+    return json;
   }
 }

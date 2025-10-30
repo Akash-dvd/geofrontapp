@@ -93,6 +93,35 @@ const ToolCatalogEntry _polygonTool = ToolCatalogEntry(
   icon: Icons.change_history,
   assetIcon: 'assets/tool_icons/polygon.svg',
   command: 'Polygon[]',
+  toolType: ToolType.polygon,
+  implemented: true,
+);
+
+const ToolCatalogEntry _polyLineTool = ToolCatalogEntry(
+  id: 'poly_line',
+  label: 'PolyLine',
+  icon: Icons.show_chart,
+  command: 'PolyLine[]',
+  toolType: ToolType.polyLine,
+  implemented: true,
+);
+
+const ToolCatalogEntry _polyArcToolEntry = ToolCatalogEntry(
+  id: 'poly_arc',
+  label: 'Poly-Arc',
+  icon: Icons.architecture,
+  command: 'PolyArc[]',
+  toolType: ToolType.polyArc,
+  implemented: true,
+);
+
+const ToolCatalogEntry _polyArcGonTool = ToolCatalogEntry(
+  id: 'poly_arc_gon',
+  label: 'Poly-Arc-Gon',
+  icon: Icons.all_inclusive,
+  command: 'PolyArcGon[]',
+  toolType: ToolType.polyArcGon,
+  implemented: true,
 );
 
 const ToolCatalogEntry _circleCenterTool = ToolCatalogEntry(
@@ -299,6 +328,8 @@ const ToolCatalogEntry _reflectLineTool = ToolCatalogEntry(
   icon: Icons.flip,
   assetIcon: 'assets/tool_icons/invert_about_line.svg',
   command: 'Reflect[]',
+  toolType: ToolType.reflectLine,
+  implemented: true,
 );
 
 const ToolCatalogEntry _rotateTool = ToolCatalogEntry(
@@ -307,7 +338,8 @@ const ToolCatalogEntry _rotateTool = ToolCatalogEntry(
   icon: Icons.rotate_left,
   assetIcon: 'assets/tool_icons/rotate.svg',
   command: 'Rotate[]',
-  toolType: ToolType.perpendicular,
+  toolType: ToolType.rotate,
+  implemented: true,
 );
 
 const ToolCatalogEntry _translateTool = ToolCatalogEntry(
@@ -315,7 +347,8 @@ const ToolCatalogEntry _translateTool = ToolCatalogEntry(
   label: 'Translate',
   icon: Icons.open_in_full,
   command: 'Translate[]',
-  toolType: ToolType.parallel,
+  toolType: ToolType.translate,
+  implemented: true,
 );
 
 const ToolCatalogEntry _dilateTool = ToolCatalogEntry(
@@ -324,7 +357,8 @@ const ToolCatalogEntry _dilateTool = ToolCatalogEntry(
   icon: Icons.center_focus_strong,
   assetIcon: 'assets/tool_icons/dilation.svg',
   command: 'Dilate[]',
-  toolType: ToolType.parallel,
+  toolType: ToolType.dilate,
+  implemented: true,
 );
 
 const ToolCatalogEntry _reflectPointTool = ToolCatalogEntry(
@@ -333,6 +367,8 @@ const ToolCatalogEntry _reflectPointTool = ToolCatalogEntry(
   icon: Icons.flip_camera_android,
   assetIcon: 'assets/tool_icons/reflection_about_point.svg',
   command: 'Reflect[]',
+  toolType: ToolType.reflectPoint,
+  implemented: true,
 );
 
 const ToolCatalogEntry _reflectCircleTool = ToolCatalogEntry(
@@ -341,6 +377,8 @@ const ToolCatalogEntry _reflectCircleTool = ToolCatalogEntry(
   icon: Icons.flip_camera_ios,
   assetIcon: 'assets/tool_icons/inversion.svg',
   command: 'Reflect[]',
+  toolType: ToolType.reflectCircle,
+  implemented: true,
 );
 
 const ToolCatalogEntry _locusTool = ToolCatalogEntry(
@@ -462,6 +500,7 @@ const List<ToolCategoryGroup> level1ToolGroups = [
       _segmentTool,
       _lineTool,
       _polygonTool,
+      _polyArcToolEntry,
       _circleCenterTool,
       _textTool,
       _eraserTool,
@@ -479,6 +518,7 @@ const List<ToolCategoryGroup> level2ToolGroups = [
       _segmentTool,
       _lineTool,
       _polygonTool,
+      _polyArcToolEntry,
       _circleCenterTool,
       _textTool,
       _eraserTool,
@@ -513,7 +553,14 @@ const List<ToolCategoryGroup> level2ToolGroups = [
   ),
   ToolCategoryGroup(
     name: 'Polygons',
-    tools: [_polygonTool, _regularPolygonTool, _rigidPolygonTool],
+    tools: [
+      _polygonTool,
+      _polyLineTool,
+      _polyArcToolEntry,
+      _polyArcGonTool,
+      _regularPolygonTool,
+      _rigidPolygonTool,
+    ],
   ),
   ToolCategoryGroup(
     name: 'Transformations',
@@ -583,7 +630,15 @@ const List<ToolCategoryGroup> level3ToolGroups = [
   ),
   ToolCategoryGroup(
     name: 'Polygons',
-    tools: [_polygonTool, _regularPolygonTool, _rigidPolygonTool, _locusTool],
+    tools: [
+      _polygonTool,
+      _polyLineTool,
+      _polyArcToolEntry,
+      _polyArcGonTool,
+      _regularPolygonTool,
+      _rigidPolygonTool,
+      _locusTool,
+    ],
   ),
   ToolCategoryGroup(
     name: 'Conics',

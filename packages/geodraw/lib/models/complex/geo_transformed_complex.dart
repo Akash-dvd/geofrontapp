@@ -405,6 +405,16 @@ class GeoTransUnionGeometryObjectList
   final double perimeterValue;
 
   @override
+  List<Object?> get props => [
+    ...super.props,
+    sourceObjectId,
+    transformId,
+    vertexCountValue,
+    areaValue,
+    perimeterValue,
+  ];
+
+  @override
   int get vertexCount => vertexCountValue;
 
   @override

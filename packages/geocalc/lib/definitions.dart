@@ -189,10 +189,8 @@ Multivector constructParallelLine(Multivector line, Multivector point) {
 /// Construct polar line of a point with respect to a circle
 /// Returns: Multivector representing the polar line
 Multivector constructPolarLine(Multivector point, Multivector circle) {
-  // TODO: Implement using Multivector geometric algebra
-  throw UnimplementedError(
-    'constructPolarLine: Multivector implementation pending',
-  );
+  // The polar line is the dual of (point ^ circle)
+  return uniForm(Multivector(O: 1) < (point ^ circle));
 }
 
 /// Construct angle bisector of three points (vertex at point2)
@@ -202,10 +200,15 @@ Multivector constructAngleBisector3Points(
   Multivector point2,
   Multivector point3,
 ) {
-  // TODO: Implement using Multivector geometric algebra
-  throw UnimplementedError(
-    'constructAngleBisector3Points: Multivector implementation pending',
-  );
+  // Construct the two lines from vertex to each point
+  final line1 = constructLineFrom2Points(point2, point1);
+  final line2 = constructLineFrom2Points(point2, point3);
+  
+  // The angle bisector passes through the vertex and bisects the angle
+  // It can be found using the normalized sum of the two lines
+  final bisector = uniForm(line1 + line2);
+  
+  return bisector;
 }
 
 /// Construct angle bisector of two lines
@@ -214,10 +217,14 @@ List<Multivector> constructAngleBisector2Lines(
   Multivector line1,
   Multivector line2,
 ) {
-  // TODO: Implement using Multivector geometric algebra
-  throw UnimplementedError(
-    'constructAngleBisector2Lines: Multivector implementation pending',
-  );
+  // The two angle bisectors are the sum and difference of normalized lines
+  final l1 = uniForm(line1);
+  final l2 = uniForm(line2);
+  
+  return [
+    uniForm(l1 + l2),  // Internal bisector
+    uniForm(l1 - l2),  // External bisector
+  ];
 }
 
 // ----------------------------------------------------------------------------
@@ -288,10 +295,16 @@ Multivector constructInverseCircle(
 /// Construct tangent lines from external point to circle
 /// Returns: List of Multivector (0, 1, or 2 tangent lines)
 List<Multivector> constructTangentLines(Multivector point, Multivector circle) {
-  // TODO: Implement using Multivector geometric algebra
-  throw UnimplementedError(
-    'constructTangentLines: Multivector implementation pending',
-  );
+  // Get the polar line of the point with respect to the circle
+  final polarLine = constructPolarLine(point, circle);
+  
+  // The tangent points are the intersections of the polar line with the circle
+  final tangentPoints = constructLineCircleIntersection(polarLine, circle);
+  
+  // Construct lines from the external point to each tangent point
+  return tangentPoints
+      .map((tangentPoint) => constructLineFrom2Points(point, tangentPoint))
+      .toList();
 }
 
 // ----------------------------------------------------------------------------
@@ -410,10 +423,7 @@ Multivector constructReflectionAcrossCircle(
 /// Calculate distance between two points
 /// Returns: double representing the distance
 double measureDistance(Multivector point1, Multivector point2) {
-  // TODO: Implement using Multivector geometric algebra
-  throw UnimplementedError(
-    'measureDistance: Multivector implementation pending',
-  );
+  return distancePointToPoint(point1, point2);
 }
 
 /// Calculate angle between three points (vertex at point2)
@@ -423,17 +433,34 @@ double measureAngle(
   Multivector point2,
   Multivector point3,
 ) {
-  // TODO: Implement using Multivector geometric algebra
-  throw UnimplementedError('measureAngle: Multivector implementation pending');
+  // Convert points to coordinate form
+  final p1 = infForm(point1);
+  final p2 = infForm(point2);
+  final p3 = infForm(point3);
+  
+  // Calculate vectors from vertex to the two points
+  final v1x = p1.e1 - p2.e1;
+  final v1y = p1.e2 - p2.e2;
+  final v2x = p3.e1 - p2.e1;
+  final v2y = p3.e2 - p2.e2;
+  
+  // Calculate angle using atan2
+  final angle1 = math.atan2(v1y, v1x);
+  final angle2 = math.atan2(v2y, v2x);
+  
+  var angle = angle2 - angle1;
+  
+  // Normalize to [0, 2π]
+  while (angle < 0) angle += 2 * math.pi;
+  while (angle > 2 * math.pi) angle -= 2 * math.pi;
+  
+  return angle;
 }
 
 /// Calculate length of a segment
 /// Returns: double representing the length
 double measureSegmentLength(Multivector startPoint, Multivector endPoint) {
-  // TODO: Implement using Multivector geometric algebra
-  throw UnimplementedError(
-    'measureSegmentLength: Multivector implementation pending',
-  );
+  return distancePointToPoint(startPoint, endPoint);
 }
 
 /// Calculate arc length on a circle between two points
@@ -444,28 +471,70 @@ double measureArcLength(
   Multivector endPoint,
   bool longerArc,
 ) {
-  // TODO: Implement using Multivector geometric algebra
-  throw UnimplementedError(
-    'measureArcLength: Multivector implementation pending',
-  );
+  final radius = measureCircleRadius(circle);
+  final center = getCircleCenter(circle);
+  
+  // Convert points to coordinate form
+  final c = infForm(center);
+  final p1 = infForm(startPoint);
+  final p2 = infForm(endPoint);
+  
+  // Calculate angles from center to each point
+  final angle1 = math.atan2(p1.e2 - c.e2, p1.e1 - c.e1);
+  final angle2 = math.atan2(p2.e2 - c.e2, p2.e1 - c.e1);
+  
+  // Calculate angular difference
+  var angleDiff = angle2 - angle1;
+  
+  // Normalize to [0, 2π]
+  while (angleDiff < 0) angleDiff += 2 * math.pi;
+  while (angleDiff > 2 * math.pi) angleDiff -= 2 * math.pi;
+  
+  // Choose shorter or longer arc
+  if (longerArc && angleDiff < math.pi) {
+    angleDiff = 2 * math.pi - angleDiff;
+  } else if (!longerArc && angleDiff > math.pi) {
+    angleDiff = 2 * math.pi - angleDiff;
+  }
+  
+  return radius * angleDiff;
 }
 
 /// Calculate area of a polygon given its vertices
 /// Returns: double representing the area
 double measurePolygonArea(List<Multivector> vertices) {
-  // TODO: Implement using Multivector geometric algebra (shoelace formula)
-  throw UnimplementedError(
-    'measurePolygonArea: Multivector implementation pending',
-  );
+  if (vertices.length < 3) return 0.0;
+  
+  // Use shoelace formula
+  double area = 0.0;
+  
+  for (int i = 0; i < vertices.length; i++) {
+    final p1 = infForm(vertices[i]);
+    final p2 = infForm(vertices[(i + 1) % vertices.length]);
+    
+    area += (p1.e1 * p2.e2) - (p2.e1 * p1.e2);
+  }
+  
+  return area.abs() / 2.0;
 }
 
 /// Calculate radius of a circle
 /// Returns: double representing the radius
 double measureCircleRadius(Multivector circle) {
-  // TODO: Implement using Multivector geometric algebra
-  throw UnimplementedError(
-    'measureCircleRadius: Multivector implementation pending',
-  );
+  if (!circle.isCircle()) {
+    throw ArgumentError('measureCircleRadius: Input is not a circle');
+  }
+  
+  // For a circle in the form (o, e1, e2, O):
+  // radius² = (e1² + e2²) / o² - 2*O/o
+  final circleInf = infForm(circle);
+  final radiusSquared = circleInf.e1 * circleInf.e1 + 
+                        circleInf.e2 * circleInf.e2 - 
+                        2 * circleInf.O;
+  
+  if (radiusSquared < 0) return 0.0;
+  
+  return math.sqrt(radiusSquared);
 }
 
 // ----------------------------------------------------------------------------

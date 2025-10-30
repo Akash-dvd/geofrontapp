@@ -18,6 +18,7 @@ import '../utils/canvas_capture.dart';
 import '../services/app_services.dart';
 import '../services/solver_service.dart';
 import '../widgets/solver_command_editor.dart';
+import '../widgets/solution_wizard.dart';
 
 /// Screen for creating and editing problems with a GeoDraw-first workflow.
 class ProblemFormScreen extends StatefulWidget {
@@ -162,6 +163,20 @@ class _ProblemFormScreenState extends State<ProblemFormScreen> {
     _toolManager = ToolManager(
       dagManager: _dagManager,
       onObjectCreated: (_, __) => setState(() {}),
+      onObjectSelected: (objectId) {
+        // Update selection for highlighting
+        if (objectId.isEmpty) {
+          // Empty string means clear selection
+          setState(() {
+            _selectedIds.clear();
+          });
+        } else {
+          // Add to selection
+          setState(() {
+            _selectedIds.add(objectId);
+          });
+        }
+      },
       onToolStateChanged: (_) => setState(() {}),
     );
 
@@ -899,7 +914,7 @@ class ProblemMetadata {
   }
 }
 
-class _CanvasAndSolutions extends StatelessWidget {
+class _CanvasAndSolutions extends StatefulWidget {
   const _CanvasAndSolutions({
     required this.dagManager,
     required this.toolManager,
@@ -915,17 +930,52 @@ class _CanvasAndSolutions extends StatelessWidget {
   final List<SolverSolutionStep> solutionSteps;
 
   @override
+  State<_CanvasAndSolutions> createState() => _CanvasAndSolutionsState();
+}
+
+class _CanvasAndSolutionsState extends State<_CanvasAndSolutions> {
+  bool _showWizard = false;
+
+  @override
+  void didUpdateWidget(_CanvasAndSolutions oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Auto-show wizard when solutions arrive
+    if (widget.solutionSteps.isNotEmpty && oldWidget.solutionSteps.isEmpty) {
+      setState(() {
+        _showWizard = true;
+      });
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final hasSolutions = solutionSteps.isNotEmpty;
+    final hasSolutions = widget.solutionSteps.isNotEmpty;
 
+    // Show wizard mode if solutions exist and wizard is enabled
+    if (hasSolutions && _showWizard) {
+      return SolutionWizard(
+        problemDagManager: widget.dagManager,
+        problemToolManager: widget.toolManager,
+        selectedIds: widget.selectedIds,
+        onSelectionChanged: widget.onSelectionChanged,
+        solutionSteps: widget.solutionSteps,
+        onClose: () {
+          setState(() {
+            _showWizard = false;
+          });
+        },
+      );
+    }
+
+    // Regular canvas view
     final canvas = Container(
       color: theme.colorScheme.surface,
       child: GeoDrawCanvas(
-        dagManager: dagManager,
-        toolManager: toolManager,
-        selectedIds: selectedIds,
-        onSelectionChanged: onSelectionChanged,
+        dagManager: widget.dagManager,
+        toolManager: widget.toolManager,
+        selectedIds: widget.selectedIds,
+        onSelectionChanged: widget.onSelectionChanged,
         showGrid: true,
       ),
     );
@@ -937,25 +987,27 @@ class _CanvasAndSolutions extends StatelessWidget {
       );
     }
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
+    // Show canvas with option to open wizard
+    return Stack(
       children: [
-        Expanded(flex: 3, child: canvas),
-        Expanded(
-          flex: 2,
-          child: Padding(
-            padding: const EdgeInsets.only(top: 12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text(
-                  'Solver Solutions',
-                  style: theme.textTheme.titleMedium,
-                ),
-                const SizedBox(height: 8),
-                Expanded(child: _SolutionStepsList(steps: solutionSteps)),
-              ],
-            ),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [Expanded(child: canvas)],
+        ),
+        
+        // Floating button to open wizard
+        Positioned(
+          right: 16,
+          bottom: 16,
+          child: FloatingActionButton.extended(
+            onPressed: () {
+              setState(() {
+                _showWizard = true;
+              });
+            },
+            icon: const Icon(Icons.auto_stories),
+            label: const Text('View Solution Steps'),
+            tooltip: 'Open step-by-step solution wizard',
           ),
         ),
       ],

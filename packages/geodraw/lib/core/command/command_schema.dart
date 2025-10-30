@@ -124,7 +124,8 @@ class TypeConstraint {
     final allOptional = list.every((constraint) => constraint.isOptional);
     final categories = list.map((constraint) => constraint.category).toSet();
     final resolvedDescription =
-        description ?? _mergeDescriptions(list.where((c) => c.description.isNotEmpty));
+        description ??
+        _mergeDescriptions(list.where((c) => c.description.isNotEmpty));
 
     if (categories.length == 1) {
       switch (categories.first) {
@@ -135,10 +136,9 @@ class TypeConstraint {
             combinedTypes.addAll(constraint.allowedTypes);
             combinedLabels.addAll(constraint.allowedTypeLabels);
           }
-          final desc =
-              resolvedDescription.isNotEmpty
-                  ? resolvedDescription
-                  : _describeTypes(combinedTypes, combinedLabels);
+          final desc = resolvedDescription.isNotEmpty
+              ? resolvedDescription
+              : _describeTypes(combinedTypes, combinedLabels);
           return TypeConstraint.geometry(
             allowedTypes: combinedTypes,
             allowedTypeLabels: combinedLabels,
@@ -250,28 +250,30 @@ class CommandSchema {
     this.createsObject = true,
     this.category,
     this.argumentHints = const [],
-  })  : assert(
-          argumentTypes == null || patterns.isEmpty,
-          'Provide either argumentTypes or patterns, not both.',
-        ),
-        _primaryPattern = List.unmodifiable(
-          patterns.isNotEmpty
-              ? patterns.first
-              : (argumentTypes ?? const <TypeConstraint>[]),
-        ),
-        argumentPatterns = patterns.isNotEmpty
-            ? List.unmodifiable(
-                patterns
-                    .map((pattern) => List.unmodifiable(pattern))
-                    .toList(growable: false),
-              )
-            : argumentTypes != null
-                ? List.unmodifiable(
-                    <List<TypeConstraint>>[
-                      List.unmodifiable(argumentTypes),
-                    ],
-                  )
-                : const <List<TypeConstraint>>[];
+  }) : assert(
+         argumentTypes == null || patterns.isEmpty,
+         'Provide either argumentTypes or patterns, not both.',
+       ),
+       _primaryPattern = List.unmodifiable(
+         patterns.isNotEmpty
+             ? patterns.first.cast<TypeConstraint>()
+             : (argumentTypes ?? const <TypeConstraint>[]),
+       ),
+       argumentPatterns = patterns.isNotEmpty
+           ? List.unmodifiable(
+               patterns
+                   .map(
+                     (pattern) => List<TypeConstraint>.unmodifiable(
+                       pattern.cast<TypeConstraint>(),
+                     ),
+                   )
+                   .toList(growable: false),
+             )
+           : argumentTypes != null
+           ? List.unmodifiable(<List<TypeConstraint>>[
+               List.unmodifiable(argumentTypes),
+             ])
+           : const <List<TypeConstraint>>[];
 
   /// Validate a full argument list
   ValidationResult validate(List<dynamic> args) {
@@ -290,9 +292,7 @@ class CommandSchema {
       }
     }
 
-    final expected = argumentPatterns
-        .map(_patternDescription)
-        .join(' | ');
+    final expected = argumentPatterns.map(_patternDescription).join(' | ');
 
     return ValidationResult(
       isValid: false,
@@ -375,10 +375,7 @@ class CommandSchema {
     );
   }
 
-  bool _matchesPatternPrefix(
-    List<dynamic> args,
-    List<TypeConstraint> pattern,
-  ) {
+  bool _matchesPatternPrefix(List<dynamic> args, List<TypeConstraint> pattern) {
     if (args.length > pattern.length) {
       return false;
     }
@@ -416,10 +413,9 @@ class CommandSchema {
     }
     return pattern
         .map(
-          (constraint) =>
-              constraint.isOptional
-                  ? '[${constraint.description}]'
-                  : constraint.description,
+          (constraint) => constraint.isOptional
+              ? '[${constraint.description}]'
+              : constraint.description,
         )
         .join(', ');
   }

@@ -3,6 +3,8 @@ import 'package:geocalc/Multivector.dart';
 import '../geometry_object.dart';
 import '../simple/geo_trans.dart';
 import '../simple/geo_point.dart';
+import '../simple/geo_line.dart';
+import '../simple/geo_circle.dart';
 import '../complex/complex_geometry_object.dart';
 import '../complex/geo_shapes.dart';
 
@@ -297,5 +299,166 @@ class TransformationEngine {
       return SimpleTransformKind.circle;
     }
     return SimpleTransformKind.unknown;
+  }
+
+  /// Translate a geometry object by a vector (dx, dy)
+  static GeometryObject translate(
+    GeometryObject source,
+    double dx,
+    double dy, {
+    required String newId,
+    required String newLabel,
+    required List<String> dependencies,
+  }) {
+    // For points, just shift coordinates
+    if (source is GeoPoint) {
+      return GeoPointer(
+        id: newId,
+        label: newLabel,
+        x: source.x + dx,
+        y: source.y + dy,
+        visible: source.visible,
+        styleOverrides: source.styleOverrides,
+      );
+    }
+
+    // For other simple geometry, translate the multivector
+    if (source is SimpleGeometryObject) {
+      final translatedMv = Multivector(
+        o: source.multivector.o,
+        e1: source.multivector.e1 + dx * source.multivector.o,
+        e2: source.multivector.e2 + dy * source.multivector.o,
+        O: source.multivector.O + (dx * source.multivector.e1 + dy * source.multivector.e2) + 
+           0.5 * (dx * dx + dy * dy) * source.multivector.o,
+      );
+
+      // Determine the type and create appropriate object
+      final kind = _inferKind(translatedMv);
+      
+      if (kind == SimpleTransformKind.line && source is GeoLine) {
+        return GeoLine2P(
+          id: newId,
+          label: newLabel,
+          dependencies: dependencies,
+          multivector: translatedMv,
+          visible: source.visible,
+          styleOverrides: source.styleOverrides,
+        );
+      }
+
+      if (kind == SimpleTransformKind.circle && source is GeoCircle) {
+        return GeoCircle2P(
+          id: newId,
+          label: newLabel,
+          dependencies: dependencies,
+          multivector: translatedMv,
+          visible: source.visible,
+          styleOverrides: source.styleOverrides,
+        );
+      }
+
+      // Default: return as simple object
+      return GeoPointer(
+        id: newId,
+        label: newLabel,
+        x: translatedMv.e1,
+        y: translatedMv.e2,
+        visible: source.visible,
+        styleOverrides: source.styleOverrides,
+      );
+    }
+
+    // For complex objects (segments, arcs), translate endpoints
+    if (source is GeoSegment) {
+      final start = GeoPointer(
+        id: '${newId}_start',
+        label: '${source.startPoint.label}\'',
+        x: source.startPoint.x + dx,
+        y: source.startPoint.y + dy,
+        visible: source.startPoint.visible,
+        styleOverrides: source.startPoint.styleOverrides,
+      );
+
+      final end = GeoPointer(
+        id: '${newId}_end',
+        label: '${source.endPoint.label}\'',
+        x: source.endPoint.x + dx,
+        y: source.endPoint.y + dy,
+        visible: source.endPoint.visible,
+        styleOverrides: source.endPoint.styleOverrides,
+      );
+
+      final translatedLineMv = Multivector(
+        o: source.boundary.multivector.o,
+        e1: source.boundary.multivector.e1 + dx * source.boundary.multivector.o,
+        e2: source.boundary.multivector.e2 + dy * source.boundary.multivector.o,
+        O: source.boundary.multivector.O + (dx * source.boundary.multivector.e1 + dy * source.boundary.multivector.e2) + 
+           0.5 * (dx * dx + dy * dy) * source.boundary.multivector.o,
+      );
+
+      return GeoSegment(
+        id: newId,
+        label: newLabel,
+        dependencies: dependencies,
+        boundary: ComplexGeometryBoundary(
+          startPoint: start,
+          endPoint: end,
+          multivector: translatedLineMv,
+        ),
+        visible: source.visible,
+        styleOverrides: source.styleOverrides,
+      );
+    }
+
+    if (source is GeoArc) {
+      final start = GeoPointer(
+        id: '${newId}_start',
+        label: '${source.startPoint.label}\'',
+        x: source.startPoint.x + dx,
+        y: source.startPoint.y + dy,
+        visible: source.startPoint.visible,
+        styleOverrides: source.startPoint.styleOverrides,
+      );
+
+      final end = GeoPointer(
+        id: '${newId}_end',
+        label: '${source.endPoint.label}\'',
+        x: source.endPoint.x + dx,
+        y: source.endPoint.y + dy,
+        visible: source.endPoint.visible,
+        styleOverrides: source.endPoint.styleOverrides,
+      );
+
+      // Translate the circle
+      final translatedCircleMv = Multivector(
+        o: source.boundary.multivector.o,
+        e1: source.boundary.multivector.e1 + dx * source.boundary.multivector.o,
+        e2: source.boundary.multivector.e2 + dy * source.boundary.multivector.o,
+        O: source.boundary.multivector.O + (dx * source.boundary.multivector.e1 + dy * source.boundary.multivector.e2) + 
+           0.5 * (dx * dx + dy * dy) * source.boundary.multivector.o,
+      );
+
+      return GeoArc(
+        id: newId,
+        label: newLabel,
+        dependencies: dependencies,
+        boundary: ComplexGeometryBoundary(
+          startPoint: start,
+          endPoint: end,
+          multivector: translatedCircleMv,
+        ),
+        visible: source.visible,
+        styleOverrides: source.styleOverrides,
+      );
+    }
+
+    // For union lists, translate recursively
+    if (source is UnionGeometryObjectList) {
+      // TODO: Implement translation for union lists if needed
+      throw UnimplementedError('Translation of UnionGeometryObjectList not yet implemented');
+    }
+
+    // Fallback: return source unchanged
+    return source;
   }
 }

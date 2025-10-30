@@ -121,6 +121,20 @@ class _GeoDrawCreateScreenState extends State<GeoDrawCreateScreen> {
         // Trigger rebuild when tool creates object
         setState(() {});
       },
+      onObjectSelected: (objectId) {
+        // Update selection for highlighting
+        if (objectId.isEmpty) {
+          // Empty string means clear selection
+          setState(() {
+            _selectedIds.clear();
+          });
+        } else {
+          // Add to selection
+          setState(() {
+            _selectedIds.add(objectId);
+          });
+        }
+      },
       onToolStateChanged: (state) {
         // Could update UI with tool state
         setState(() {});
@@ -303,6 +317,20 @@ class _GeoDrawEditScreenState extends State<GeoDrawEditScreen> {
       onObjectCreated: (object, deps) {
         setState(() {});
       },
+      onObjectSelected: (objectId) {
+        // Update selection for highlighting
+        if (objectId.isEmpty) {
+          // Empty string means clear selection
+          setState(() {
+            _selectedIds.clear();
+          });
+        } else {
+          // Add to selection
+          setState(() {
+            _selectedIds.add(objectId);
+          });
+        }
+      },
       onToolStateChanged: (state) {
         setState(() {});
       },
@@ -425,6 +453,14 @@ class _GeoDrawViewScreenState extends State<GeoDrawViewScreen> {
       dagManager: _dagManager,
       onObjectCreated: (object, deps) {
         setState(() {});
+      },
+      onObjectSelected: (objectId) {
+        // Note: View screen doesn't use selection, but we provide callback for consistency
+        // Empty string means clear selection
+        if (objectId.isNotEmpty) {
+          // View mode typically doesn't allow selection, but we could show it
+          setState(() {});
+        }
       },
       onToolStateChanged: (state) {
         setState(() {});
