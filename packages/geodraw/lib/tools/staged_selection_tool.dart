@@ -40,22 +40,23 @@ enum ParameterType {
 }
 
 /// Base class for tools that require multiple selection steps
-abstract class StagedSelectionTool implements Tool {
+abstract class StagedSelectionTool with ToolCallbacksMixin implements Tool {
   StagedSelectionTool({
     required this.dagManager,
     this.commandHistory,
-    this.onObjectCreated,
-    this.onObjectSelected,
-    this.onToolStateChanged,
+    OnObjectCreated? onObjectCreated,
+    OnObjectSelected? onObjectSelected,
+    OnToolStateChanged? onToolStateChanged,
     this.onParameterRequest,
-  }) : executor = SimpleExecutor(dagManager);
+  }) : executor = SimpleExecutor(dagManager) {
+    this.onObjectCreated = onObjectCreated;
+    this.onObjectSelected = onObjectSelected;
+    this.onToolStateChanged = onToolStateChanged;
+  }
 
   final DAGManager dagManager;
   final SimpleExecutor executor;
   final CommandHistory? commandHistory;
-  final OnObjectCreated? onObjectCreated;
-  final OnObjectSelected? onObjectSelected;
-  final OnToolStateChanged? onToolStateChanged;
   final OnParameterRequest? onParameterRequest;
 
   final List<GeometryObject> _selectedObjects = <GeometryObject>[];
@@ -93,10 +94,6 @@ abstract class StagedSelectionTool implements Tool {
   /// Failure message
   String failureMessage(String reason);
 
-  void notifyStateChanged(String state) {
-    onToolStateChanged?.call(state);
-  }
-
   @override
   void handleInput(PointerEvent event) {
     if (event is! PointerDownEvent) {
@@ -121,7 +118,7 @@ abstract class StagedSelectionTool implements Tool {
     _selectedObjects.add(candidate);
     
     // Notify that object was selected (for highlighting)
-    onObjectSelected?.call(candidate.id);
+    notifyObjectSelected(candidate.id);
     
     _currentStage++;
 
@@ -179,7 +176,7 @@ abstract class StagedSelectionTool implements Tool {
       
       // Clear selections and reset
       for (var i = 0; i < _selectedObjects.length; i++) {
-        onObjectSelected?.call(''); // Clear highlight
+        notifyObjectSelected(''); // Clear highlight
       }
       _selectedObjects.clear();
       _currentStage = 0;
@@ -188,7 +185,7 @@ abstract class StagedSelectionTool implements Tool {
     }
 
     if (result.object is GeometryObject) {
-      onObjectCreated?.call(
+      notifyObjectCreated(
         result.object as GeometryObject,
         (result.object as GeometryObject).dependencies,
       );
@@ -210,7 +207,7 @@ abstract class StagedSelectionTool implements Tool {
   void reset() {
     // Clear selection highlights
     for (var i = 0; i < _selectedObjects.length; i++) {
-      onObjectSelected?.call(''); // Clear highlight by sending empty string
+      notifyObjectSelected(''); // Clear highlight by sending empty string
     }
     
     _selectedObjects.clear();

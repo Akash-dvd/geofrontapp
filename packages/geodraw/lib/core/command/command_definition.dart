@@ -18,17 +18,30 @@ class CommandDefinition {
   final List<String> aliases;
   final String? category;
   final bool implemented;
-  final CommandExecutor executor;
+  
+  /// Single executor for all patterns (backward compatibility)
+  final CommandExecutor? executor;
+  
+  /// Pattern-specific executors (one per pattern in schema)
+  final List<CommandExecutor>? patternExecutors;
 
-  const CommandDefinition({
+  CommandDefinition({
     required this.name,
     required this.schema,
-    required this.executor,
+    this.executor,
+    this.patternExecutors,
     this.description = '',
     this.aliases = const [],
     this.category,
     this.implemented = true,
-  });
+  }) : assert(
+    (executor != null) != (patternExecutors != null),
+    'Provide either executor or patternExecutors, not both.',
+  ), assert(
+    patternExecutors == null ||
+        patternExecutors.length == schema.argumentPatterns.length,
+    'patternExecutors length must match schema patterns length.',
+  );
 
   Future<ExecutionResult> run(
     CommandExecutionContext context,
@@ -44,6 +57,19 @@ class CommandDefinition {
       return ExecutionResult.error('$name is not implemented yet');
     }
 
-    return executor(context, arguments);
+    // Route to pattern-specific executor if available
+    if (patternExecutors != null && validation.matchedPatternIndex != null) {
+      final patternIndex = validation.matchedPatternIndex!;
+      if (patternIndex >= 0 && patternIndex < patternExecutors!.length) {
+        return patternExecutors![patternIndex](context, arguments);
+      }
+    }
+
+    // Fallback to single executor (backward compatibility)
+    if (executor != null) {
+      return executor!(context, arguments);
+    }
+
+    return ExecutionResult.error('No executor defined for command: $name');
   }
 }

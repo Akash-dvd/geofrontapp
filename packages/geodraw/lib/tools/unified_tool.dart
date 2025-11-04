@@ -12,24 +12,23 @@ import '../models/geometry_object.dart';
 import 'tool.dart';
 
 /// Base class for tools using direct execution with sequential validation
-abstract class UnifiedTool implements Tool {
+abstract class UnifiedTool with ToolCallbacksMixin implements Tool {
   final DAGManager dagManager;
   final SimpleExecutor executor;
   late final ToolVerifier verifier;
   HistoryMarker? _historyMarker;
   final CommandHistory? commandHistory;
 
-  final OnObjectCreated? onObjectCreated;
-  final OnObjectSelected? onObjectSelected;
-  final OnToolStateChanged? onToolStateChanged;
-
   UnifiedTool({
     required this.dagManager,
-    this.onObjectCreated,
-    this.onObjectSelected,
-    this.onToolStateChanged,
+    OnObjectCreated? onObjectCreated,
+    OnObjectSelected? onObjectSelected,
+    OnToolStateChanged? onToolStateChanged,
     this.commandHistory,
   }) : executor = SimpleExecutor(dagManager) {
+    this.onObjectCreated = onObjectCreated;
+    this.onObjectSelected = onObjectSelected;
+    this.onToolStateChanged = onToolStateChanged;
     verifier = ToolVerifier(commandName, registry: dagManager.commandRegistry);
   }
 
@@ -137,7 +136,7 @@ abstract class UnifiedTool implements Tool {
       if (result.success) {
         if (result.object is GeometryObject) {
           final geometry = result.object as GeometryObject;
-          onObjectCreated?.call(geometry, geometry.dependencies);
+          notifyObjectCreated(geometry, geometry.dependencies);
         }
         notifyStateChanged(result.message);
         _recordHistory(entry, result);
@@ -198,9 +197,5 @@ abstract class UnifiedTool implements Tool {
       return 'Click to start ${name.toLowerCase()}';
     }
     return verifier.nextArgumentDescription;
-  }
-
-  void notifyStateChanged(String state) {
-    onToolStateChanged?.call(state);
   }
 }

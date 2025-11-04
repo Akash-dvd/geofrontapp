@@ -3,8 +3,8 @@
 import xml.etree.ElementTree as ET
 import json
 # import xmltodict
-from IGraph.codec.geogebra.dicttoxml import dicttoxml
-from IGraph.IGraph import IGraph
+from GraphForest.codec.geogebra.dicttoxml import dicttoxml
+from GraphForest.GraphForest import GraphForest
 from xml.dom.minidom import parseString
 
 
@@ -69,7 +69,7 @@ class geogebraCodec:
   #   print(doc)
 
   @staticmethod
-  def encoder(content,signal) ->"IGraph":
+  def encoder(content,signal) ->GraphForest:
     dct = json.loads(content)
 
     obj = dct["xml"]
@@ -149,7 +149,7 @@ class geogebraCodec:
                   'extra':{'iter':key}}
                   # The nth output is key number
     
-    return IGraph(symlst,IrElementsDict,appendage)
+    return GraphForest(symlst,IrElementsDict,appendage)
 
     # print(xml.decode("utf-8"))
     # xmlstr = ET.tostring(construction, encoding='utf8', method='xml')
@@ -171,12 +171,12 @@ class geogebraCodec:
       }
     }
 
-    IGdict.construction.pop(GExpr._oo, None)
+    IGdict.dag.pop(GExpr._oo, None)
     # remove {'element': {'@attrs': {'type': 'point', 'label': '_oo'}, 'iter': {'@attrs': 0}}}
     
     subEleCmd = ['input','output']
     lst = []
-    for key, value in IGdict.construction.items():
+    for key, value in IGdict.dag.items():
       if(not value['dependency']):
         ele = {}
         ele["element"] = {
@@ -197,7 +197,7 @@ class geogebraCodec:
       elif ( value['dependency'] and not(value['extra']['iter'])) :
         outlst = []
         cmd ={}
-        for key1, value1 in IGdict.construction.items():
+        for key1, value1 in IGdict.dag.items():
           if((value['dependency'] == value1['dependency']) and\
             (value['command'] == value1['command'])):
             outlst.append(key1.mv.name)

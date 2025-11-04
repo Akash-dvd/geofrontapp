@@ -152,14 +152,14 @@ class _SolutionWizardState extends State<SolutionWizard> {
                     Row(
                       children: [
                         Text(
-                          'Step ${_currentPage} of ${_pages.length - 1}',
+                          'Step $_currentPage of ${_pages.length - 1}',
                           style: theme.textTheme.bodySmall,
                         ),
                         const SizedBox(width: 16),
                         Expanded(
                           child: LinearProgressIndicator(
                             value: _currentPage / (_pages.length - 1),
-                            backgroundColor: theme.colorScheme.surfaceVariant,
+                            backgroundColor: theme.colorScheme.surfaceContainerHighest,
                           ),
                         ),
                       ],
@@ -307,7 +307,7 @@ class _SolutionPageView extends StatelessWidget {
           child: Container(
             padding: const EdgeInsets.all(24),
             decoration: BoxDecoration(
-              color: theme.colorScheme.surfaceVariant,
+              color: theme.colorScheme.surfaceContainerHighest,
               border: Border(
                 left: BorderSide(
                   color: theme.dividerColor,

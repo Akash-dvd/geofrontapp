@@ -1,0 +1,70 @@
+xl =`<?xml version="1.0" ?>
+<geogebra>
+        <construction>
+                <element type="point" label="A">
+                        <coords x="-1.4890909090909097" y="1.609090909090905" z="1"/>
+                        <show object="true" label="true"/>
+                </element>
+                <element type="point" label="B">
+                        <coords x="-0.8345454545454551" y="2.6454545454545424" z="1"/>
+                        <show object="true" label="true"/>
+                </element>
+                <command name="Circle">
+                        <input a0="A" a1="B"/>
+                        <output a0="c"/>
+                </command>
+                <element type="point" label="C">
+                        <coords x="2.892727272727272" y="-1.590909090909095" z="1"/>
+                        <show object="true" label="true"/>
+                </element>
+                <element type="point" label="D">
+                        <coords x="4.26" y="-3.72" z="1"/>
+                        <show object="true" label="true"/>
+                </element>
+                <command name="Circle">
+                        <input a0="C" a1="D"/>
+                        <output a0="d"/>
+                </command>
+                <element type="point" label="E">
+                        <coords x="1.4381818181818176" y="3.0636363636363595" z="1"/>
+                        <show object="true" label="true"/>
+                </element>
+                <element type="point" label="F">
+                        <coords x="1.14" y="2.26" z="1"/>
+                        <show object="true" label="true"/>
+                </element>
+                <command name="Circle">
+                        <input a0="E" a1="F"/>
+                        <output a0="e"/>
+                </command>
+                <command name="Tangent">
+                        <input a0="c" a1="d"/>
+                        <output a0="f" a1="g" a2="h" a3="i"/>
+                </command>
+                <command name="Tangent">
+                        <input a0="d" a1="e"/>
+                        <output a0="j" a1="k" a2="l" a3="m"/>
+                </command>
+                <command name="Tangent">
+                        <input a0="c" a1="e"/>
+                        <output a0="n" a1="p" a2="q" a3="r"/>
+                </command>
+                <command name="Intersect">
+                        <input a0="f" a1="g"/>
+                        <output a0="G"/>
+                </command>
+                <command name="Intersect">
+                        <input a0="j" a1="k"/>
+                        <output a0="H"/>
+                </command>
+                <command name="Intersect">
+                        <input a0="n" a1="p"/>
+                        <output a0="I"/>
+                </command>
+                <command name="Line">
+                        <input a0="G" a1="H"/>
+                        <output a0="s"/>
+                </command>
+        </construction>
+</geogebra>
+`

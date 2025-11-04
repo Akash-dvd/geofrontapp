@@ -15,7 +15,7 @@ import '../models/simple/geo_line.dart';
 import '../models/simple/geo_circle.dart';
 
 /// Manages the active tool and tool state
-class ToolManager {
+class ToolManager with ToolCallbacksMixin {
   final DAGManager dagManager;
   final CommandHistory? commandHistory;
 
@@ -24,17 +24,17 @@ class ToolManager {
 
   final _PointLabelGenerator _pointLabelGenerator = _PointLabelGenerator();
 
-  final OnObjectCreated? onObjectCreated;
-  final OnObjectSelected? onObjectSelected;
-  final OnToolStateChanged? onToolStateChanged;
-
   ToolManager({
     required this.dagManager,
     this.commandHistory,
-    this.onObjectCreated,
-    this.onObjectSelected,
-    this.onToolStateChanged,
-  });
+    OnObjectCreated? onObjectCreated,
+    OnObjectSelected? onObjectSelected,
+    OnToolStateChanged? onToolStateChanged,
+  }) {
+    this.onObjectCreated = onObjectCreated;
+    this.onObjectSelected = onObjectSelected;
+    this.onToolStateChanged = onToolStateChanged;
+  }
 
   /// Get the currently active tool type
   ToolType get activeToolType => _activeToolType;
@@ -50,7 +50,7 @@ class ToolManager {
     _activeToolType = type;
     _activeTool = _createTool(type);
 
-    onToolStateChanged?.call(
+    notifyStateChanged(
       _activeTool?.stateDescription ?? 'No tool selected',
     );
   }
@@ -208,8 +208,28 @@ class ToolManager {
           createFreePoint: _createFreePoint,
         );
 
+      case ToolType.angleBisector:
+        return _AngleBisectorTool(
+          dagManager: dagManager,
+          commandHistory: commandHistory,
+          onObjectCreated: onObjectCreated,
+          onObjectSelected: onObjectSelected,
+          onToolStateChanged: onToolStateChanged,
+          createFreePoint: _createFreePoint,
+        );
+
       case ToolType.tangent:
         return _TangentTool(
+          dagManager: dagManager,
+          commandHistory: commandHistory,
+          onObjectCreated: onObjectCreated,
+          onObjectSelected: onObjectSelected,
+          onToolStateChanged: onToolStateChanged,
+          createFreePoint: _createFreePoint,
+        );
+
+      case ToolType.intersection:
+        return _IntersectionTool(
           dagManager: dagManager,
           commandHistory: commandHistory,
           onObjectCreated: onObjectCreated,
@@ -298,7 +318,7 @@ class ToolManager {
     );
 
     dagManager.addObject(point, const <String>[]);
-    onObjectCreated?.call(point, const <String>[]);
+    notifyObjectCreated(point, const <String>[]);
     return point;
   }
 
@@ -320,7 +340,9 @@ class ToolManager {
     ToolType.perpendicular,
     ToolType.parallel,
     ToolType.perpBisector,
+    ToolType.angleBisector,
     ToolType.tangent,
+    ToolType.intersection,
     ToolType.reflectLine,
     ToolType.reflectPoint,
     ToolType.reflectCircle,
@@ -1948,6 +1970,95 @@ class _PerpBisectorTool extends UnifiedTool {
   void reset() {
     super.reset();
     notifyStateChanged('Select two points for perpendicular bisector');
+  }
+}
+
+/// Angle bisector tool - constructs angle bisector from 3 points or 2 lines
+class _AngleBisectorTool extends UnifiedTool {
+  final GeoPointer Function(Offset position) createFreePoint;
+
+  _AngleBisectorTool({
+    required super.dagManager,
+    super.commandHistory,
+    super.onObjectCreated,
+    super.onObjectSelected,
+    super.onToolStateChanged,
+    required this.createFreePoint,
+  });
+
+  @override
+  ToolType get type => ToolType.angleBisector;
+
+  @override
+  String get commandName => 'anglebisector';
+
+  @override
+  String get name => 'Angle Bisector';
+
+  @override
+  IconData get icon => Icons.call_split;
+
+  @override
+  String get tooltip =>
+      'Create angle bisector from three points (vertex at middle) or two lines';
+
+  @override
+  GeometryObject? createObjectAtPosition(Offset position) {
+    final nextConstraint = verifier.schema.nextConstraint(verifier.arguments);
+    // Can accept GeoPoint or GeoLine depending on the pattern
+    if (nextConstraint?.accepts(GeoPointer) ?? false) {
+      return createFreePoint(position);
+    }
+    // Cannot create GeoLine at position, user must select existing lines
+    return null;
+  }
+
+  @override
+  void reset() {
+    super.reset();
+    notifyStateChanged('Select three points (or two lines) for angle bisector');
+  }
+}
+
+/// Intersection tool - finds intersection points between two objects
+class _IntersectionTool extends UnifiedTool {
+  final GeoPointer Function(Offset position) createFreePoint;
+
+  _IntersectionTool({
+    required super.dagManager,
+    super.commandHistory,
+    super.onObjectCreated,
+    super.onObjectSelected,
+    super.onToolStateChanged,
+    required this.createFreePoint,
+  });
+
+  @override
+  ToolType get type => ToolType.intersection;
+
+  @override
+  String get commandName => 'intersection';
+
+  @override
+  String get name => 'Intersection';
+
+  @override
+  IconData get icon => Icons.control_point;
+
+  @override
+  String get tooltip => 'Find intersection points between two objects';
+
+  @override
+  GeometryObject? createObjectAtPosition(Offset position) {
+    // Intersection requires selecting existing objects (lines, circles, points)
+    // Cannot create new objects at position
+    return null;
+  }
+
+  @override
+  void reset() {
+    super.reset();
+    notifyStateChanged('Select two objects to find intersection');
   }
 }
 

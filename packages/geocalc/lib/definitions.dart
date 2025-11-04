@@ -451,8 +451,12 @@ double measureAngle(
   var angle = angle2 - angle1;
   
   // Normalize to [0, 2π]
-  while (angle < 0) angle += 2 * math.pi;
-  while (angle > 2 * math.pi) angle -= 2 * math.pi;
+  while (angle < 0) {
+    angle += 2 * math.pi;
+  }
+  while (angle > 2 * math.pi) {
+    angle -= 2 * math.pi;
+  }
   
   return angle;
 }
@@ -487,8 +491,12 @@ double measureArcLength(
   var angleDiff = angle2 - angle1;
   
   // Normalize to [0, 2π]
-  while (angleDiff < 0) angleDiff += 2 * math.pi;
-  while (angleDiff > 2 * math.pi) angleDiff -= 2 * math.pi;
+  while (angleDiff < 0) {
+    angleDiff += 2 * math.pi;
+  }
+  while (angleDiff > 2 * math.pi) {
+    angleDiff -= 2 * math.pi;
+  }
   
   // Choose shorter or longer arc
   if (longerArc && angleDiff < math.pi) {

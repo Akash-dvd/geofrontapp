@@ -1,29 +1,32 @@
 from Sygal.GAtom import GExpr
 
-class IGraph():
+class GraphForest():
   # def __init__(self, *args, **kwargs):
   #   super(IR, self).__init__(*args, **kwargs)
   #   self.__dict__ = self
 
   symlist = {}
-  construction = {}
+  dag = {}
 
-  def __init__(self,symlst,cons,appendage):
+  def __init__(self,symlst,dag,appendage):
     self.symlist = symlst
-    self.construction = cons
+    self.dag = dag
     self.appendage = appendage
   
   def printElements(self):
     print("PRIMARY SYMBOL LIST")
     print(self.symlist)
     print("RELATIONAL DICT")
-    # print(self.construction)
-    # print(self.construction[GExpr._oo])
-    for key, value in self.construction.items():
+    # print(self.dag)
+    # print(self.dag[GExpr._oo])
+    for key, value in self.dag.items():
       print(key,'->',value)
     print("APPENDAGE DICT")
     print("ScalarConstraints -> ",self.appendage["ScalarConstraints"])
     print("ScalarProof -> ",self.appendage["ScalarProof"])
+    print("ObjectConstraints =>")
+    for ele in self.appendage["ObjectConstraints"]:
+      print(ele["name"]," -> ", ele["nestedArray"])
     print("ObjectProof =>")
     # print(self.appendage["ObjectProof"])
     for ele in self.appendage["ObjectProof"]:
@@ -35,7 +38,7 @@ class IGraph():
 
   def printGraph(self):
     print("RELATIONAL DICT")
-    for key, value in self.construction.items():
+    for key, value in self.dag.items():
       print(key,'->',value)
 
 
@@ -48,16 +51,16 @@ class IGraph():
       print(ele["name"]," -> ", ele["nestedArray"])
 
   def getElement(self,ele):
-    return self.construction[ele]
+    return self.dag[ele]
 
   def getDependency(self,ele):
-    return self.construction[ele]["dependency"]
+    return self.dag[ele]["dependency"]
 
   def getType(self,ele):
-    return self.construction[ele]["type"].lower()
+    return self.dag[ele]["type"].lower()
 
   def getExtIter(self,ele):
-    return self.construction[ele]["extra"]["iter"]
+    return self.dag[ele]["extra"]["iter"]
   
   def sygalEleList(self) -> "list": 
     return []

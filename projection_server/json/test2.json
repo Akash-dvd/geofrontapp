@@ -1,0 +1,57 @@
+{
+  "type": "construction",
+  "version": "1.0",
+  "objects": [
+    {
+      "id": "p1",
+      "type": "GeoPointer",
+      "label": "P1",
+      "dependencies": [],
+      "visible": true,
+      "style": {}
+    },
+    {
+      "id": "p2",
+      "type": "GeoPointer",
+      "label": "P2",
+      "dependencies": [],
+      "visible": true,
+      "style": {}
+    },
+    {
+      "id": "p3",
+      "type": "GeoMidpoint",
+      "label": "M",
+      "dependencies": ["p1", "p2"],
+      "visible": true,
+      "style": {}
+    },
+    {
+      "id": "l1",
+      "type": "GeoLine2P",
+      "label": "L1",
+      "dependencies": ["p1", "p2"],
+      "visible": true,
+      "style": {}
+    },
+    {
+      "id": "l2",
+      "type": "GeoPerpendicularBisector",
+      "label": "L2",
+      "dependencies": ["p1", "p2"],
+      "visible": true,
+      "style": {}
+    },
+    {
+      "id": "c1",
+      "type": "GeoCircle3P",
+      "label": "C1",
+      "dependencies": ["p1", "p2", "p3"],
+      "visible": true,
+      "style": {}
+    }
+  ],
+  "constraints": [],
+  "proofs": []
+}
+

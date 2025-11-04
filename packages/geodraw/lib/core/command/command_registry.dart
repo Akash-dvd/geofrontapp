@@ -17,6 +17,8 @@ import '../../models/simple/geo_circle.dart';
 import '../../models/simple/geo_trans.dart';
 import '../../models/simple/geo_transformed_simple.dart';
 import '../../models/simple_lists/geo_tangent.dart';
+import '../../models/simple_lists/geo_angle_bisector.dart';
+import '../../models/simple_lists/geo_intersection.dart';
 import '../../models/complex/complex_geometry_object.dart';
 import '../../models/complex/geo_shapes.dart';
 import '../../models/complex/geo_shapes_list.dart';
@@ -48,6 +50,8 @@ class CommandRegistry {
   int _parallelLabelCounter = 0;
   int _perpBisectorLabelCounter = 0;
   int _tangentLabelCounter = 0;
+  int _angleBisectorLabelCounter = 0;
+  int _intersectionLabelCounter = 0;
   int _textLabelCounter = 0;
   int _inverseLabelCounter = 0;
   int _rotateLabelCounter = 0;
@@ -80,7 +84,7 @@ class CommandRegistry {
         executor: (context, arguments) async {
           final x = (arguments[0] as num).toDouble();
           final y = (arguments[1] as num).toDouble();
-          final providedLabel = arguments.length >= 3 && arguments[2] is String
+          final providedLabel = arguments.length >= 3
               ? (arguments[2] as String).trim()
               : '';
           final point = GeoPointer(
@@ -123,7 +127,7 @@ class CommandRegistry {
         executor: (context, arguments) async {
           final x = (arguments[0] as num).toDouble();
           final y = (arguments[1] as num).toDouble();
-          final providedText = arguments.length >= 3 && arguments[2] is String
+          final providedText = arguments.length >= 3
               ? (arguments[2] as String).trim()
               : '';
           final textContent = providedText.isNotEmpty
@@ -173,7 +177,7 @@ class CommandRegistry {
         executor: (context, arguments) async {
           final p1 = arguments[0] as GeoPoint;
           final p2 = arguments[1] as GeoPoint;
-          final providedLabel = arguments.length >= 3 && arguments[2] is String
+          final providedLabel = arguments.length >= 3
               ? (arguments[2] as String).trim()
               : '';
           final line = GeoLine2P.fromDependencies(
@@ -222,7 +226,7 @@ class CommandRegistry {
         executor: (context, arguments) async {
           final p1 = arguments[0] as GeoPoint;
           final p2 = arguments[1] as GeoPoint;
-          final providedLabel = arguments.length >= 3 && arguments[2] is String
+          final providedLabel = arguments.length >= 3
               ? (arguments[2] as String).trim()
               : '';
 
@@ -271,7 +275,7 @@ class CommandRegistry {
         executor: (context, arguments) async {
           final center = arguments[0] as GeoPoint;
           final pointOnCircle = arguments[1] as GeoPoint;
-          final providedLabel = arguments.length >= 3 && arguments[2] is String
+          final providedLabel = arguments.length >= 3
               ? (arguments[2] as String).trim()
               : '';
           final circle = GeoCircle2P.fromDependencies(
@@ -326,7 +330,7 @@ class CommandRegistry {
           final p1 = arguments[0] as GeoPoint;
           final p2 = arguments[1] as GeoPoint;
           final p3 = arguments[2] as GeoPoint;
-          final providedLabel = arguments.length >= 4 && arguments[3] is String
+          final providedLabel = arguments.length >= 4
               ? (arguments[3] as String).trim()
               : '';
           final circle = GeoCircle3P.fromDependencies(
@@ -387,7 +391,7 @@ class CommandRegistry {
           final p1 = arguments[0] as GeoPoint;
           final p2 = arguments[1] as GeoPoint;
           final p3 = arguments[2] as GeoPoint;
-          final providedLabel = arguments.length >= 4 && arguments[3] is String
+          final providedLabel = arguments.length >= 4
               ? (arguments[3] as String).trim()
               : '';
 
@@ -440,27 +444,13 @@ class CommandRegistry {
           ],
         ),
         executor: (context, arguments) async {
-          if (arguments.length < 3) {
-            return ExecutionResult.error(
-              'Poly-arc requires at least three points',
-            );
-          }
-
           final rawArguments = List<dynamic>.from(arguments);
           String providedLabel = '';
           if (rawArguments.isNotEmpty && rawArguments.last is String) {
             providedLabel = (rawArguments.removeLast() as String).trim();
           }
 
-          final points = <GeoPoint>[];
-          for (final argument in rawArguments) {
-            if (argument is! GeoPoint) {
-              return ExecutionResult.error(
-                'Poly-arc expects only point arguments',
-              );
-            }
-            points.add(argument);
-          }
+          final points = rawArguments.cast<GeoPoint>().toList();
 
           if (points.length < 3) {
             return ExecutionResult.error(
@@ -596,27 +586,13 @@ class CommandRegistry {
           ],
         ),
         executor: (context, arguments) async {
-          if (arguments.length < 3) {
-            return ExecutionResult.error(
-              'Polygon requires at least three points',
-            );
-          }
-
           final rawArguments = List<dynamic>.from(arguments);
           String providedLabel = '';
           if (rawArguments.isNotEmpty && rawArguments.last is String) {
             providedLabel = (rawArguments.removeLast() as String).trim();
           }
 
-          final points = <GeoPoint>[];
-          for (final argument in rawArguments) {
-            if (argument is! GeoPoint) {
-              return ExecutionResult.error(
-                'Polygon expects only point arguments',
-              );
-            }
-            points.add(argument);
-          }
+          final points = rawArguments.cast<GeoPoint>().toList();
 
           if (points.length < 3) {
             return ExecutionResult.error(
@@ -740,27 +716,13 @@ class CommandRegistry {
           ],
         ),
         executor: (context, arguments) async {
-          if (arguments.length < 2) {
-            return ExecutionResult.error(
-              'Polyline requires at least two points',
-            );
-          }
-
           final rawArguments = List<dynamic>.from(arguments);
           String providedLabel = '';
           if (rawArguments.isNotEmpty && rawArguments.last is String) {
             providedLabel = (rawArguments.removeLast() as String).trim();
           }
 
-          final points = <GeoPoint>[];
-          for (final argument in rawArguments) {
-            if (argument is! GeoPoint) {
-              return ExecutionResult.error(
-                'Polyline expects only point arguments',
-              );
-            }
-            points.add(argument);
-          }
+          final points = rawArguments.cast<GeoPoint>().toList();
 
           if (points.length < 2) {
             return ExecutionResult.error(
@@ -886,27 +848,13 @@ class CommandRegistry {
           ],
         ),
         executor: (context, arguments) async {
-          if (arguments.length < 4) {
-            return ExecutionResult.error(
-              'Poly-arc-gon requires at least four points',
-            );
-          }
-
           final rawArguments = List<dynamic>.from(arguments);
           String providedLabel = '';
           if (rawArguments.isNotEmpty && rawArguments.last is String) {
             providedLabel = (rawArguments.removeLast() as String).trim();
           }
 
-          final points = <GeoPoint>[];
-          for (final argument in rawArguments) {
-            if (argument is! GeoPoint) {
-              return ExecutionResult.error(
-                'Poly-arc-gon expects only point arguments',
-              );
-            }
-            points.add(argument);
-          }
+          final points = rawArguments.cast<GeoPoint>().toList();
 
           if (points.length < 4) {
             return ExecutionResult.error(
@@ -1060,26 +1008,44 @@ class CommandRegistry {
             ],
           ],
         ),
-        executor: (context, arguments) async {
-          if (arguments.isEmpty) {
-            return ExecutionResult.error('Midpoint requires geometry input');
-          }
+        patternExecutors: [
+          // Pattern 0: Two points
+          (context, arguments) async {
+            final providedLabel = arguments.length >= 3
+                ? (arguments[2] as String).trim()
+                : '';
+            final p1 = arguments[0] as GeoPoint;
+            final p2 = arguments[1] as GeoPoint;
 
-          GeoPoint p1;
-          GeoPoint p2;
-
-          String extractLabel(int index) {
-            if (arguments.length > index && arguments[index] is String) {
-              return (arguments[index] as String).trim();
+            if (p1.id == p2.id) {
+              return ExecutionResult.error(
+                'Midpoint requires two distinct points',
+              );
             }
-            return '';
-          }
 
-          String providedLabel = '';
+            final midpoint = GeoMidpoint.fromDependencies(
+              id: context.generateId('midpoint'),
+              label: providedLabel.isNotEmpty
+                  ? providedLabel
+                  : context.resolveLabel(_nextMidpointLabel),
+              points: [p1, p2],
+            );
 
-          if (arguments[0] is GeoSegment) {
+            context.dagManager.addObject(midpoint, [p1.id, p2.id]);
+
+            return ExecutionResult.successful(
+              objectId: midpoint.id,
+              message: 'Created ${midpoint.label}',
+              object: midpoint,
+            );
+          },
+
+          // Pattern 1: Segment reference
+          (context, arguments) async {
             final segment = arguments[0] as GeoSegment;
-            providedLabel = extractLabel(1);
+            final providedLabel = arguments.length >= 2
+                ? (arguments[1] as String).trim()
+                : '';
 
             GeoPoint resolveSegmentPoint(int index, GeoPoint fallback) {
               if (segment.dependencies.length > index) {
@@ -1093,36 +1059,32 @@ class CommandRegistry {
               return fallback;
             }
 
-            p1 = resolveSegmentPoint(0, segment.startPoint);
-            p2 = resolveSegmentPoint(1, segment.endPoint);
-          } else {
-            p1 = arguments[0] as GeoPoint;
-            p2 = arguments[1] as GeoPoint;
-            providedLabel = extractLabel(2);
-          }
+            final p1 = resolveSegmentPoint(0, segment.startPoint);
+            final p2 = resolveSegmentPoint(1, segment.endPoint);
 
-          if (p1.id == p2.id) {
-            return ExecutionResult.error(
-              'Midpoint requires two distinct points',
+            if (p1.id == p2.id) {
+              return ExecutionResult.error(
+                'Midpoint requires two distinct points',
+              );
+            }
+
+            final midpoint = GeoMidpoint.fromDependencies(
+              id: context.generateId('midpoint'),
+              label: providedLabel.isNotEmpty
+                  ? providedLabel
+                  : context.resolveLabel(_nextMidpointLabel),
+              points: [p1, p2],
             );
-          }
 
-          final midpoint = GeoMidpoint.fromDependencies(
-            id: context.generateId('midpoint'),
-            label: providedLabel.isNotEmpty
-                ? providedLabel
-                : context.resolveLabel(_nextMidpointLabel),
-            points: [p1, p2],
-          );
+            context.dagManager.addObject(midpoint, [p1.id, p2.id]);
 
-          context.dagManager.addObject(midpoint, [p1.id, p2.id]);
-
-          return ExecutionResult.successful(
-            objectId: midpoint.id,
-            message: 'Created ${midpoint.label}',
-            object: midpoint,
-          );
-        },
+            return ExecutionResult.successful(
+              objectId: midpoint.id,
+              message: 'Created ${midpoint.label}',
+              object: midpoint,
+            );
+          },
+        ],
       ),
     );
 
@@ -1153,7 +1115,7 @@ class CommandRegistry {
         executor: (context, arguments) async {
           final reference = arguments[0] as GeoLine;
           final point = arguments[1] as GeoPoint;
-          final providedLabel = arguments.length >= 3 && arguments[2] is String
+          final providedLabel = arguments.length >= 3
               ? (arguments[2] as String).trim()
               : '';
           final perpendicular = GeoPerpendicularLine.fromDependencies(
@@ -1202,7 +1164,7 @@ class CommandRegistry {
         executor: (context, arguments) async {
           final reference = arguments[0] as GeoLine;
           final point = arguments[1] as GeoPoint;
-          final providedLabel = arguments.length >= 3 && arguments[2] is String
+          final providedLabel = arguments.length >= 3
               ? (arguments[2] as String).trim()
               : '';
           final parallel = GeoParallelLine.fromDependencies(
@@ -1251,7 +1213,7 @@ class CommandRegistry {
         executor: (context, arguments) async {
           final p1 = arguments[0] as GeoPoint;
           final p2 = arguments[1] as GeoPoint;
-          final providedLabel = arguments.length >= 3 && arguments[2] is String
+          final providedLabel = arguments.length >= 3
               ? (arguments[2] as String).trim()
               : '';
           final bisector = GeoPerpendicularBisector.fromDependencies(
@@ -1300,7 +1262,7 @@ class CommandRegistry {
         executor: (context, arguments) async {
           final first = arguments[0] as GeometryObject;
           final second = arguments[1] as GeometryObject;
-          final providedLabel = arguments.length >= 3 && arguments[2] is String
+          final providedLabel = arguments.length >= 3
               ? (arguments[2] as String).trim()
               : '';
           final label = providedLabel.isNotEmpty
@@ -1335,6 +1297,118 @@ class CommandRegistry {
             object: tangent,
           );
         },
+      ),
+    );
+
+    _register(
+      CommandDefinition(
+        name: 'anglebisector',
+        description:
+            'Construct angle bisector from three points (vertex at middle) or two lines',
+        schema: CommandSchema(
+          description: 'Angle bisector',
+          patterns: [
+            [
+              TypeConstraint.geometry(
+                allowedTypes: {GeoPoint},
+                description: 'First point',
+              ),
+              TypeConstraint.geometry(
+                allowedTypes: {GeoPoint},
+                description: 'Vertex point (middle)',
+              ),
+              TypeConstraint.geometry(
+                allowedTypes: {GeoPoint},
+                description: 'Second point',
+              ),
+              TypeConstraint.text(description: 'Label', optional: true),
+            ],
+            [
+              TypeConstraint.geometry(
+                allowedTypes: {GeoLine},
+                description: 'First line',
+              ),
+              TypeConstraint.geometry(
+                allowedTypes: {GeoLine},
+                description: 'Second line',
+              ),
+              TypeConstraint.text(description: 'Label', optional: true),
+            ],
+          ],
+          argumentHints: [
+            'Select three points (or two lines) for angle bisector',
+          ],
+        ),
+        patternExecutors: [
+          // Pattern 0: Three points (vertex at middle)
+          (context, arguments) async {
+            final providedLabel = arguments.length >= 4
+                ? (arguments[3] as String).trim()
+                : '';
+            final label = providedLabel.isNotEmpty
+                ? providedLabel
+                : context.resolveLabel(_nextAngleBisectorLabel);
+
+            final p1 = arguments[0] as GeoPoint;
+            final vertex = arguments[1] as GeoPoint;
+            final p2 = arguments[2] as GeoPoint;
+
+            try {
+              final bisector = GeoAngleBisector3P.fromDependencies(
+                id: context.generateId('anglebisector'),
+                label: label,
+                dependencies: [p1, vertex, p2],
+              );
+
+              context.dagManager.addObject(bisector, bisector.dependencies);
+
+              return ExecutionResult.successful(
+                objectId: bisector.id,
+                message: 'Created angle bisector ${bisector.label}',
+                object: bisector,
+              );
+            } on ArgumentError catch (e) {
+              return ExecutionResult.error(e.message);
+            }
+          },
+
+          // Pattern 1: Two lines (returns list of 2 bisectors)
+          (context, arguments) async {
+            final providedLabel = arguments.length >= 3
+                ? (arguments[2] as String).trim()
+                : '';
+            final label = providedLabel.isNotEmpty
+                ? providedLabel
+                : context.resolveLabel(_nextAngleBisectorLabel);
+
+            final line1 = arguments[0] as GeoLine;
+            final line2 = arguments[1] as GeoLine;
+
+            try {
+              final bisectors = GeoAngleBisector2L.constructFromLines(
+                id: context.generateId('anglebisector'),
+                label: label,
+                line1: line1,
+                line2: line2,
+              );
+
+              context.dagManager.addObject(bisectors, bisectors.dependencies);
+
+              final count = bisectors.objects.length;
+              final message = count == 0
+                  ? 'Created ${bisectors.label} (no bisectors yet)'
+                  : 'Created ${bisectors.label} with $count bisector${count == 1 ? '' : 's'}';
+
+              return ExecutionResult.successful(
+                objectId: bisectors.id,
+                message: message,
+                object: bisectors,
+              );
+            } on ArgumentError catch (e) {
+              return ExecutionResult.error(e.message);
+            }
+          },
+        ],
       ),
     );
 
@@ -1384,38 +1458,70 @@ class CommandRegistry {
             'Enter label (optional)',
           ],
         ),
-        executor: (context, arguments) async {
-          final subject = arguments[0] as GeometryObject;
-          final label = _extractTrailingLabel(arguments);
-          final transform = _resolveInverseTransform(context, arguments[1]);
-          if (transform == null) {
-            return ExecutionResult.error(
-              'Reflect requires a mirror line, circle, point, or existing GeoInverse transform.',
+        patternExecutors: [
+          // Pattern 0: Object + existing GeoInverse transform
+          (context, arguments) async {
+            final subject = arguments[0] as GeometryObject;
+            final label = _extractTrailingLabel(arguments);
+            final transform = arguments[1] as GeoInverse;
+
+            final transformed = _createTransformedGeometry(
+              context: context,
+              subject: subject,
+              transform: transform,
+              providedLabel: label,
             );
-          }
 
-          final transformed = _createTransformedGeometry(
-            context: context,
-            subject: subject,
-            transform: transform,
-            providedLabel: label,
-          );
+            if (transformed == null) {
+              return ExecutionResult.error(
+                'Reflect does not support transforming ${subject.runtimeType}.',
+              );
+            }
 
-          if (transformed == null) {
-            return ExecutionResult.error(
-              'Reflect does not support transforming ${subject.runtimeType}.',
+            context.dagManager.addObject(transformed, transformed.dependencies);
+
+            return ExecutionResult.successful(
+              objectId: transformed.id,
+              message:
+                  'Reflected ${_displayName(subject)} to ${_displayName(transformed)}',
+              object: transformed,
             );
-          }
+          },
 
-          context.dagManager.addObject(transformed, transformed.dependencies);
+          // Pattern 1: Object + mirror line/circle/point
+          (context, arguments) async {
+            final subject = arguments[0] as GeometryObject;
+            final label = _extractTrailingLabel(arguments);
+            final transform = _resolveInverseTransform(context, arguments[1]);
+            if (transform == null) {
+              return ExecutionResult.error(
+                'Reflect requires a mirror line, circle, or point.',
+              );
+            }
 
-          return ExecutionResult.successful(
-            objectId: transformed.id,
-            message:
-                'Reflected ${_displayName(subject)} to ${_displayName(transformed)}',
-            object: transformed,
-          );
-        },
+            final transformed = _createTransformedGeometry(
+              context: context,
+              subject: subject,
+              transform: transform,
+              providedLabel: label,
+            );
+
+            if (transformed == null) {
+              return ExecutionResult.error(
+                'Reflect does not support transforming ${subject.runtimeType}.',
+              );
+            }
+
+            context.dagManager.addObject(transformed, transformed.dependencies);
+
+            return ExecutionResult.successful(
+              objectId: transformed.id,
+              message:
+                  'Reflected ${_displayName(subject)} to ${_displayName(transformed)}',
+              object: transformed,
+            );
+          },
+        ],
       ),
     );
 
@@ -1467,45 +1573,72 @@ class CommandRegistry {
             'Enter label (optional)',
           ],
         ),
-        executor: (context, arguments) async {
-          final subject = arguments[0] as GeometryObject;
-          final label = _extractTrailingLabel(arguments);
+        patternExecutors: [
+          // Pattern 0: Object + existing GeoRotate transform
+          (context, arguments) async {
+            final subject = arguments[0] as GeometryObject;
+            final label = _extractTrailingLabel(arguments);
+            final transform = arguments[1] as GeoRotate;
 
-          GeoRotate transform;
-          if (arguments[1] is GeoRotate) {
-            transform = arguments[1] as GeoRotate;
-          } else {
+            final transformed = _createTransformedGeometry(
+              context: context,
+              subject: subject,
+              transform: transform,
+              providedLabel: label,
+            );
+
+            if (transformed == null) {
+              return ExecutionResult.error(
+                'Rotate does not support transforming ${subject.runtimeType}.',
+              );
+            }
+
+            context.dagManager.addObject(transformed, transformed.dependencies);
+
+            return ExecutionResult.successful(
+              objectId: transformed.id,
+              message:
+                  'Rotated ${_displayName(subject)} to ${_displayName(transformed)}',
+              object: transformed,
+            );
+          },
+
+          // Pattern 1: Object + center point + angle
+          (context, arguments) async {
+            final subject = arguments[0] as GeometryObject;
+            final label = _extractTrailingLabel(arguments);
             final center = arguments[1] as GeoPoint;
             final angle = arguments[2] as num;
-            transform = _createRotationTransform(
+
+            final transform = _createRotationTransform(
               context: context,
               center: center,
               angleRadians: _degreesToRadians(angle.toDouble()),
             );
-          }
 
-          final transformed = _createTransformedGeometry(
-            context: context,
-            subject: subject,
-            transform: transform,
-            providedLabel: label,
-          );
-
-          if (transformed == null) {
-            return ExecutionResult.error(
-              'Rotate does not support transforming ${subject.runtimeType}.',
+            final transformed = _createTransformedGeometry(
+              context: context,
+              subject: subject,
+              transform: transform,
+              providedLabel: label,
             );
-          }
 
-          context.dagManager.addObject(transformed, transformed.dependencies);
+            if (transformed == null) {
+              return ExecutionResult.error(
+                'Rotate does not support transforming ${subject.runtimeType}.',
+              );
+            }
 
-          return ExecutionResult.successful(
-            objectId: transformed.id,
-            message:
-                'Rotated ${_displayName(subject)} to ${_displayName(transformed)}',
-            object: transformed,
-          );
-        },
+            context.dagManager.addObject(transformed, transformed.dependencies);
+
+            return ExecutionResult.successful(
+              objectId: transformed.id,
+              message:
+                  'Rotated ${_displayName(subject)} to ${_displayName(transformed)}',
+              object: transformed,
+            );
+          },
+        ],
       ),
     );
 
@@ -1557,45 +1690,72 @@ class CommandRegistry {
             'Enter label (optional)',
           ],
         ),
-        executor: (context, arguments) async {
-          final subject = arguments[0] as GeometryObject;
-          final label = _extractTrailingLabel(arguments);
+        patternExecutors: [
+          // Pattern 0: Object + existing GeoDilate transform
+          (context, arguments) async {
+            final subject = arguments[0] as GeometryObject;
+            final label = _extractTrailingLabel(arguments);
+            final transform = arguments[1] as GeoDilate;
 
-          GeoDilate transform;
-          if (arguments[1] is GeoDilate) {
-            transform = arguments[1] as GeoDilate;
-          } else {
+            final transformed = _createTransformedGeometry(
+              context: context,
+              subject: subject,
+              transform: transform,
+              providedLabel: label,
+            );
+
+            if (transformed == null) {
+              return ExecutionResult.error(
+                'Dilate does not support transforming ${subject.runtimeType}.',
+              );
+            }
+
+            context.dagManager.addObject(transformed, transformed.dependencies);
+
+            return ExecutionResult.successful(
+              objectId: transformed.id,
+              message:
+                  'Dilated ${_displayName(subject)} to ${_displayName(transformed)}',
+              object: transformed,
+            );
+          },
+
+          // Pattern 1: Object + center point + scale factor
+          (context, arguments) async {
+            final subject = arguments[0] as GeometryObject;
+            final label = _extractTrailingLabel(arguments);
             final center = arguments[1] as GeoPoint;
             final factor = arguments[2] as num;
-            transform = _createDilateTransform(
+
+            final transform = _createDilateTransform(
               context: context,
               center: center,
               factor: factor.toDouble(),
             );
-          }
 
-          final transformed = _createTransformedGeometry(
-            context: context,
-            subject: subject,
-            transform: transform,
-            providedLabel: label,
-          );
-
-          if (transformed == null) {
-            return ExecutionResult.error(
-              'Dilate does not support transforming ${subject.runtimeType}.',
+            final transformed = _createTransformedGeometry(
+              context: context,
+              subject: subject,
+              transform: transform,
+              providedLabel: label,
             );
-          }
 
-          context.dagManager.addObject(transformed, transformed.dependencies);
+            if (transformed == null) {
+              return ExecutionResult.error(
+                'Dilate does not support transforming ${subject.runtimeType}.',
+              );
+            }
 
-          return ExecutionResult.successful(
-            objectId: transformed.id,
-            message:
-                'Dilated ${_displayName(subject)} to ${_displayName(transformed)}',
-            object: transformed,
-          );
-        },
+            context.dagManager.addObject(transformed, transformed.dependencies);
+
+            return ExecutionResult.successful(
+              objectId: transformed.id,
+              message:
+                  'Dilated ${_displayName(subject)} to ${_displayName(transformed)}',
+              object: transformed,
+            );
+          },
+        ],
       ),
     );
 
@@ -1701,9 +1861,74 @@ class CommandRegistry {
           ],
           argumentHints: ['Select first object', 'Select second object'],
         ),
-        implemented: false,
         executor: (context, arguments) async {
-          return ExecutionResult.error('Intersection is not implemented');
+          final first = arguments[0] as GeometryObject;
+          final second = arguments[1] as GeometryObject;
+          final providedLabel = arguments.length >= 3
+              ? (arguments[2] as String).trim()
+              : '';
+          final label = providedLabel.isNotEmpty
+              ? providedLabel
+              : context.resolveLabel(_nextIntersectionLabel);
+
+          GeoIntersection intersection;
+
+          try {
+            // Handle different combinations of objects
+            if (first is GeoLine && second is GeoLine) {
+              final lineIntersection = GeoIntersection.lineLine(
+                id: context.generateId('intersection'),
+                label: label,
+                line1: first,
+                line2: second,
+              );
+              if (lineIntersection == null) {
+                return ExecutionResult.error(
+                  'Lines are parallel - no intersection found',
+                );
+              }
+              intersection = lineIntersection;
+            } else if (first is GeoLine && second is GeoCircle) {
+              intersection = GeoIntersection.lineCircle(
+                id: context.generateId('intersection'),
+                label: label,
+                line: first,
+                circle: second,
+              );
+            } else if (first is GeoCircle && second is GeoLine) {
+              intersection = GeoIntersection.lineCircle(
+                id: context.generateId('intersection'),
+                label: label,
+                line: second,
+                circle: first,
+              );
+            } else {
+              // first is GeoCircle && second is GeoCircle (validated by schema)
+              intersection = GeoIntersection.circleCircle(
+                id: context.generateId('intersection'),
+                label: label,
+                circle1: first as GeoCircle,
+                circle2: second as GeoCircle,
+              );
+            }
+
+            context.dagManager.addObject(intersection, intersection.dependencies);
+
+            final count = intersection.objects.length;
+            final message = count == 0
+                ? 'Created ${intersection.label} (no intersections found)'
+                : 'Created ${intersection.label} with $count intersection${count == 1 ? '' : 's'}';
+
+            return ExecutionResult.successful(
+              objectId: intersection.id,
+              message: message,
+              object: intersection,
+            );
+          } on ArgumentError catch (e) {
+            return ExecutionResult.error(e.message);
+          } catch (e) {
+            return ExecutionResult.error('Intersection calculation failed: $e');
+          }
         },
       ),
     );
@@ -2257,6 +2482,8 @@ class CommandRegistry {
   String _nextParallelLabel() => 'Par${++_parallelLabelCounter}';
   String _nextPerpBisectorLabel() => 'Bis${++_perpBisectorLabelCounter}';
   String _nextTangentLabel() => 'Tan${++_tangentLabelCounter}';
+  String _nextAngleBisectorLabel() => 'AngBis${++_angleBisectorLabelCounter}';
+  String _nextIntersectionLabel() => 'Int${++_intersectionLabelCounter}';
   String _nextInverseLabel() => 'Inv${++_inverseLabelCounter}';
   String _nextRotateLabel() => 'Rot${++_rotateLabelCounter}';
   String _nextDilateLabel() => 'Dil${++_dilateLabelCounter}';

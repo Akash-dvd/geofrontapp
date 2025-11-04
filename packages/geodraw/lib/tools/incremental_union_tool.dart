@@ -12,21 +12,22 @@ import '../models/geometry_object.dart';
 import 'tool.dart';
 
 abstract class IncrementalUnionTool<T extends UnionGeometryObjectList>
-    implements Tool {
+    with ToolCallbacksMixin implements Tool {
   IncrementalUnionTool({
     required this.dagManager,
     this.commandHistory,
-    this.onObjectCreated,
-    this.onObjectSelected,
-    this.onToolStateChanged,
-  }) : executor = SimpleExecutor(dagManager);
+    OnObjectCreated? onObjectCreated,
+    OnObjectSelected? onObjectSelected,
+    OnToolStateChanged? onToolStateChanged,
+  }) : executor = SimpleExecutor(dagManager) {
+    this.onObjectCreated = onObjectCreated;
+    this.onObjectSelected = onObjectSelected;
+    this.onToolStateChanged = onToolStateChanged;
+  }
 
   final DAGManager dagManager;
   final SimpleExecutor executor;
   final CommandHistory? commandHistory;
-  final OnObjectCreated? onObjectCreated;
-  final OnObjectSelected? onObjectSelected;
-  final OnToolStateChanged? onToolStateChanged;
 
   final List<dynamic> _inputs = <dynamic>[];
   T? _currentObject;
@@ -57,10 +58,6 @@ abstract class IncrementalUnionTool<T extends UnionGeometryObjectList>
   String extensionPrompt(int newInputCount);
   String? validateNextInput(List<dynamic> currentInputs, dynamic candidate) =>
       null;
-
-  void notifyStateChanged(String state) {
-    onToolStateChanged?.call(state);
-  }
 
   @override
   void handleInput(PointerEvent event) {
@@ -148,7 +145,7 @@ abstract class IncrementalUnionTool<T extends UnionGeometryObjectList>
     _currentObjectId = created.id;
     _syncInputsWithCurrentObject();
     _completeTransaction();
-    onObjectCreated?.call(created, created.dependencies);
+    notifyObjectCreated(created, created.dependencies);
     notifyStateChanged(creationSuccessMessage(created));
   }
 
@@ -190,7 +187,7 @@ abstract class IncrementalUnionTool<T extends UnionGeometryObjectList>
     _currentObjectId = updated.id;
     _syncInputsWithCurrentObject();
     _completeTransaction();
-    onObjectSelected?.call(updated.id);
+    notifyObjectSelected(updated.id);
     notifyStateChanged(extensionSuccessMessage(updated));
   }
 

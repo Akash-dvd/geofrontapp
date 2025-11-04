@@ -1,7 +1,7 @@
 the central executor
 
 1) called by query
-2) creates IGraph
+2) creates DAG
 3) creates structure
 4) calls pattmatt (subgraph isomorhism)
 5) calls solver for pather towards query

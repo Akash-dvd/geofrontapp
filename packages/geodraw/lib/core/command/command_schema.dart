@@ -279,16 +279,17 @@ class CommandSchema {
   ValidationResult validate(List<dynamic> args) {
     if (argumentPatterns.isEmpty) {
       if (args.isEmpty) {
-        return ValidationResult.success();
+        return ValidationResult.success(null);
       }
       return ValidationResult.failure(
         'No arguments expected, but received ${args.length}',
       );
     }
 
-    for (final pattern in argumentPatterns) {
-      if (_matchesPatternExactly(args, pattern)) {
-        return ValidationResult.success();
+    // Track which pattern matched
+    for (int i = 0; i < argumentPatterns.length; i++) {
+      if (_matchesPatternExactly(args, argumentPatterns[i])) {
+        return ValidationResult.success(i);
       }
     }
 
@@ -425,12 +426,26 @@ class CommandSchema {
 class ValidationResult {
   final bool isValid;
   final List<String> errors;
+  /// Index of the pattern that matched (if validation succeeded)
+  final int? matchedPatternIndex;
 
-  ValidationResult({required this.isValid, required this.errors});
+  ValidationResult({
+    required this.isValid,
+    required this.errors,
+    this.matchedPatternIndex,
+  });
 
-  factory ValidationResult.success() =>
-      ValidationResult(isValid: true, errors: const []);
+  factory ValidationResult.success([int? patternIndex]) =>
+      ValidationResult(
+        isValid: true,
+        errors: const [],
+        matchedPatternIndex: patternIndex,
+      );
 
   factory ValidationResult.failure(String error) =>
-      ValidationResult(isValid: false, errors: [error]);
+      ValidationResult(
+        isValid: false,
+        errors: [error],
+        matchedPatternIndex: null,
+      );
 }

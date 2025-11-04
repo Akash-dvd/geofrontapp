@@ -9,7 +9,7 @@ class IRTOGB:
       raise
     lst = []
     for key in objlst:
-      if key in IR.construction:
+      if key in IR.dag:
         lst.append(GV(key))
     
     if(len(lst)==3):

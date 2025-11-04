@@ -1009,3 +1009,155 @@ String? _normalizeLinePattern(dynamic raw) {
 bool _almostEqual(double a, double b, [double epsilon = 0.0001]) {
   return (a - b).abs() < epsilon;
 }
+
+/// Angle bisector from three points (vertex at middle point)
+class GeoAngleBisector3P extends GeoLine {
+  GeoAngleBisector3P({
+    required super.id,
+    required super.label,
+    required super.dependencies,
+    required super.multivector,
+    super.visible,
+    super.styleOverrides,
+  });
+
+  static GeoAngleBisector3P fromDependencies({
+    required String id,
+    required String label,
+    required List<GeometryObject> dependencies,
+    bool visible = true,
+    CanvasStyle? style,
+    Map<String, dynamic>? styleOverrides,
+    double fallbackStrokeWidth = 2.0,
+    LineStyle fallbackLineStyle = LineStyle.solid,
+    Color fallbackColor = Colors.purple,
+  }) {
+    if (dependencies.length != 3) {
+      throw ArgumentError(
+        'GeoAngleBisector3P requires exactly 3 point dependencies',
+      );
+    }
+
+    final p1 = dependencies[0];
+    final vertex = dependencies[1];
+    final p2 = dependencies[2];
+
+    if (p1 is! GeoPoint || vertex is! GeoPoint || p2 is! GeoPoint) {
+      throw ArgumentError(
+        'GeoAngleBisector3P expects all dependencies to be GeoPoint',
+      );
+    }
+
+    final mv = constructAngleBisector3Points(
+      p1.multivector,
+      vertex.multivector,
+      p2.multivector,
+    );
+
+    final normalizedOverrides = _lineStyleOverridesFromStyle(
+      type: GeoAngleBisector3P,
+      style: style,
+      overrides: styleOverrides,
+      fallbackColor: fallbackColor,
+      fallbackStrokeWidth: fallbackStrokeWidth,
+      fallbackLineStyle: fallbackLineStyle,
+    );
+
+    return GeoAngleBisector3P(
+      id: id,
+      label: label,
+      dependencies: [p1.id, vertex.id, p2.id],
+      multivector: mv,
+      visible: visible,
+      styleOverrides: normalizedOverrides,
+    );
+  }
+
+  @override
+  GeoAngleBisector3P copyWith({
+    String? id,
+    String? label,
+    List<String>? dependencies,
+    Multivector? multivector,
+    bool? visible,
+    CanvasStyle? style,
+    Map<String, dynamic>? styleOverrides,
+  }) {
+    final overrides =
+        styleOverrides ??
+        (style == null ? this.styleOverrides : resolveStyleOverrides(style));
+    return GeoAngleBisector3P(
+      id: id ?? this.id,
+      label: label ?? this.label,
+      dependencies: dependencies ?? this.dependencies,
+      multivector: multivector ?? this.multivector,
+      visible: visible ?? this.visible,
+      styleOverrides: overrides,
+    );
+  }
+
+  @override
+  String get type => 'GeoAngleBisector3P';
+
+  @override
+  Map<String, dynamic> toJson() {
+    final json = super.toJson();
+    final properties = <String, dynamic>{
+      'a': a,
+      'b': b,
+      'c': c,
+      'linePattern': style.linePattern,
+      'strokeWidth': style.strokeWidth,
+    };
+    properties.removeWhere((_, value) => value == null);
+    json['properties'] = properties;
+    return json;
+  }
+
+  static GeoAngleBisector3P fromJson(Map<String, dynamic> json) {
+    final props = (json['properties'] as Map<String, dynamic>?) ?? const {};
+    final mv = SimpleGeometryObject.decodeMultivector(
+      json[SimpleGeometryObject.multivectorKey],
+    );
+    final deps = (json['dependencies'] as List).cast<String>();
+    final defaults =
+        CanvasStyleDefaults.instance.resolveForType(GeoAngleBisector3P);
+    final styleOverrides = _lineStyleOverridesFromJson(
+      json,
+      legacyProps: props,
+      fallbackColor: defaults.strokeColor,
+    );
+
+    return GeoAngleBisector3P(
+      id: json['id'] as String,
+      label: json['label'] as String,
+      dependencies: deps,
+      multivector: mv,
+      visible: json['visible'] as bool? ?? true,
+      styleOverrides: styleOverrides,
+    );
+  }
+
+  @override
+  GeometryObject? rebuildFromParents(List<GeometryObject> parents) {
+    if (parents.length != 3) {
+      return null;
+    }
+
+    final p1 = parents[0];
+    final vertex = parents[1];
+    final p2 = parents[2];
+
+    if (p1 is! GeoPoint || vertex is! GeoPoint || p2 is! GeoPoint) {
+      return null;
+    }
+
+    return GeoAngleBisector3P.fromDependencies(
+      id: id,
+      label: label,
+      dependencies: parents,
+      visible: visible,
+      styleOverrides: styleOverrides,
+    );
+  }
+}

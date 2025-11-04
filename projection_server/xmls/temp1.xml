@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<geogebra format="5.0" version="5.0.600.0" app="geometry" platform="w" id="A9A985EE-28AB-431C-B2DD-6E66DB75CF1A"  xsi:noNamespaceSchemaLocation="http://www.geogebra.org/apps/xsd/ggb.xsd" xmlns="" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" >
+
+<construction title="" author="" date="">
+<element type="point" label="A">
+	<show object="true" label="true"/>
+	<coords x="-3.56" y="3.4" z="1"/>
+</element>
+
+<element type="point" label="B">
+	<show object="true" label="true"/>
+	<coords x="-6.18" y="-1.58" z="1"/>
+</element>
+
+<element type="point" label="C">
+	<show object="true" label="true"/>
+	<coords x="0.76" y="-1.5" z="1"/>
+</element>
+
+<command name="Circle">
+	<input a0="A" a1="B" a2="C"/>
+	<output a0="c"/>
+</command>
+
+<command name="AngularBisector">
+	<input a0="B" a1="A" a2="C"/>
+	<output a0="f"/>
+</command>
+
+<command name="LineBisector">
+	<input a0="B" a1="C"/>
+	<output a0="g"/>
+</command>
+
+<command name="Intersect">
+	<input a0="f" a1="g"/>
+	<output a0="D"/>
+</command>
+
+</construction>
+</geogebra>

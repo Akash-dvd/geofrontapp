@@ -58,7 +58,7 @@ class invocation:
       'point': invocation.point,
     }
     for arg in args:
-      if arg.name in IR.construction:
+      if arg.name in IR.dag:
         func = switcher[IR.getType(arg.name)]
         nqGB = nqGB.sSubs((arg,func(arg.name,IR)))
     

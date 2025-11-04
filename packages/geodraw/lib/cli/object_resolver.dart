@@ -1,8 +1,8 @@
 /// Utilities for resolving references into DAG objects
 library;
 
-import '../dag/dag_manager.dart';
-import '../../models/geometry_object.dart';
+import '../core/dag/dag_manager.dart';
+import '../models/geometry_object.dart';
 
 /// Simple resolver for converting string IDs/labels to objects
 class ObjectResolver {
@@ -43,3 +43,4 @@ class ObjectResolver {
     return references.map(resolve).toList();
   }
 }
+

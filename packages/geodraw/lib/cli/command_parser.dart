@@ -1,10 +1,10 @@
 /// Simple command parser for AI and CLI input
 library;
 
-import '../dag/dag_manager.dart';
+import '../core/dag/dag_manager.dart';
 import 'object_resolver.dart';
-import 'simple_executor.dart';
-import 'command_registry.dart';
+import '../core/command/simple_executor.dart';
+import '../core/command/command_registry.dart';
 
 /// Exception thrown when command parsing fails.
 class CommandParserException implements Exception {
@@ -170,3 +170,4 @@ class CommandParser {
     return results;
   }
 }
+

@@ -208,6 +208,8 @@ const ToolCatalogEntry _angleBisectorTool = ToolCatalogEntry(
   icon: Icons.call_split,
   assetIcon: 'assets/tool_icons/angle_Bisector.svg',
   command: 'AngleBisector[]',
+  toolType: ToolType.angleBisector,
+  implemented: true,
 );
 
 const ToolCatalogEntry _midpointTool = ToolCatalogEntry(
@@ -395,6 +397,7 @@ const ToolCatalogEntry _intersectTool = ToolCatalogEntry(
   assetIcon: 'assets/tool_icons/intersection.svg',
   command: 'Intersect[]',
   toolType: ToolType.intersection,
+  implemented: true,
 );
 
 const ToolCatalogEntry _pointOnObjectTool = ToolCatalogEntry(

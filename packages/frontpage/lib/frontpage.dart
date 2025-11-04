@@ -146,6 +146,7 @@ class _FrontPageState extends State<FrontPage> {
                   onPrimaryCta: () => _scrollTo(_demoSectionKey),
                   onSecondaryCta: () => _scrollTo(_ctaSectionKey),
                 ),
+                const _VisionRoadmapSection(),
                 const _ValuePropositionSection(),
                 const _FeatureShowcaseSection(),
                 _InteractiveDemoSection(
@@ -302,7 +303,7 @@ class _HeroSection extends StatelessWidget {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                'Visual Geometry. Symbolic Rigor.',
+                                'One Algebraic Core. Infinite Domains.',
                                 style: Theme.of(context)
                                     .textTheme
                                     .displayMedium
@@ -313,8 +314,8 @@ class _HeroSection extends StatelessWidget {
                               ),
                               const SizedBox(height: 20),
                               Text(
-                                'Interactive 2D geometry powered by a symbolic algebra core — '
-                                'get verifiable, human-readable solutions.',
+                                'Starting with International Math Olympiad geometry, expanding through physics and AI integration, '
+                                'toward robotics—all powered by a unified symbolic algebra framework that never hallucinates.',
                                 style: Theme.of(context)
                                     .textTheme
                                     .titleMedium
@@ -482,6 +483,276 @@ class _GeometryHeroDemoState extends State<_GeometryHeroDemo>
   }
 }
 
+class _VisionRoadmapSection extends StatelessWidget {
+  const _VisionRoadmapSection();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            _Palette.primary.withOpacity(0.03),
+            _Palette.secondary.withOpacity(0.03),
+          ],
+        ),
+      ),
+      padding: const EdgeInsets.symmetric(vertical: 96, horizontal: 24),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 1200),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Text('The Vision: Incremental Mastery',
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.displaySmall?.copyWith(
+                      fontWeight: FontWeight.w600, color: _Palette.primary)),
+              const SizedBox(height: 20),
+              Text(
+                'One core algebraic framework. Multiple domains. A clear roadmap from competitive math to autonomous intelligence.',
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                    color: _Palette.neutralDark.withOpacity(0.85), height: 1.5),
+              ),
+              const SizedBox(height: 64),
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final isSmall = constraints.maxWidth < 900;
+                  if (isSmall) {
+                    return Column(
+                      children: [
+                        _RoadmapPhaseCard(
+                          phase: 'TODAY',
+                          title: 'Geometry',
+                          description:
+                              'Solve International Math Olympiad and competitive geometry problems with verified, step-by-step proofs.',
+                          features: const [
+                            '✓ IMO/USAMO problem solving',
+                            '✓ Interactive GeoDraw canvas',
+                            '✓ Solver backend (live)',
+                            '✓ CLI & API access',
+                          ],
+                          color: _Palette.secondary,
+                          icon: Icons.functions_outlined,
+                        ),
+                        const SizedBox(height: 32),
+                        _RoadmapPhaseCard(
+                          phase: 'NEXT',
+                          title: 'Physics',
+                          description:
+                              'Extend the algebraic core to mechanics, electromagnetics, and physical simulations with the same symbolic rigor.',
+                          features: const [
+                            '→ Classical mechanics',
+                            '→ Electromagnetic fields',
+                            '→ AI-augmented reasoning',
+                            '→ Natural language interface',
+                          ],
+                          color: _Palette.primary,
+                          icon: Icons.waves_outlined,
+                        ),
+                        const SizedBox(height: 32),
+                        _RoadmapPhaseCard(
+                          phase: 'FUTURE',
+                          title: 'Robotics',
+                          description:
+                              'Math + Physics + AI convergence for autonomous systems with real-time, provably correct control and planning.',
+                          features: const [
+                            '⟡ Motion planning',
+                            '⟡ Autonomous control',
+                            '⟡ Industrial automation',
+                            '⟡ Verifiable AI agents',
+                          ],
+                          color: _Palette.accent,
+                          icon: Icons.precision_manufacturing_outlined,
+                        ),
+                      ],
+                    );
+                  }
+                  
+                  return Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: _RoadmapPhaseCard(
+                          phase: 'TODAY',
+                          title: 'Geometry',
+                          description:
+                              'Solve International Math Olympiad and competitive geometry problems with verified, step-by-step proofs.',
+                          features: const [
+                            '✓ IMO/USAMO problem solving',
+                            '✓ Interactive GeoDraw canvas',
+                            '✓ Solver backend (live)',
+                            '✓ CLI & API access',
+                          ],
+                          color: _Palette.secondary,
+                          icon: Icons.functions_outlined,
+                        ),
+                      ),
+                      const SizedBox(width: 24),
+                      Expanded(
+                        child: _RoadmapPhaseCard(
+                          phase: 'NEXT',
+                          title: 'Physics',
+                          description:
+                              'Extend the algebraic core to mechanics, electromagnetics, and physical simulations with the same symbolic rigor.',
+                          features: const [
+                            '→ Classical mechanics',
+                            '→ Electromagnetic fields',
+                            '→ AI-augmented reasoning',
+                            '→ Natural language interface',
+                          ],
+                          color: _Palette.primary,
+                          icon: Icons.waves_outlined,
+                        ),
+                      ),
+                      const SizedBox(width: 24),
+                      Expanded(
+                        child: _RoadmapPhaseCard(
+                          phase: 'FUTURE',
+                          title: 'Robotics',
+                          description:
+                              'Math + Physics + AI convergence for autonomous systems with real-time, provably correct control and planning.',
+                          features: const [
+                            '⟡ Motion planning',
+                            '⟡ Autonomous control',
+                            '⟡ Industrial automation',
+                            '⟡ Verifiable AI agents',
+                          ],
+                          color: _Palette.accent,
+                          icon: Icons.precision_manufacturing_outlined,
+                        ),
+                      ),
+                    ],
+                  );
+                },
+              ),
+              const SizedBox(height: 48),
+              Container(
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  color: _Palette.primary.withOpacity(0.08),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: _Palette.primary.withOpacity(0.2)),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.hub_outlined,
+                        color: _Palette.secondary, size: 32),
+                    const SizedBox(width: 16),
+                    Flexible(
+                      child: Text(
+                        'One Unified Algebraic Framework Powers All Phases',
+                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w600,
+                            color: _Palette.primary),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _RoadmapPhaseCard extends StatelessWidget {
+  const _RoadmapPhaseCard({
+    required this.phase,
+    required this.title,
+    required this.description,
+    required this.features,
+    required this.color,
+    required this.icon,
+  });
+
+  final String phase;
+  final String title;
+  final String description;
+  final List<String> features;
+  final Color color;
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(28),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: color.withOpacity(0.3), width: 2),
+        boxShadow: [
+          BoxShadow(
+            color: color.withOpacity(0.15),
+            blurRadius: 24,
+            offset: const Offset(0, 12),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: color.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  phase,
+                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                      color: color, fontWeight: FontWeight.w700, letterSpacing: 1.2),
+                ),
+              ),
+              const Spacer(),
+              Icon(icon, color: color, size: 36),
+            ],
+          ),
+          const SizedBox(height: 20),
+          Text(title,
+              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                  fontWeight: FontWeight.w700, color: _Palette.primary)),
+          const SizedBox(height: 12),
+          Text(description,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  height: 1.6, color: _Palette.neutralDark.withOpacity(0.85))),
+          const SizedBox(height: 24),
+          ...features.map((feature) => Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      feature.substring(0, 1),
+                      style: TextStyle(
+                          color: color, fontSize: 18, fontWeight: FontWeight.w600),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        feature.substring(2),
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: _Palette.neutralDark, height: 1.4),
+                      ),
+                    ),
+                  ],
+                ),
+              )),
+        ],
+      ),
+    );
+  }
+}
+
 class _SymbolicStepsToggle extends StatefulWidget {
   const _SymbolicStepsToggle({required this.currentStep});
 
@@ -577,9 +848,15 @@ class _ValuePropositionSection extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Why Akshara Intelligence',
+              Text('The Akshara Advantage',
                   style: Theme.of(context).textTheme.headlineMedium?.copyWith(
                       fontWeight: FontWeight.w600, color: _Palette.primary)),
+              const SizedBox(height: 16),
+              Text(
+                'Built to scale from competitive mathematics to autonomous systems',
+                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                    color: _Palette.neutralDark.withOpacity(0.8)),
+              ),
               const SizedBox(height: 32),
               LayoutBuilder(
                 builder: (context, constraints) {
@@ -592,7 +869,7 @@ class _ValuePropositionSection extends StatelessWidget {
                             prop: prop,
                             width: isSmall
                                 ? constraints.maxWidth
-                                : (constraints.maxWidth - 48) / 3))
+                                : (constraints.maxWidth - 48) / 2))
                         .toList(),
                   );
                 },
@@ -1004,9 +1281,15 @@ class _UseCasesSection extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Use cases & industries',
+              Text('Applications Across The Journey',
                   style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                       fontWeight: FontWeight.w600, color: _Palette.primary)),
+              const SizedBox(height: 12),
+              Text(
+                'From today\'s geometry to tomorrow\'s autonomous systems',
+                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                    color: _Palette.neutralDark.withOpacity(0.75)),
+              ),
               const SizedBox(height: 24),
               Wrap(
                 spacing: 24,
@@ -1073,9 +1356,15 @@ class _HowItWorksSection extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('How it works',
+              Text('Our Approach: Incremental Domain Mastery',
                   style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                       fontWeight: FontWeight.w600, color: _Palette.primary)),
+              const SizedBox(height: 12),
+              Text(
+                'Start with geometry, prove the framework, expand systematically',
+                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                    color: _Palette.neutralDark.withOpacity(0.75)),
+              ),
               const SizedBox(height: 32),
               Wrap(
                 alignment: WrapAlignment.spaceBetween,
@@ -1189,7 +1478,7 @@ class _CtaSectionState extends State<_CtaSection> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'See how visual intuition becomes verified reasoning. Request early access.',
+                      'Join us on the journey from Olympiad geometry to autonomous intelligence.',
                       style: Theme.of(context)
                           .textTheme
                           .headlineSmall
@@ -1198,7 +1487,7 @@ class _CtaSectionState extends State<_CtaSection> {
                     ),
                     const SizedBox(height: 16),
                     Text(
-                      'Share a bit about your organization and use case, and we will tailor a walkthrough with the right geometry and algebra demos.',
+                      'Tell us which phase interests you—whether it\'s today\'s geometry solver, tomorrow\'s physics engine, or our long-term robotics vision.',
                       style: Theme.of(context)
                           .textTheme
                           .bodyLarge
@@ -1803,22 +2092,28 @@ class _ValueProp {
 
 const List<_ValueProp> valuePropositions = [
   _ValueProp(
-    title: 'Unified Symbolic Core',
+    title: 'Unified Algebraic Core',
     description:
-        'A single algebraic engine that makes proofs verifiable and outputs human-readable reasoning.',
+        'One mathematical engine that works across geometry, physics, and beyond. Build once, scale infinitely.',
     icon: Icons.hub_outlined,
   ),
   _ValueProp(
-    title: 'Interactive Visual Learning',
+    title: 'IMO to Physics to Robotics',
     description:
-        'Build and explore geometry diagrams with instant symbolic translations.',
-    icon: Icons.view_in_ar_outlined,
+        'Master Olympiad-level geometry today. Physics simulation tomorrow. Autonomous systems soon.',
+    icon: Icons.timeline_outlined,
   ),
   _ValueProp(
-    title: 'Hallucination-Free Outputs',
+    title: 'AI-Augmented, Not AI-Dependent',
     description:
-        'Math-first design guarantees correctness where informal AI fails.',
+        'LLM integration for natural language, but all reasoning grounded in symbolic proof—no hallucinations.',
     icon: Icons.verified_outlined,
+  ),
+  _ValueProp(
+    title: 'Built for the Long Game',
+    description:
+        'From competitive math to robotics control. We\'re building the foundation that scales to real-world intelligence.',
+    icon: Icons.rocket_launch_outlined,
   ),
 ];
 
@@ -1926,24 +2221,34 @@ class _UseCase {
 
 const List<_UseCase> useCases = [
   _UseCase(
-      title: 'Education',
+      title: 'Today: Olympiad Training',
       description:
-          'Interactive lessons for classrooms and self-paced learners.',
+          'IMO, USAMO, and competitive geometry problems with verified proofs.',
+      icon: Icons.emoji_events_outlined),
+  _UseCase(
+      title: 'Today: Advanced Math Education',
+      description:
+          'Interactive geometry for universities and self-paced learners.',
       icon: Icons.school_outlined),
   _UseCase(
-      title: 'Research & R&D',
+      title: 'Next: Physics & EM Simulation',
       description:
-          'Prototype new geometry solvers and publish symbolic insights.',
+          'Mechanics, electromagnetics, and physical systems with symbolic certainty.',
       icon: Icons.science_outlined),
   _UseCase(
-      title: 'EdTech Integrations',
+      title: 'Next: AI-Integrated Reasoning',
       description:
-          'Embed geometry + algebra understanding into your learning product.',
-      icon: Icons.extension_outlined),
+          'Natural language understanding backed by verifiable computation.',
+      icon: Icons.psychology_outlined),
   _UseCase(
-      title: 'Engineering & Simulation',
-      description: 'Connect CAD-like reasoning with symbolic proof guarantees.',
+      title: 'Future: Robotics R&D',
+      description:
+          'Motion planning and control with provable constraints.',
       icon: Icons.precision_manufacturing_outlined),
+  _UseCase(
+      title: 'Future: Autonomous Systems',
+      description: 'Real-time verified computation for industrial automation.',
+      icon: Icons.smart_toy_outlined),
 ];
 
 class _Testimonial {
@@ -1987,19 +2292,24 @@ class _ProcessStep {
 
 const List<_ProcessStep> processSteps = [
   _ProcessStep(
-      icon: Icons.draw_outlined,
-      title: 'Construct visually',
+      icon: Icons.functions_outlined,
+      title: '1. Prove Geometry (Now)',
       description:
-          'Start with intuitive constructions using an interactive canvas.'),
+          'Solve IMO and Olympiad problems with verifiable, symbolic proofs.'),
   _ProcessStep(
-      icon: Icons.calculate_outlined,
-      title: 'Translate to symbolic representation',
+      icon: Icons.waves_outlined,
+      title: '2. Simulate Physics (Next)',
       description:
-          'Akshara captures constraints, relations and algebraic equivalents.'),
+          'Extend to mechanics and electromagnetics using the same algebraic core.'),
   _ProcessStep(
-      icon: Icons.verified_user_outlined,
-      title: 'Get verified solutions & APIs',
-      description: 'Share proofs, export code or connect via REST / SDK.'),
+      icon: Icons.psychology_outlined,
+      title: '3. Integrate AI (Soon)',
+      description:
+          'Combine LLM natural language with symbolic certainty—no hallucinations.'),
+  _ProcessStep(
+      icon: Icons.precision_manufacturing_outlined,
+      title: '4. Power Robotics (Vision)',
+      description: 'Real-time autonomous systems with provable constraints.'),
 ];
 
 class _TeamMember {
@@ -2045,10 +2355,12 @@ const Map<String, List<String>> footerLinks = {
 };
 
 const List<String> useCaseOptions = [
-  'Classroom instruction',
-  'EdTech product integration',
-  'Research collaboration',
-  'STEM competition coaching',
+  'IMO/Olympiad Geometry (Available Now)',
+  'Advanced Math Education (Available Now)',
+  'Physics Simulation (Early Access)',
+  'AI-Integrated Reasoning (Coming Soon)',
+  'Robotics Applications (Long-term Partnership)',
+  'Research Collaboration (All Phases)',
   'Other',
 ];
 
