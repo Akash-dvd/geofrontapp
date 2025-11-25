@@ -164,18 +164,16 @@ class _ProblemFormScreenState extends State<ProblemFormScreen> {
       dagManager: _dagManager,
       onObjectCreated: (_, __) => setState(() {}),
       onObjectSelected: (objectId) {
-        // Update selection for highlighting
-        if (objectId.isEmpty) {
-          // Empty string means clear selection
-          setState(() {
+        // Update selection for both select tool and staged selection tools
+        setState(() {
+          if (objectId.isEmpty) {
+            // Empty string means clear selection
             _selectedIds.clear();
-          });
-        } else {
-          // Add to selection
-          setState(() {
+          } else {
+            // Add to selection set for visual feedback
             _selectedIds.add(objectId);
-          });
-        }
+          }
+        });
       },
       onToolStateChanged: (_) => setState(() {}),
     );

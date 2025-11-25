@@ -237,7 +237,7 @@ _AngleBisectorComputation _computeAngleBisectors({
   final internalLines = <GeoLine>[];
   final externalLines = <GeoLine>[];
 
-  if (bisectors.length >= 1) {
+  if (bisectors.isNotEmpty) {
     internalLines.add(
       GeoLine2P(
         id: '${idSeed}_internal',

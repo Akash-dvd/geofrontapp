@@ -2,7 +2,7 @@
 library;
 
 export '../core/command/simple_executor.dart' show ExecutionResult;
-export 'command_history.dart';
+export '../core/command/command_history.dart';
 export 'cli_adapter.dart';
 export 'command_parser.dart';
 export 'object_resolver.dart';

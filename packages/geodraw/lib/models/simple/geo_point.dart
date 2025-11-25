@@ -30,23 +30,54 @@ abstract class GeoPoint extends SimpleGeometryObject {
 
     final effectiveStyle = style;
     final radius = effectiveStyle.pointRadius;
+    
+    // Check if paint has highlight colors (different from base style)
+    final isHighlighted = paint.color != effectiveStyle.strokeColor ||
+        (effectiveStyle.highlightStrokeColor != null &&
+            paint.color == effectiveStyle.highlightStrokeColor);
+    
+    // Draw glow effect if highlighted and enabled
+    if (isHighlighted && effectiveStyle.highlightUseGlow && effectiveStyle.highlightGlowRadius > 0) {
+      final glowPaint = Paint()
+        ..color = effectiveStyle.getEffectiveFillColor(true).withOpacity(0.3)
+        ..style = PaintingStyle.fill
+        ..maskFilter = MaskFilter.blur(BlurStyle.normal, effectiveStyle.highlightGlowRadius);
+      canvas.drawCircle(position, radius + effectiveStyle.highlightGlowRadius, glowPaint);
+    }
 
     if (effectiveStyle.filled) {
+      // Use highlight colors if paint indicates highlighting, otherwise use style
+      final fillColor = isHighlighted && effectiveStyle.highlightFillColor != null
+          ? effectiveStyle.highlightFillColor!
+          : effectiveStyle.fillColor;
+      final strokeColor = isHighlighted && effectiveStyle.highlightStrokeColor != null
+          ? effectiveStyle.highlightStrokeColor!
+          : effectiveStyle.strokeColor;
+      // Use paint's strokeWidth (already includes 1.5x multiplier when selected)
+      final strokeWidth = paint.strokeWidth;
+      
       final fillPaint = Paint()
-        ..color = effectiveStyle.fillColor
+        ..color = fillColor
         ..style = PaintingStyle.fill;
       canvas.drawCircle(position, radius, fillPaint);
 
       final strokePaint = Paint()
-        ..color = effectiveStyle.strokeColor
+        ..color = strokeColor
         ..style = PaintingStyle.stroke
-        ..strokeWidth = effectiveStyle.strokeWidth;
+        ..strokeWidth = strokeWidth;
       canvas.drawCircle(position, radius, strokePaint);
     } else {
+      // Use highlight colors if paint indicates highlighting, otherwise use style
+      final strokeColor = isHighlighted && effectiveStyle.highlightStrokeColor != null
+          ? effectiveStyle.highlightStrokeColor!
+          : effectiveStyle.strokeColor;
+      // Use paint's strokeWidth (already includes 1.5x multiplier when selected)
+      final strokeWidth = paint.strokeWidth;
+      
       final strokePaint = Paint()
-        ..color = effectiveStyle.strokeColor
+        ..color = strokeColor
         ..style = PaintingStyle.stroke
-        ..strokeWidth = effectiveStyle.strokeWidth;
+        ..strokeWidth = strokeWidth;
       canvas.drawCircle(position, radius, strokePaint);
     }
 

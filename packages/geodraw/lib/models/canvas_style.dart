@@ -10,6 +10,13 @@ class CanvasStyle {
   final String linePattern;
   final Color labelColor;
   final double labelFontSize;
+  
+  // Highlight properties
+  final Color? highlightStrokeColor;
+  final Color? highlightFillColor;
+  final double highlightStrokeWidthMultiplier;
+  final double highlightGlowRadius;
+  final bool highlightUseGlow;
 
   const CanvasStyle({
     required this.strokeColor,
@@ -20,6 +27,11 @@ class CanvasStyle {
     required this.linePattern,
     required this.labelColor,
     required this.labelFontSize,
+    this.highlightStrokeColor,
+    this.highlightFillColor,
+    this.highlightStrokeWidthMultiplier = 1.5,
+    this.highlightGlowRadius = 0.0,
+    this.highlightUseGlow = false,
   });
 
   /// Base defaults used when an object does not supply its own defaults.
@@ -43,6 +55,11 @@ class CanvasStyle {
     String? linePattern,
     Color? labelColor,
     double? labelFontSize,
+    Color? highlightStrokeColor,
+    Color? highlightFillColor,
+    double? highlightStrokeWidthMultiplier,
+    double? highlightGlowRadius,
+    bool? highlightUseGlow,
   }) {
     return CanvasStyle(
       strokeColor: strokeColor ?? this.strokeColor,
@@ -53,7 +70,36 @@ class CanvasStyle {
       linePattern: linePattern ?? this.linePattern,
       labelColor: labelColor ?? this.labelColor,
       labelFontSize: labelFontSize ?? this.labelFontSize,
+      highlightStrokeColor: highlightStrokeColor ?? this.highlightStrokeColor,
+      highlightFillColor: highlightFillColor ?? this.highlightFillColor,
+      highlightStrokeWidthMultiplier: highlightStrokeWidthMultiplier ?? this.highlightStrokeWidthMultiplier,
+      highlightGlowRadius: highlightGlowRadius ?? this.highlightGlowRadius,
+      highlightUseGlow: highlightUseGlow ?? this.highlightUseGlow,
     );
+  }
+
+  /// Get effective stroke color (highlight if provided, else normal)
+  Color getEffectiveStrokeColor(bool isHighlighted) {
+    if (isHighlighted && highlightStrokeColor != null) {
+      return highlightStrokeColor!;
+    }
+    return strokeColor;
+  }
+
+  /// Get effective fill color (highlight if provided, else normal)
+  Color getEffectiveFillColor(bool isHighlighted) {
+    if (isHighlighted && highlightFillColor != null) {
+      return highlightFillColor!;
+    }
+    return fillColor;
+  }
+
+  /// Get effective stroke width (highlight multiplier if provided)
+  double getEffectiveStrokeWidth(bool isHighlighted) {
+    if (isHighlighted) {
+      return strokeWidth * highlightStrokeWidthMultiplier;
+    }
+    return strokeWidth;
   }
 
   /// Calculate the difference between this style and the provided defaults.
@@ -84,6 +130,8 @@ class CanvasStyle {
     if (!_equalsDouble(labelFontSize, defaults.labelFontSize)) {
       diff['labelFontSize'] = labelFontSize;
     }
+    // Note: Highlight properties are not serialized in diff
+    // They are only used for rendering, not persisted
 
     return diff;
   }
@@ -133,6 +181,12 @@ class CanvasStyle {
           ? resolveColor('labelColor', defaults.labelColor)
           : defaults.labelColor,
       labelFontSize: resolveDouble('labelFontSize', defaults.labelFontSize),
+      // Highlight properties are not loaded from diff, use defaults
+      highlightStrokeColor: defaults.highlightStrokeColor,
+      highlightFillColor: defaults.highlightFillColor,
+      highlightStrokeWidthMultiplier: defaults.highlightStrokeWidthMultiplier,
+      highlightGlowRadius: defaults.highlightGlowRadius,
+      highlightUseGlow: defaults.highlightUseGlow,
     );
   }
 

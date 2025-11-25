@@ -54,23 +54,23 @@ Multivector uniForm(Multivector line) {
   }
 }
 
-/// Construct infForm
-Multivector infForm(Multivector circle) {
-  if (circle.isCircle()) {
-    return circle.scalarDivide(circle.o);
-  } else {
-    throw ArgumentError('constructPointFromCircle: Input is not a circle');
-  }
-}
-
-/// Construct infSignedForm
-Multivector infSignedForm(Multivector circle) {
+/// Construct signed infForm
+Multivector signedInfForm(Multivector circle) {
   if (circle.isCircle()) {
     final orientation = circle.o;
     if (orientation == 0) {
       throw ArgumentError('infSignedForm: Circle has zero orientation');
     }
     return circle.scalarDivide(orientation).scalarMultiply(orientation.sign);
+  } else {
+    throw ArgumentError('constructPointFromCircle: Input is not a circle');
+  }
+}
+
+/// Construct infForm
+Multivector infForm(Multivector circle) {
+  if (circle.isCircle()) {
+    return circle.scalarDivide(circle.o);
   } else {
     throw ArgumentError('constructPointFromCircle: Input is not a circle');
   }
@@ -278,7 +278,7 @@ Multivector constructCircleThrough3PointsSigned(
   Multivector point2,
   Multivector point3,
 ) {
-  return infSignedForm((point1 ^ point2 ^ point3).dual());
+  return signedInfForm((point1 ^ point2 ^ point3).dual());
 }
 
 /// Construct inverse circle with respect to a circle
@@ -386,14 +386,21 @@ Multivector constructPointReflectionOperator(Multivector point) {
   return point ^ Multivector(O: 1);
 }
 
+// ----------------------------------------------------------------------------
+// REFLECTION HELPERS
+// ----------------------------------------------------------------------------
+
 /// Construct reflection of object across line
 /// Returns: Multivector representing the reflected object
 Multivector constructReflectionAcrossLine(
   Multivector object,
   Multivector line,
 ) {
-  final normalized = constructLineReflectionOperator(line);
-  return normalized.reflection(object).getOrElse(() => object);
+  return _finalizeReflection(
+    object: object,
+    operator: constructLineReflectionOperator(line),
+    signed: false,
+  );
 }
 
 /// Construct reflection of object across point
@@ -402,9 +409,13 @@ Multivector constructReflectionAcrossPoint(
   Multivector object,
   Multivector point,
 ) {
-  final operator = constructPointReflectionOperator(point);
-  return operator.reflection(object).getOrElse(() => object);
+  return _finalizeReflection(
+    object: object,
+    operator: constructPointReflectionOperator(point),
+    signed: false,
+  );
 }
+
 
 /// Construct reflection of object across circle
 /// Returns: Multivector representing the reflected object
@@ -412,8 +423,102 @@ Multivector constructReflectionAcrossCircle(
   Multivector object,
   Multivector circle,
 ) {
-  final normalized = constructCircleReflectionOperator(circle);
-  return normalized.reflection(object).getOrElse(() => object);
+  return _finalizeReflection(
+    object: object,
+    operator: constructCircleReflectionOperator(circle),
+    signed: false,
+  );
+}
+
+/// Construct reflection of object across line
+/// Returns: Multivector representing the reflected object
+Multivector constructSignedReflectionAcrossLine(
+  Multivector object,
+  Multivector line,
+) {
+  return _finalizeReflection(
+    object: object,
+    operator: constructLineReflectionOperator(line),
+    signed: true,
+  );
+}
+
+/// Construct reflection of object across point
+/// Returns: Multivector representing the reflected object
+Multivector constructSignedReflectionAcrossPoint(
+  Multivector object,
+  Multivector point,
+) {
+  return _finalizeReflection(
+    object: object,
+    operator: constructPointReflectionOperator(point),
+    signed: true,
+  );
+}
+
+/// Construct reflection of object across circle
+/// Returns: Multivector representing the reflected object
+Multivector constructSignedReflectionAcrossCircle(
+  Multivector object,
+  Multivector circle,
+) {
+  return _finalizeReflection(
+    object: object,
+    operator: constructCircleReflectionOperator(circle),
+    signed: true,
+  );
+}
+
+Multivector _finalizeReflection({
+  required Multivector object,
+  required Multivector operator,
+  required bool signed,
+}) {
+  final reflected = operator.reflection(object).getOrElse(() => object);
+
+  if (reflected.isCircle()) {
+    return signed ? signedInfForm(reflected) : infForm(reflected);
+  }
+
+  if (reflected.isLine()) {
+    return uniForm(reflected);
+  }
+
+  if (reflected.isPoint()) {
+    return infForm(reflected);
+  }
+
+  return reflected;
+}
+
+/// Normalize a multivector after transformation to ensure it's in proper form
+/// This handles cases where transformations produce valid but unnormalized multivectors
+/// Returns: Normalized multivector (as line or circle), or original if normalization fails
+Multivector normalizeTransformedMultivector(Multivector mv) {
+  // Check if it looks like a line (has e1, e2, O components, o might be 0 or small)
+  final looksLikeLine = mv.o.abs() < 1e-10 && 
+                        (mv.e1.abs() > 1e-10 || mv.e2.abs() > 1e-10);
+  // Check if it looks like a circle (has o component)
+  final looksLikeCircle = mv.o.abs() > 1e-10;
+  
+  if (mv.isLine() || looksLikeLine) {
+    try {
+      return uniForm(mv);
+    } catch (e) {
+      // Normalization failed, return original
+      return mv;
+    }
+  } else if (mv.isCircle() || looksLikeCircle) {
+    try {
+      return infForm(mv);
+    } catch (e) {
+      // Normalization failed, return original
+      return mv;
+    }
+  }
+  
+  // Not a line or circle, return as-is
+  return mv;
 }
 
 // ----------------------------------------------------------------------------
@@ -562,7 +667,7 @@ double distancePointToLine(Multivector point, Multivector line) {
   final p1 = infForm(point);
   final l1 = uniForm(line);
   final d = (l1 | p1).s;
-  return d;
+  return d.abs();
 }
 
 /// Calculate distance from a point to a circle
@@ -570,7 +675,10 @@ double distancePointToLine(Multivector point, Multivector line) {
 double distancePointToCircle(Multivector point, Multivector circle) {
   final p1 = infForm(point);
   final c1 = infForm(circle);
-  final d = math.sqrt(((p1 | c1).s) * (-2));
+  final scalar = (p1 | c1).s;
+  // 10x the scale
+  final multiplier = scalar > 0 ? .2 : -.2;
+  final d = math.sqrt(scalar * multiplier);
   return d;
 }
 

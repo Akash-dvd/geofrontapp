@@ -98,6 +98,7 @@ class _GeoDrawCreateScreenState extends State<GeoDrawCreateScreen> {
       setState(() {
         _dagManager.deleteObject(id, cascade: hasChildren);
         _selectedIds.remove(id);
+            // Selection removed via _selectedIds.remove(id) above
       });
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -122,18 +123,16 @@ class _GeoDrawCreateScreenState extends State<GeoDrawCreateScreen> {
         setState(() {});
       },
       onObjectSelected: (objectId) {
-        // Update selection for highlighting
-        if (objectId.isEmpty) {
-          // Empty string means clear selection
-          setState(() {
+        // Update highlighting for tool-based selection (staged selection tools)
+        setState(() {
+          if (objectId.isEmpty) {
+            // Empty string means clear all highlights
             _selectedIds.clear();
-          });
-        } else {
-          // Add to selection
-          setState(() {
+          } else {
+            // Add to highlights (for multi-step selection like inversion/reflection)
             _selectedIds.add(objectId);
-          });
-        }
+          }
+        });
       },
       onToolStateChanged: (state) {
         // Could update UI with tool state
@@ -279,6 +278,7 @@ class _GeoDrawEditScreenState extends State<GeoDrawEditScreen> {
       setState(() {
         _dagManager.deleteObject(id, cascade: hasChildren);
         _selectedIds.remove(id);
+            // Selection removed via _selectedIds.remove(id) above
       });
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -318,18 +318,16 @@ class _GeoDrawEditScreenState extends State<GeoDrawEditScreen> {
         setState(() {});
       },
       onObjectSelected: (objectId) {
-        // Update selection for highlighting
-        if (objectId.isEmpty) {
-          // Empty string means clear selection
-          setState(() {
+        // Update highlighting for tool-based selection (staged selection tools)
+        setState(() {
+          if (objectId.isEmpty) {
+            // Empty string means clear all highlights
             _selectedIds.clear();
-          });
-        } else {
-          // Add to selection
-          setState(() {
+          } else {
+            // Add to highlights (for multi-step selection like inversion/reflection)
             _selectedIds.add(objectId);
-          });
-        }
+          }
+        });
       },
       onToolStateChanged: (state) {
         setState(() {});

@@ -82,7 +82,6 @@ class GeoArc extends ComplexGeometryObject {
   void draw(Canvas canvas, Paint paint) {
     if (!visible) return;
 
-
     final effectiveStyle = style;
     final center = _center;
     final radius = _radius;
@@ -90,10 +89,20 @@ class GeoArc extends ComplexGeometryObject {
       return;
     }
 
+    // Check if paint has highlight colors (different from base style)
+    final isHighlighted = paint.color != effectiveStyle.strokeColor ||
+        (effectiveStyle.highlightStrokeColor != null &&
+            paint.color == effectiveStyle.highlightStrokeColor);
+    
+    // Use highlight colors if paint indicates highlighting, otherwise use style
+    final strokeColor = effectiveStyle.getEffectiveStrokeColor(isHighlighted);
+    // Use paint's strokeWidth (already includes 1.5x multiplier when selected)
+    final strokeWidth = paint.strokeWidth;
+
     final arcPaint = Paint()
-      ..color = effectiveStyle.strokeColor
+      ..color = strokeColor
       ..style = PaintingStyle.stroke
-      ..strokeWidth = effectiveStyle.strokeWidth
+      ..strokeWidth = strokeWidth
       ..strokeCap = StrokeCap.round;
 
     final rect = Rect.fromCircle(center: center, radius: radius);
@@ -169,19 +178,19 @@ class GeoArc extends ComplexGeometryObject {
 
   @override
   double distanceTo(Offset point) {
-    final center = _center;
-    final radius = _radius;
-    if (radius <= 0) {
-      return (point - center).distance;
-    }
-
+    // First use multivector-based circle distance calculation (like GeoLine does)
+    final pointMv = constructFreePoint(point.dx, point.dy);
+    final circleDistance = distancePointToCircle(pointMv, multivector);
+    
+    // Check if the point's angle is within the arc sweep
     final angle = _angleFor(point);
-
+    
     if (_isAngleWithinSweep(angle, inclusive: true)) {
-      final radialDistance = (point - center).distance;
-      return (radialDistance - radius).abs();
+      // Point is within the sweep, return the circle distance
+      return circleDistance;
     }
-
+    
+    // Point is outside the sweep, return distance to nearest endpoint
     final startDistance = (point - startPoint.position).distance;
     final endDistance = (point - endPoint.position).distance;
     return math.min(startDistance, endDistance);
@@ -502,6 +511,17 @@ class GeoSegment extends ComplexGeometryObject {
     }
 
     final effectiveStyle = style;
+    
+    // Check if paint has highlight colors (different from base style)
+    final isHighlighted = paint.color != effectiveStyle.strokeColor ||
+        (effectiveStyle.highlightStrokeColor != null &&
+            paint.color == effectiveStyle.highlightStrokeColor);
+    
+    // Use highlight colors if paint indicates highlighting, otherwise use style
+    final strokeColor = effectiveStyle.getEffectiveStrokeColor(isHighlighted);
+    // Use paint's strokeWidth (already includes 1.5x multiplier when selected)
+    final strokeWidth = paint.strokeWidth;
+    
   final rotatedPointMv = _computeRotatedEndpoint();
   final signedDistance =
     _orientationSignedDistance(rotatedPoint: rotatedPointMv);
@@ -511,9 +531,9 @@ class GeoSegment extends ComplexGeometryObject {
     : null;
 
     final segmentPaint = Paint()
-      ..color = effectiveStyle.strokeColor
+      ..color = strokeColor
       ..style = PaintingStyle.stroke
-      ..strokeWidth = effectiveStyle.strokeWidth
+      ..strokeWidth = strokeWidth
       ..strokeCap = StrokeCap.round;
 
     if (!directSweep) {
@@ -593,30 +613,37 @@ class GeoSegment extends ComplexGeometryObject {
       return double.infinity;
     }
 
+    // First use multivector-based line distance calculation (like GeoLine does)
+    final pointMv = constructFreePoint(point.dx, point.dy);
+    final lineDistance = distancePointToLine(pointMv, multivector);
+    
+    // Check if the point lies between the two boundaries (start and end points)
     final start = startPoint.position;
     final end = endPoint.position;
     final segment = end - start;
     final lengthSquared = segment.dx * segment.dx + segment.dy * segment.dy;
+    
     if (lengthSquared <= _distanceEpsilon) {
+      // Degenerate segment (zero length)
       return (point - start).distance;
     }
 
+    // Project point onto the line segment
     final toPoint = point - start;
     final projection =
         (toPoint.dx * segment.dx + toPoint.dy * segment.dy) / lengthSquared;
 
+    if (projection >= 0 && projection <= 1) {
+      // Point lies between the boundaries, return the line distance
+      return lineDistance;
+    }
+
+    // Point is outside the boundaries, return distance to nearest endpoint
     if (projection < 0) {
       return (point - start).distance;
     }
-    if (projection > 1) {
-      return (point - end).distance;
-    }
-
-    final nearest = Offset(
-      start.dx + projection * segment.dx,
-      start.dy + projection * segment.dy,
-    );
-    return (point - nearest).distance;
+    // projection > 1
+    return (point - end).distance;
   }
 
   @override

@@ -1,4 +1,4 @@
-part of geo_shapes_list;
+part of '../geo_shapes_list.dart';
 
 abstract class GeoPolyArcBase<T extends ComplexGeometryObject>
     extends UnionComplexObjectList<T> {

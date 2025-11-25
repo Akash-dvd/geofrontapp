@@ -1097,24 +1097,24 @@ class CommandRegistry {
           description: 'Perpendicular line',
           argumentTypes: [
             TypeConstraint.geometry(
-              allowedTypes: {GeoLine},
-              description: 'Reference line',
-            ),
-            TypeConstraint.geometry(
               allowedTypes: {GeoPoint},
               description: 'Point on perpendicular line',
+            ),
+            TypeConstraint.geometry(
+              allowedTypes: {GeoLine},
+              description: 'Reference line',
             ),
             TypeConstraint.text(description: 'Label', optional: true),
           ],
           argumentHints: [
-            'Select reference line',
             'Select point',
+            'Select reference line',
             'Enter label (optional)',
           ],
         ),
         executor: (context, arguments) async {
-          final reference = arguments[0] as GeoLine;
-          final point = arguments[1] as GeoPoint;
+          final point = arguments[0] as GeoPoint;
+          final reference = arguments[1] as GeoLine;
           final providedLabel = arguments.length >= 3
               ? (arguments[2] as String).trim()
               : '';
@@ -1123,10 +1123,10 @@ class CommandRegistry {
             label: providedLabel.isNotEmpty
                 ? providedLabel
                 : context.resolveLabel(_nextPerpendicularLabel),
-            dependencies: [reference, point],
+            dependencies: [point, reference],
           );
 
-          context.dagManager.addObject(perpendicular, [reference.id, point.id]);
+          context.dagManager.addObject(perpendicular, [point.id, reference.id]);
 
           return ExecutionResult.successful(
             objectId: perpendicular.id,
@@ -1490,15 +1490,24 @@ class CommandRegistry {
 
           // Pattern 1: Object + mirror line/circle/point
           (context, arguments) async {
+            print('[Reflect Command] Pattern 1: Object + mirror');
             final subject = arguments[0] as GeometryObject;
+            final mirror = arguments[1] as GeometryObject;
+            print('[Reflect Command] Subject: ${subject.runtimeType} (${subject.id})');
+            print('[Reflect Command] Mirror: ${mirror.runtimeType} (${mirror.id})');
+            
             final label = _extractTrailingLabel(arguments);
+            print('[Reflect Command] Resolving inverse transform from mirror...');
             final transform = _resolveInverseTransform(context, arguments[1]);
             if (transform == null) {
+              print('[Reflect Command] ❌ Failed to resolve inverse transform');
               return ExecutionResult.error(
                 'Reflect requires a mirror line, circle, or point.',
               );
             }
+            print('[Reflect Command] ✅ Resolved transform: ${transform.runtimeType} (${transform.id})');
 
+            print('[Reflect Command] Creating transformed geometry...');
             final transformed = _createTransformedGeometry(
               context: context,
               subject: subject,
@@ -1506,13 +1515,19 @@ class CommandRegistry {
               providedLabel: label,
             );
 
+            print('[Reflect Command] Transformed result: ${transformed?.runtimeType}');
             if (transformed == null) {
+              print('[Reflect Command] ❌ Transformation returned null for ${subject.runtimeType}');
               return ExecutionResult.error(
                 'Reflect does not support transforming ${subject.runtimeType}.',
               );
             }
-
+            print('[Reflect Command] ✅ Transformation successful: ${transformed.runtimeType} (${transformed.id})');
+            print('[Reflect Command] Adding object to DAG: ${transformed.id} with dependencies: ${transformed.dependencies}');
             context.dagManager.addObject(transformed, transformed.dependencies);
+            print('[Reflect Command] Object added to DAG. Checking if object exists in DAG...');
+            final dagObject = context.dagManager.getObject(transformed.id);
+            print('[Reflect Command] Object in DAG: ${dagObject != null ? "YES (${dagObject.runtimeType})" : "NO"}');
 
             return ExecutionResult.successful(
               objectId: transformed.id,
@@ -1864,6 +1879,9 @@ class CommandRegistry {
         executor: (context, arguments) async {
           final first = arguments[0] as GeometryObject;
           final second = arguments[1] as GeometryObject;
+        print(
+          '[IntersectionCommand] Received ${first.runtimeType} (${first.id}) and ${second.runtimeType} (${second.id})',
+        );
           final providedLabel = arguments.length >= 3
               ? (arguments[2] as String).trim()
               : '';
@@ -2146,189 +2164,169 @@ class CommandRegistry {
     required GeoTrans transform,
     required String providedLabel,
   }) {
+    print('[Reflect Command] _createTransformedGeometry: subject=${subject.runtimeType} (${subject.id}), transform=${transform.runtimeType} (${transform.id})');
+    
     if (subject is GeoPoint) {
+      print('[Reflect Command] Subject is GeoPoint, transforming...');
+      final label = _resolveLabel(context, providedLabel, _nextPointLabel);
       final result = TransformationEngine.transformSimple(
         source: subject,
         transform: transform,
-      );
-
-      if (result.kind != SimpleTransformKind.point) {
-        return null;
-      }
-
-      final label = _resolveLabel(context, providedLabel, _nextPointLabel);
-      return GeoTransPoint(
         id: context.generateId('point'),
         label: label,
         dependencies: [subject.id, transform.id],
-        multivector: result.multivector,
-        sourcePointId: subject.id,
-        transformId: transform.id,
         visible: subject.visible,
         styleOverrides: subject.styleOverrides,
       );
+
+      print('[Reflect Command] Transformation result: ${result?.runtimeType}');
+      if (result is GeoTransPoint) {
+        print('[Reflect Command] ✅ Successfully created GeoTransPoint');
+        return result;
+      }
+      print('[Reflect Command] ❌ Point transformation did not produce GeoTransPoint, returning null');
+      return null;
     }
 
     if (subject is GeoLine) {
+      final label = _resolveLabel(context, providedLabel, _nextLineLabel);
       final result = TransformationEngine.transformSimple(
         source: subject,
         transform: transform,
+        id: context.generateId('line'),
+        label: label,
+        dependencies: [subject.id, transform.id],
+        visible: subject.visible,
+        styleOverrides: subject.styleOverrides,
       );
 
-      switch (result.kind) {
-        case SimpleTransformKind.line:
-          final label = _resolveLabel(context, providedLabel, _nextLineLabel);
-          return GeoTransLine(
-            id: context.generateId('line'),
-            label: label,
-            dependencies: [subject.id, transform.id],
-            multivector: result.multivector,
-            sourceObjectId: subject.id,
-            transformId: transform.id,
-            visible: subject.visible,
-            styleOverrides: subject.styleOverrides,
-          );
-        case SimpleTransformKind.circle:
-          final label = _resolveLabel(context, providedLabel, _nextCircleLabel);
-          return GeoTransCircle(
-            id: context.generateId('circle'),
-            label: label,
-            dependencies: [subject.id, transform.id],
-            multivector: result.multivector,
-            sourceObjectId: subject.id,
-            transformId: transform.id,
-            visible: subject.visible,
-            styleOverrides: subject.styleOverrides,
-          );
-        default:
-          return null;
+      if (result is GeoTransLine) {
+        return result;
       }
+      if (result is GeoTransCircle) {
+        final circleLabel = _resolveLabel(context, providedLabel, _nextCircleLabel);
+        return GeoTransCircle(
+          id: context.generateId('circle'),
+          label: circleLabel,
+          dependencies: [subject.id, transform.id],
+          multivector: result.multivector,
+          sourceObjectId: subject.id,
+          transformId: transform.id,
+          visible: subject.visible,
+          styleOverrides: subject.styleOverrides,
+        );
+      }
+      return null;
     }
 
     if (subject is GeoCircle) {
+      final label = _resolveLabel(context, providedLabel, _nextCircleLabel);
       final result = TransformationEngine.transformSimple(
         source: subject,
         transform: transform,
+        id: context.generateId('circle'),
+        label: label,
+        dependencies: [subject.id, transform.id],
+        visible: subject.visible,
+        styleOverrides: subject.styleOverrides,
       );
 
-      switch (result.kind) {
-        case SimpleTransformKind.circle:
-          final label = _resolveLabel(context, providedLabel, _nextCircleLabel);
-          return GeoTransCircle(
-            id: context.generateId('circle'),
-            label: label,
-            dependencies: [subject.id, transform.id],
-            multivector: result.multivector,
-            sourceObjectId: subject.id,
-            transformId: transform.id,
-            visible: subject.visible,
-            styleOverrides: subject.styleOverrides,
-          );
-        case SimpleTransformKind.line:
-          final label = _resolveLabel(context, providedLabel, _nextLineLabel);
-          return GeoTransLine(
-            id: context.generateId('line'),
-            label: label,
-            dependencies: [subject.id, transform.id],
-            multivector: result.multivector,
-            sourceObjectId: subject.id,
-            transformId: transform.id,
-            visible: subject.visible,
-            styleOverrides: subject.styleOverrides,
-          );
-        default:
-          return null;
+      if (result is GeoTransCircle) {
+        return result;
       }
+      if (result is GeoTransLine) {
+        final lineLabel = _resolveLabel(context, providedLabel, _nextLineLabel);
+        return GeoTransLine(
+          id: context.generateId('line'),
+          label: lineLabel,
+          dependencies: [subject.id, transform.id],
+          multivector: result.multivector,
+          sourceObjectId: subject.id,
+          transformId: transform.id,
+          visible: subject.visible,
+          styleOverrides: subject.styleOverrides,
+        );
+      }
+      return null;
     }
 
     if (subject is GeoSegment) {
+      final label = _resolveLabel(
+        context,
+        providedLabel,
+        _nextSegmentLabel,
+      );
       final result = TransformationEngine.transformComplex(
         source: subject,
         transform: transform,
+        id: context.generateId('segment'),
+        label: label,
+        dependencies: [subject.id, transform.id],
+        visible: subject.visible,
+        styleOverrides: subject.styleOverrides,
       );
 
-      switch (result.kind) {
-        case ComplexTransformKind.segment:
-          final label = _resolveLabel(
-            context,
-            providedLabel,
-            _nextSegmentLabel,
-          );
-          return GeoTransSegment(
-            id: context.generateId('segment'),
-            label: label,
-            dependencies: [subject.id, transform.id],
-            boundary: result.boundary,
-            sourceObjectId: subject.id,
-            transformId: transform.id,
-            visible: subject.visible,
-            styleOverrides: subject.styleOverrides,
-          );
-        case ComplexTransformKind.arc:
-          final label = _resolveLabel(
-            context,
-            providedLabel,
-            _nextArcThreeLabel,
-          );
-          return GeoTransArc(
-            id: context.generateId('arc'),
-            label: label,
-            dependencies: [subject.id, transform.id],
-            boundary: result.boundary,
-            controlPoint: result.controlPoint,
-            sourceObjectId: subject.id,
-            transformId: transform.id,
-            visible: subject.visible,
-            styleOverrides: subject.styleOverrides,
-          );
-        case ComplexTransformKind.unknown:
-          return null;
+      if (result is GeoTransSegment) {
+        return result;
       }
+      if (result is GeoTransArc) {
+        final arcLabel = _resolveLabel(
+          context,
+          providedLabel,
+          _nextArcThreeLabel,
+        );
+        return GeoTransArc(
+          id: context.generateId('arc'),
+          label: arcLabel,
+          dependencies: [subject.id, transform.id],
+          boundary: result.boundary,
+          controlPoint: result.controlPoint,
+          sourceObjectId: subject.id,
+          transformId: transform.id,
+          visible: subject.visible,
+          styleOverrides: subject.styleOverrides,
+        );
+      }
+      return null;
     }
 
     if (subject is GeoArc) {
+      final label = _resolveLabel(
+        context,
+        providedLabel,
+        _nextArcThreeLabel,
+      );
       final result = TransformationEngine.transformComplex(
         source: subject,
         transform: transform,
+        id: context.generateId('arc'),
+        label: label,
+        dependencies: [subject.id, transform.id],
+        visible: subject.visible,
+        styleOverrides: subject.styleOverrides,
       );
 
-      switch (result.kind) {
-        case ComplexTransformKind.arc:
-          final label = _resolveLabel(
-            context,
-            providedLabel,
-            _nextArcThreeLabel,
-          );
-          return GeoTransArc(
-            id: context.generateId('arc'),
-            label: label,
-            dependencies: [subject.id, transform.id],
-            boundary: result.boundary,
-            controlPoint: result.controlPoint,
-            sourceObjectId: subject.id,
-            transformId: transform.id,
-            visible: subject.visible,
-            styleOverrides: subject.styleOverrides,
-          );
-        case ComplexTransformKind.segment:
-          final label = _resolveLabel(
-            context,
-            providedLabel,
-            _nextSegmentLabel,
-          );
-          return GeoTransSegment(
-            id: context.generateId('segment'),
-            label: label,
-            dependencies: [subject.id, transform.id],
-            boundary: result.boundary,
-            sourceObjectId: subject.id,
-            transformId: transform.id,
-            visible: subject.visible,
-            styleOverrides: subject.styleOverrides,
-          );
-        case ComplexTransformKind.unknown:
-          return null;
+      if (result is GeoTransArc) {
+        return result;
       }
+      if (result is GeoTransSegment) {
+        final segmentLabel = _resolveLabel(
+          context,
+          providedLabel,
+          _nextSegmentLabel,
+        );
+        return GeoTransSegment(
+          id: context.generateId('segment'),
+          label: segmentLabel,
+          dependencies: [subject.id, transform.id],
+          boundary: result.boundary,
+          sourceObjectId: subject.id,
+          transformId: transform.id,
+          visible: subject.visible,
+          styleOverrides: subject.styleOverrides,
+        );
+      }
+      return null;
     }
 
     if (subject is UnionGeometryObjectList) {
@@ -2363,69 +2361,37 @@ class CommandRegistry {
         final simpleResult = TransformationEngine.transformSimple(
           source: element,
           transform: transform,
+          id: '${element.id}_${transform.id}_point',
+          label: element.label,
+          dependencies: element.dependencies,
+          visible: element.visible,
+          styleOverrides: element.styleOverrides,
         );
 
-        switch (simpleResult.kind) {
-          case SimpleTransformKind.point:
-            transformedElements.add(
-              GeoTransPoint(
-                id: '${element.id}_${transform.id}_point',
-                label: element.label,
-                dependencies: element.dependencies,
-                multivector: simpleResult.multivector,
-                sourcePointId: element.id,
-                transformId: transform.id,
-                visible: element.visible,
-                styleOverrides: element.styleOverrides,
-              ),
-            );
-            break;
-          default:
-            transformedElements.add(element);
+        if (simpleResult != null) {
+          transformedElements.add(simpleResult);
+        } else {
+          transformedElements.add(element);
         }
         continue;
       }
 
       if (element is GeoSegment || element is GeoArc) {
+        final transformedId = '${element.id}_${transform.id}_trans';
         final complexResult = TransformationEngine.transformComplex(
           source: element as ComplexGeometryObject,
           transform: transform,
+          id: transformedId,
+          label: element.label,
+          dependencies: element.dependencies,
+          visible: element.visible,
+          styleOverrides: element.styleOverrides,
         );
-        final transformedId = '${element.id}_${transform.id}_trans';
 
-        switch (complexResult.kind) {
-          case ComplexTransformKind.segment:
-            transformedElements.add(
-              GeoTransSegment(
-                id: transformedId,
-                label: element.label,
-                dependencies: null,
-                boundary: complexResult.boundary,
-                sourceObjectId: element.id,
-                transformId: transform.id,
-                visible: element.visible,
-                styleOverrides: element.styleOverrides,
-              ),
-            );
-            break;
-          case ComplexTransformKind.arc:
-            transformedElements.add(
-              GeoTransArc(
-                id: transformedId,
-                label: element.label,
-                dependencies: null,
-                boundary: complexResult.boundary,
-                controlPoint: complexResult.controlPoint,
-                sourceObjectId: element.id,
-                transformId: transform.id,
-                visible: element.visible,
-                styleOverrides: element.styleOverrides,
-              ),
-            );
-            break;
-          case ComplexTransformKind.unknown:
-            transformedElements.add(element);
-            break;
+        if (complexResult != null) {
+          transformedElements.add(complexResult);
+        } else {
+          transformedElements.add(element);
         }
         continue;
       }

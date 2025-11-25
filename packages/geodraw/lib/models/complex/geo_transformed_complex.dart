@@ -4,7 +4,6 @@ import '../canvas_style.dart';
 import '../geometry_object.dart';
 import '../simple/geo_point.dart';
 import '../simple/geo_trans.dart';
-import '../simple/geo_transformed_simple.dart';
 import '../transforms/transformation_engine.dart';
 import 'complex_geometry_object.dart';
 import 'geo_shapes.dart';
@@ -44,7 +43,7 @@ class GeoTransSegment extends GeoSegment {
     required super.id,
     required super.label,
     required List<String>? dependencies,
-    required ComplexGeometryBoundary boundary,
+    required super.boundary,
     required this.sourceObjectId,
     required this.transformId,
     super.visible,
@@ -55,7 +54,6 @@ class GeoTransSegment extends GeoSegment {
            sourceObjectId,
            transformId,
          ),
-         boundary: boundary,
        );
 
   final String sourceObjectId;
@@ -153,26 +151,34 @@ class GeoTransSegment extends GeoSegment {
     final result = TransformationEngine.transformComplex(
       source: source,
       transform: transform,
+      id: id,
+      label: label,
+      dependencies: dependencies,
+      visible: visible,
+      styleOverrides: styleOverrides,
     );
 
-    switch (result.kind) {
-      case ComplexTransformKind.segment:
-        return copyWith(boundary: result.boundary);
-      case ComplexTransformKind.arc:
-        return GeoTransArc(
-          id: id,
-          label: label,
-          dependencies: dependencies,
-          boundary: result.boundary,
-          controlPoint: result.controlPoint,
-          sourceObjectId: sourceObjectId,
-          transformId: transformId,
-          visible: visible,
-          styleOverrides: styleOverrides,
-        );
-      case ComplexTransformKind.unknown:
-        return copyWith();
+    if (result == null) {
+      return copyWith();
     }
+
+    if (result is GeoTransSegment) {
+      return result;
+    }
+    if (result is GeoTransArc) {
+      return GeoTransArc(
+        id: id,
+        label: label,
+        dependencies: dependencies,
+        boundary: result.boundary,
+        controlPoint: result.controlPoint,
+        sourceObjectId: sourceObjectId,
+        transformId: transformId,
+        visible: visible,
+        styleOverrides: styleOverrides,
+      );
+    }
+    return copyWith();
   }
 
   GeoSegment? _findSource(List<GeometryObject> parents) {
@@ -200,7 +206,7 @@ class GeoTransArc extends GeoArc {
     required super.id,
     required super.label,
     required List<String>? dependencies,
-    required ComplexGeometryBoundary boundary,
+    required super.boundary,
     required this.sourceObjectId,
     required this.transformId,
     this.controlPoint,
@@ -212,7 +218,6 @@ class GeoTransArc extends GeoArc {
            sourceObjectId,
            transformId,
          ),
-         boundary: boundary,
        );
 
   final String sourceObjectId;
@@ -318,41 +323,43 @@ class GeoTransArc extends GeoArc {
       return null;
     }
 
-    ComplexTransformResult result;
-    if (source is GeoSegment) {
-      result = TransformationEngine.transformComplex(
-        source: source,
-        transform: transform,
-      );
-    } else if (source is GeoArc) {
-      result = TransformationEngine.transformComplex(
-        source: source,
-        transform: transform,
-      );
-    } else {
+    if (source is! GeoSegment && source is! GeoArc) {
       return copyWith();
     }
 
-    switch (result.kind) {
-      case ComplexTransformKind.arc:
-        return copyWith(
-          boundary: result.boundary,
-          controlPoint: result.controlPoint ?? controlPoint,
-        );
-      case ComplexTransformKind.segment:
-        return GeoTransSegment(
-          id: id,
-          label: label,
-          dependencies: dependencies,
-          boundary: result.boundary,
-          sourceObjectId: sourceObjectId,
-          transformId: transformId,
-          visible: visible,
-          styleOverrides: styleOverrides,
-        );
-      case ComplexTransformKind.unknown:
-        return copyWith();
+    final result = TransformationEngine.transformComplex(
+      source: source as ComplexGeometryObject,
+      transform: transform,
+      id: id,
+      label: label,
+      dependencies: dependencies,
+      visible: visible,
+      styleOverrides: styleOverrides,
+    );
+
+    if (result == null) {
+      return copyWith();
     }
+
+    if (result is GeoTransArc) {
+      return copyWith(
+        boundary: result.boundary,
+        controlPoint: result.controlPoint ?? controlPoint,
+      );
+    }
+    if (result is GeoTransSegment) {
+      return GeoTransSegment(
+        id: id,
+        label: label,
+        dependencies: dependencies,
+        boundary: result.boundary,
+        sourceObjectId: sourceObjectId,
+        transformId: transformId,
+        visible: visible,
+        styleOverrides: styleOverrides,
+      );
+    }
+    return copyWith();
   }
 
   GeometryObject? _findSource(List<GeometryObject> parents) {
@@ -381,7 +388,7 @@ class GeoTransUnionGeometryObjectList
     required super.id,
     required super.label,
     required List<String>? dependencies,
-    required List<GeometryObject> elements,
+    required super.elements,
     required this.sourceObjectId,
     required this.transformId,
     this.vertexCountValue = 0,
@@ -395,7 +402,6 @@ class GeoTransUnionGeometryObjectList
            sourceObjectId,
            transformId,
          ),
-         elements: elements,
        );
 
   final String sourceObjectId;
@@ -530,24 +536,16 @@ class GeoTransUnionGeometryObjectList
         final simpleResult = TransformationEngine.transformSimple(
           source: element,
           transform: transform,
+          id: '${element.id}_${transform.id}_point',
+          label: element.label,
+          dependencies: element.dependencies,
+          visible: element.visible,
+          styleOverrides: element.styleOverrides,
         );
-        switch (simpleResult.kind) {
-          case SimpleTransformKind.point:
-            transformedElements.add(
-              GeoTransPoint(
-                id: '${element.id}_${transform.id}_point',
-                label: element.label,
-                dependencies: element.dependencies,
-                multivector: simpleResult.multivector,
-                sourcePointId: element.id,
-                transformId: transform.id,
-                visible: element.visible,
-                styleOverrides: element.styleOverrides,
-              ),
-            );
-            break;
-          default:
-            transformedElements.add(element);
+        if (simpleResult != null) {
+          transformedElements.add(simpleResult);
+        } else {
+          transformedElements.add(element);
         }
         continue;
       }
@@ -556,41 +554,16 @@ class GeoTransUnionGeometryObjectList
         final complexResult = TransformationEngine.transformComplex(
           source: element as ComplexGeometryObject,
           transform: transform,
+          id: '${element.id}_${transform.id}_trans',
+          label: element.label,
+          dependencies: element.dependencies,
+          visible: element.visible,
+          styleOverrides: element.styleOverrides,
         );
-        final transformedId = '${element.id}_${transform.id}_trans';
-        switch (complexResult.kind) {
-          case ComplexTransformKind.segment:
-            transformedElements.add(
-              GeoTransSegment(
-                id: transformedId,
-                label: element.label,
-                dependencies: null,
-                boundary: complexResult.boundary,
-                sourceObjectId: element.id,
-                transformId: transform.id,
-                visible: element.visible,
-                styleOverrides: element.styleOverrides,
-              ),
-            );
-            break;
-          case ComplexTransformKind.arc:
-            transformedElements.add(
-              GeoTransArc(
-                id: transformedId,
-                label: element.label,
-                dependencies: null,
-                boundary: complexResult.boundary,
-                sourceObjectId: element.id,
-                transformId: transform.id,
-                controlPoint: complexResult.controlPoint,
-                visible: element.visible,
-                styleOverrides: element.styleOverrides,
-              ),
-            );
-            break;
-          case ComplexTransformKind.unknown:
-            transformedElements.add(element);
-            break;
+        if (complexResult != null) {
+          transformedElements.add(complexResult);
+        } else {
+          transformedElements.add(element);
         }
         continue;
       }

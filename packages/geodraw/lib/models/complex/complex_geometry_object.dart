@@ -155,10 +155,10 @@ abstract class UnionComplexObjectList<T extends ComplexGeometryObject>
     required super.id,
     required super.label,
     required super.dependencies,
-    required List<T> elements,
+    required super.elements,
     super.visible,
     super.styleOverrides,
-  }) : super(elements: elements);
+  });
 }
 
 /// Placeholder for recursive unions that can contain other groupings.

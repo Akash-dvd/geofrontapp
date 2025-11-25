@@ -1,24 +1,18 @@
-part of geo_shapes_list;
+part of '../geo_shapes_list.dart';
 
 class GeoPolyLine extends GeoPolyArcBase<GeoSegment> {
   GeoPolyLine._fromChain({
-    required String id,
-    required String label,
+    required super.id,
+    required super.label,
     required _PolyChainData<GeoSegment> chain,
-    bool visible = true,
-    CanvasStyle? style,
-    Map<String, dynamic>? styleOverrides,
-    Color color = Colors.orange,
+    super.visible,
+    super.style,
+    super.styleOverrides,
+    Color super.color = Colors.orange,
   }) : _chain = chain,
        super(
-         id: id,
-         label: label,
          dependencies: chain.dependencies,
          elements: chain.elements,
-         visible: visible,
-         style: style,
-         styleOverrides: styleOverrides,
-         color: color,
          styleType: GeoPolyLine,
          isClosedLoop: false,
        );
@@ -100,6 +94,7 @@ class GeoPolyLine extends GeoPolyArcBase<GeoSegment> {
   @override
   double area() => 0.0;
 
+  @override
   GeoPolyLine copyWith({
     String? id,
     String? label,

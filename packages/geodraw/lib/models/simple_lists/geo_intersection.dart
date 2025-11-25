@@ -85,8 +85,12 @@ class GeoIntersection extends GenSimpleGeometryObjectList<GeoPoint> {
     Color color = Colors.orange,
     bool visible = true,
   }) {
+    debugPrint(
+      '[GeoIntersection] Computing line-line intersection between ${line1.label} and ${line2.label}',
+    );
     final wedge = line1.multivector ^ line2.multivector;
     if (wedge.isZero()) {
+      debugPrint('[GeoIntersection] Lines are parallel, no intersection.');
       return null;
     }
 
@@ -97,10 +101,12 @@ class GeoIntersection extends GenSimpleGeometryObjectList<GeoPoint> {
 
     if (!isPointOnLine(intersectionMv, line1.multivector) ||
         !isPointOnLine(intersectionMv, line2.multivector)) {
+      debugPrint('[GeoIntersection] Computed point is not on both lines.');
       return null;
     }
 
     if (!_isFinitePoint(intersectionMv)) {
+      debugPrint('[GeoIntersection] Intersection is at infinity, skipping.');
       return null;
     }
 
@@ -113,6 +119,7 @@ class GeoIntersection extends GenSimpleGeometryObjectList<GeoPoint> {
       visible: visible,
     );
 
+    debugPrint('[GeoIntersection] Line-line intersection created with 1 point.');
     return GeoIntersection(
       id: id,
       label: label,
@@ -132,14 +139,46 @@ class GeoIntersection extends GenSimpleGeometryObjectList<GeoPoint> {
     Color color = Colors.orange,
     bool visible = true,
   }) {
-    final intersections = constructLineCircleIntersection(
-      line.multivector,
-      circle.multivector,
+    debugPrint(
+      '[GeoIntersection] Computing line-circle intersection between ${line.label} and ${circle.label}',
     );
+    List<Multivector> intersections;
+    try {
+      intersections = constructLineCircleIntersection(
+        line.multivector,
+        circle.multivector,
+      );
+    } catch (error, stackTrace) {
+      debugPrint(
+        '[GeoIntersection] Error while solving line-circle intersection: $error\n$stackTrace',
+      );
+      rethrow;
+    }
+
+    if (intersections.isEmpty) {
+      debugPrint(
+        '[GeoIntersection] No intersection points returned from solver for ${line.label} × ${circle.label}.',
+      );
+      return GeoIntersection(
+        id: id,
+        label: label,
+        dependencies: [line.id, circle.id],
+        objects: const [],
+        color: color,
+        visible: visible,
+      );
+    }
 
     final points = <GeoPoint>[];
 
     for (final candidate in intersections) {
+      debugPrint('  • Candidate MV: $candidate');
+      final candidateNorm = (candidate | candidate).s;
+      if (candidateNorm.isNaN || candidateNorm.isInfinite || candidateNorm == 0) {
+        debugPrint('    ↳ candidate has invalid norm ($candidateNorm), skipping.');
+        continue;
+      }
+
       if (!_isFinitePoint(candidate)) {
         continue;
       }
@@ -165,6 +204,9 @@ class GeoIntersection extends GenSimpleGeometryObjectList<GeoPoint> {
       );
     }
 
+    debugPrint(
+      '[GeoIntersection] Line-circle intersection produced ${points.length} point(s).',
+    );
     return GeoIntersection(
       id: id,
       label: label,
@@ -184,22 +226,51 @@ class GeoIntersection extends GenSimpleGeometryObjectList<GeoPoint> {
     Color color = Colors.orange,
     bool visible = true,
   }) {
-    final intersections = constructCircleCircleIntersection(
-      circle1.multivector,
-      circle2.multivector,
+    debugPrint(
+      '[GeoIntersection] Computing circle-circle intersection between ${circle1.label} and ${circle2.label}',
     );
+    List<Multivector> intersections;
+    try {
+      intersections = constructCircleCircleIntersection(
+        circle1.multivector,
+        circle2.multivector,
+      );
+    } catch (error, stackTrace) {
+      debugPrint(
+        '[GeoIntersection] Error while solving circle-circle intersection: $error\n$stackTrace',
+      );
+      rethrow;
+    }
+
+    if (intersections.isEmpty) {
+      debugPrint(
+        '[GeoIntersection] Circles ${circle1.label} and ${circle2.label} do not intersect (no real solutions).',
+      );
+      return GeoIntersection(
+        id: id,
+        label: label,
+        dependencies: [circle1.id, circle2.id],
+        objects: const [],
+        color: color,
+        visible: visible,
+      );
+    }
 
     final points = <GeoPoint>[];
 
     for (final candidate in intersections) {
+      debugPrint('  • Candidate MV: $candidate');
       if (!_isFinitePoint(candidate)) {
+        debugPrint('    ↳ discarded (not finite)');
         continue;
       }
       if (!isPointOnCircle(candidate, circle1.multivector) ||
           !isPointOnCircle(candidate, circle2.multivector)) {
+        debugPrint('    ↳ discarded (not on both circles)');
         continue;
       }
       if (_containsPoint(points, candidate)) {
+        debugPrint('    ↳ duplicate point, skipping');
         continue;
       }
       final displayLabel = intersections.length == 1
@@ -217,6 +288,9 @@ class GeoIntersection extends GenSimpleGeometryObjectList<GeoPoint> {
       );
     }
 
+    debugPrint(
+      '[GeoIntersection] Circle-circle intersection produced ${points.length} point(s).',
+    );
     return GeoIntersection(
       id: id,
       label: label,

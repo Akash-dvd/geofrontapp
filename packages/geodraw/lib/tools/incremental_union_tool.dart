@@ -4,12 +4,11 @@ import 'package:flutter/material.dart';
 
 import '../core/command/command_history.dart';
 import '../core/command/command_history_entry.dart';
-import '../core/command/command_runtime.dart';
 import '../core/command/simple_executor.dart';
 import '../core/dag/dag_manager.dart';
 import '../models/complex/complex_geometry_object.dart';
-import '../models/geometry_object.dart';
 import 'tool.dart';
+import 'tool_verifier.dart';
 
 abstract class IncrementalUnionTool<T extends UnionGeometryObjectList>
     with ToolCallbacksMixin implements Tool {
@@ -121,6 +120,12 @@ abstract class IncrementalUnionTool<T extends UnionGeometryObjectList>
 
   Future<void> _executeCreate() async {
     final args = buildCreateArguments(List<dynamic>.from(_inputs));
+    try {
+      _validateArguments(createCommandName, args);
+    } on ArgumentError catch (error) {
+      _rollbackTransaction(formatCreationFailure(error.message));
+      return;
+    }
     final marker = _historyMarker;
 
     final result = await executor.execute(
@@ -161,6 +166,12 @@ abstract class IncrementalUnionTool<T extends UnionGeometryObjectList>
       _inputs.length,
     );
     final args = buildExtendArguments(shape, List<dynamic>.from(newInputs));
+    try {
+      _validateArguments(extendCommandName!, args);
+    } on ArgumentError catch (error) {
+      _rollbackTransaction(formatExtensionFailure(error.message));
+      return;
+    }
     final marker = _historyMarker;
 
     final result = await executor.execute(
@@ -323,5 +334,21 @@ abstract class IncrementalUnionTool<T extends UnionGeometryObjectList>
     final dependencyCount = _currentObject!.dependencies.length;
     final delta = _inputs.length - dependencyCount;
     return extensionPrompt(delta < 0 ? 0 : delta);
+  }
+
+  void _validateArguments(String command, List<dynamic> args) {
+    final verifier = ToolVerifier(
+      command,
+      registry: dagManager.commandRegistry,
+    );
+    for (final arg in args) {
+      final result = verifier.addArgument(arg);
+      if (!result.isValid) {
+        throw ArgumentError(result.errors.join(', '));
+      }
+    }
+    if (!verifier.isComplete) {
+      throw ArgumentError('Command "$command" is missing required arguments');
+    }
   }
 }

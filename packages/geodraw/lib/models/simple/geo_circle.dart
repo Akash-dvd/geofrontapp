@@ -37,12 +37,21 @@ abstract class GeoCircle extends SimpleGeometryObject {
     if (!visible) return;
 
     final effectiveStyle = style;
-    final strokeColor = effectiveStyle.strokeColor;
-    final fillColor = effectiveStyle.fillColor;
+    
+    // Check if paint has highlight colors (different from base style)
+    final isHighlighted = paint.color != effectiveStyle.strokeColor ||
+        (effectiveStyle.highlightStrokeColor != null &&
+            paint.color == effectiveStyle.highlightStrokeColor);
+    
+    // Use highlight colors if paint indicates highlighting, otherwise use style
+    final strokeColor = effectiveStyle.getEffectiveStrokeColor(isHighlighted);
+    final fillColor = effectiveStyle.getEffectiveFillColor(isHighlighted);
+    // Use paint's strokeWidth (already includes 1.5x multiplier when selected)
+    final strokeWidth = paint.strokeWidth;
 
     final circlePaint = Paint()
       ..color = effectiveStyle.filled ? fillColor : strokeColor
-      ..strokeWidth = effectiveStyle.strokeWidth
+      ..strokeWidth = strokeWidth
       ..style = effectiveStyle.filled
           ? PaintingStyle.fill
           : PaintingStyle.stroke;

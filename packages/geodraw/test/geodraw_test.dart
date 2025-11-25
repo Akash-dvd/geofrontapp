@@ -1,6 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:geodraw/geodraw.dart';
-import 'package:geodraw/core/command/command_runtime.dart';
 
 void main() {
   group('GeoPoint Tests', () {

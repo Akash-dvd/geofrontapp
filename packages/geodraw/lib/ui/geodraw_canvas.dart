@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
 import '../core/dag/dag_manager.dart' hide Viewport;
 import '../core/dag/dag_manager.dart' as dag show Viewport;
+import '../core/dag/dag_node.dart';
 import '../models/canvas_object.dart';
+import '../models/geometry_object.dart';
 import '../models/simple/geo_point.dart';
 import '../tools/tool_manager.dart';
 import '../tools/tool.dart';
@@ -165,7 +167,14 @@ class _GeoDrawCanvasState extends State<GeoDrawCanvas> {
     if (nearby.isNotEmpty &&
         widget.toolManager.activeToolType == ToolType.select) {
       // Select object
-      final newSelection = {nearby.first.id};
+      final GeometryObject selectedObject = nearby.first;
+      final newSelection = {selectedObject.id};
+      final objectName = selectedObject.label.isNotEmpty
+          ? selectedObject.label
+          : selectedObject.id;
+      final objectType = selectedObject.runtimeType.toString();
+      // ignore: avoid_print
+      print('Selected object - Label: $objectName, Type: $objectType');
       widget.onSelectionChanged?.call(newSelection);
       setState(() {});
     } else {
@@ -272,13 +281,31 @@ class GeoDrawCanvasPainter extends CustomPainter {
     _applyViewportTransform(canvas, size);
 
     // Draw all objects in topological order
+    // First draw non-GeoPoint objects, then GeoPoint objects (so points appear on top)
     final sortedNodes = dagManager.topologicalSort();
+    final nonPointNodes = <DAGNode>[];
+    final pointNodes = <DAGNode>[];
+
     for (final node in sortedNodes) {
       if (!node.object.visible) continue;
+      if (node.object is GeoPoint) {
+        pointNodes.add(node);
+      } else {
+        nonPointNodes.add(node);
+      }
+    }
 
+    // Draw non-point objects first
+    for (final node in nonPointNodes) {
       final isSelected = selectedIds.contains(node.id);
       final paint = _getPaintForObject(node.object, isSelected);
+      node.object.draw(canvas, paint);
+    }
 
+    // Draw points on top
+    for (final node in pointNodes) {
+      final isSelected = selectedIds.contains(node.id);
+      final paint = _getPaintForObject(node.object, isSelected);
       node.object.draw(canvas, paint);
     }
 
@@ -350,12 +377,12 @@ class GeoDrawCanvasPainter extends CustomPainter {
     canvas.translate(-viewport.center.dx, -viewport.center.dy);
   }
 
-  Paint _getPaintForObject(CanvasObject object, bool isSelected) {
+  Paint _getPaintForObject(CanvasObject object, bool isHighlighted) {
     final baseStyle = object.style;
-    final strokeColor = isSelected ? Colors.orange : baseStyle.strokeColor;
-    final strokeWidth = isSelected
-        ? (baseStyle.strokeWidth + 1.0)
-        : baseStyle.strokeWidth;
+    
+    // Use highlight styles if highlighted, otherwise use base style
+    final strokeColor = baseStyle.getEffectiveStrokeColor(isHighlighted);
+    final strokeWidth = baseStyle.getEffectiveStrokeWidth(isHighlighted);
 
     return Paint()
       ..color = strokeColor

@@ -1,28 +1,22 @@
-part of geo_shapes_list;
+part of '../geo_shapes_list.dart';
 
 class GeoTriangle extends GeoPolygon {
   GeoTriangle({
-    required String id,
-    required String label,
+    required super.id,
+    required super.label,
     required List<GeoPoint> points,
-    bool visible = true,
-    CanvasStyle? style,
-    Map<String, dynamic>? styleOverrides,
-    Color color = Colors.purple,
+    super.visible,
+    super.style,
+    super.styleOverrides,
+    super.color = Colors.purple,
     List<String>? dependencies,
   }) : super._fromChain(
-         id: id,
-         label: label,
          chain: _prepareClosedChain(
            id,
            label,
            _validateTriangle(points),
            color,
          ),
-         visible: visible,
-         style: style,
-         styleOverrides: styleOverrides,
-         color: color,
          dependencyIds: dependencies,
        );
 

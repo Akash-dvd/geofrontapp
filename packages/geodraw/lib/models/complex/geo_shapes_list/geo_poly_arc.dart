@@ -1,21 +1,17 @@
-part of geo_shapes_list;
+part of '../geo_shapes_list.dart';
 
 class GeoPolyArc extends GeoPolyArcBase<GeoArc> {
   GeoPolyArc({
     required super.id,
     required super.label,
     required super.dependencies,
-    required List<GeoArc> elements,
+    required super.elements,
     super.visible,
-    CanvasStyle? style,
-    Map<String, dynamic>? styleOverrides,
-    Color color = Colors.teal,
+    super.style,
+    super.styleOverrides,
+    Color super.color = Colors.teal,
   }) : super(
-         elements: elements,
          isClosedLoop: false,
-         style: style,
-         styleOverrides: styleOverrides,
-         color: color,
          styleType: GeoPolyArc,
        );
 
@@ -87,6 +83,7 @@ class GeoPolyArc extends GeoPolyArcBase<GeoArc> {
     );
   }
 
+  @override
   GeoPolyArc copyWith({
     String? id,
     String? label,

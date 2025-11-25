@@ -159,7 +159,7 @@ void main() {
   });
 
   group('GeoPolyArc', () {
-    GeoArc3P _arc(
+    GeoArc3P arc0(
       String id,
       GeoPoint start,
       GeoPoint through,
@@ -181,8 +181,8 @@ void main() {
       final p4 = _point('p4', 3, -2);
       final p5 = _point('p5', 4, 0);
 
-      final arc1 = _arc('arc1', p1, p2, p3);
-      final arc2 = _arc('arc2', p3, p4, p5);
+      final arc1 = arc0('arc1', p1, p2, p3);
+      final arc2 = arc0('arc2', p3, p4, p5);
 
       final chain = GeoPolyArc(
         id: 'chain',

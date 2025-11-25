@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'tool.dart';
+import 'tool_registry.dart';
+import 'tool_catalog.dart';
 import 'unified_tool.dart';
 import 'incremental_union_tool.dart';
 import 'staged_selection_tool.dart';
@@ -34,6 +36,7 @@ class ToolManager with ToolCallbacksMixin {
     this.onObjectCreated = onObjectCreated;
     this.onObjectSelected = onObjectSelected;
     this.onToolStateChanged = onToolStateChanged;
+    _registerAllTools();
   }
 
   /// Get the currently active tool type
@@ -65,248 +68,556 @@ class ToolManager with ToolCallbacksMixin {
     _activeTool?.reset();
   }
 
-  /// Create a tool instance by type (inline implementation)
+  /// Create a tool instance using the registry
   Tool? _createTool(ToolType type) {
-    switch (type) {
-      case ToolType.point:
-        return _PointTool(
+    final context = ToolFactoryContext(
           dagManager: dagManager,
-          commandHistory: commandHistory,
+      commandHistory: commandHistory, // Optional: only for CLI/AI logging, not core functionality
           onObjectCreated: onObjectCreated,
           onObjectSelected: onObjectSelected,
           onToolStateChanged: onToolStateChanged,
+      createFreePoint: _createFreePoint,
           labelGenerator: _pointLabelGenerator,
-        );
+      onParameterRequest: null,
+    );
 
-      case ToolType.lineSegment:
-        return _SegmentTool(
-          dagManager: dagManager,
-          commandHistory: commandHistory,
-          onObjectCreated: onObjectCreated,
-          onObjectSelected: onObjectSelected,
-          onToolStateChanged: onToolStateChanged,
-          createFreePoint: _createFreePoint,
-        );
+    return ToolRegistry().createTool(type, context);
+  }
 
-      case ToolType.line:
-        return _LineTool(
-          dagManager: dagManager,
-          commandHistory: commandHistory,
-          onObjectCreated: onObjectCreated,
-          onObjectSelected: onObjectSelected,
-          onToolStateChanged: onToolStateChanged,
-          createFreePoint: _createFreePoint,
-        );
+  /// Register all tools with the registry
+  void _registerAllTools() {
+    final registry = ToolRegistry();
 
-      case ToolType.circle:
-        return _CircleTool(
-          dagManager: dagManager,
-          commandHistory: commandHistory,
-          onObjectCreated: onObjectCreated,
-          onObjectSelected: onObjectSelected,
-          onToolStateChanged: onToolStateChanged,
-          createFreePoint: _createFreePoint,
-        );
+    // Point tool
+    registry.registerFromManager(
+      ToolType.point,
+      (context) => _PointTool(
+        dagManager: context.dagManager,
+        commandHistory: context.commandHistory,
+        onObjectCreated: context.onObjectCreated,
+        onObjectSelected: context.onObjectSelected,
+        onToolStateChanged: context.onToolStateChanged,
+        labelGenerator: context.labelGenerator as _PointLabelGenerator,
+      ),
+      const ToolCatalogEntry(
+        id: 'point',
+        label: 'Point',
+        icon: Icons.gps_fixed,
+        assetIcon: 'assets/tool_icons/point.svg',
+        command: 'Point[]',
+        toolType: ToolType.point,
+        implemented: true,
+      ),
+    );
 
-      case ToolType.circleThreePoints:
-        return _CircleThreePointsTool(
-          dagManager: dagManager,
-          commandHistory: commandHistory,
-          onObjectCreated: onObjectCreated,
-          onObjectSelected: onObjectSelected,
-          onToolStateChanged: onToolStateChanged,
-          createFreePoint: _createFreePoint,
-        );
+    // Segment tool
+    registry.registerFromManager(
+      ToolType.lineSegment,
+      (context) => _SegmentTool(
+        dagManager: context.dagManager,
+        commandHistory: context.commandHistory,
+        onObjectCreated: context.onObjectCreated,
+        onObjectSelected: context.onObjectSelected,
+        onToolStateChanged: context.onToolStateChanged,
+        createFreePoint: context.createFreePoint!,
+      ),
+      const ToolCatalogEntry(
+        id: 'segment',
+        label: 'Segment',
+        icon: Icons.show_chart,
+        assetIcon: 'assets/tool_icons/segment.svg',
+        command: 'Segment[]',
+        toolType: ToolType.lineSegment,
+        implemented: true,
+      ),
+    );
 
-      case ToolType.arcThreePoints:
-        return _ArcThreePointsTool(
-          dagManager: dagManager,
-          commandHistory: commandHistory,
-          onObjectCreated: onObjectCreated,
-          onObjectSelected: onObjectSelected,
-          onToolStateChanged: onToolStateChanged,
-          createFreePoint: _createFreePoint,
-        );
+    // Line tool
+    registry.registerFromManager(
+      ToolType.line,
+      (context) => _LineTool(
+        dagManager: context.dagManager,
+        commandHistory: context.commandHistory,
+        onObjectCreated: context.onObjectCreated,
+        onObjectSelected: context.onObjectSelected,
+        onToolStateChanged: context.onToolStateChanged,
+        createFreePoint: context.createFreePoint!,
+      ),
+      const ToolCatalogEntry(
+        id: 'line',
+        label: 'Line',
+        icon: Icons.horizontal_rule,
+        assetIcon: 'assets/tool_icons/line.svg',
+        command: 'Line[]',
+        toolType: ToolType.line,
+        implemented: true,
+      ),
+    );
 
-      case ToolType.polyArc:
-        return _PolyArcTool(
-          dagManager: dagManager,
-          commandHistory: commandHistory,
-          onObjectCreated: onObjectCreated,
-          onObjectSelected: onObjectSelected,
-          onToolStateChanged: onToolStateChanged,
-          createFreePoint: _createFreePoint,
-        );
+    // Circle tool
+    registry.registerFromManager(
+      ToolType.circle,
+      (context) => _CircleTool(
+        dagManager: context.dagManager,
+        commandHistory: context.commandHistory,
+        onObjectCreated: context.onObjectCreated,
+        onObjectSelected: context.onObjectSelected,
+        onToolStateChanged: context.onToolStateChanged,
+        createFreePoint: context.createFreePoint!,
+      ),
+      const ToolCatalogEntry(
+        id: 'circle_center',
+        label: 'Circle (Center)',
+        icon: Icons.circle_outlined,
+        assetIcon: 'assets/tool_icons/circle2.svg',
+        command: 'Circle[]',
+        toolType: ToolType.circle,
+        implemented: true,
+      ),
+    );
 
-      case ToolType.polygon:
-        return _PolygonTool(
-          dagManager: dagManager,
-          commandHistory: commandHistory,
-          onObjectCreated: onObjectCreated,
-          onObjectSelected: onObjectSelected,
-          onToolStateChanged: onToolStateChanged,
-          createFreePoint: _createFreePoint,
-        );
+    // Circle Three Points tool
+    registry.registerFromManager(
+      ToolType.circleThreePoints,
+      (context) => _CircleThreePointsTool(
+        dagManager: context.dagManager,
+        commandHistory: context.commandHistory,
+        onObjectCreated: context.onObjectCreated,
+        onObjectSelected: context.onObjectSelected,
+        onToolStateChanged: context.onToolStateChanged,
+        createFreePoint: context.createFreePoint!,
+      ),
+      const ToolCatalogEntry(
+        id: 'circle_three_points',
+        label: 'Circle (3 Points)',
+        icon: Icons.circle,
+        assetIcon: 'assets/tool_icons/circle3.svg',
+        command: 'Circle3[]',
+        toolType: ToolType.circleThreePoints,
+        implemented: true,
+      ),
+    );
 
-      case ToolType.polyLine:
-        return _PolyLineTool(
-          dagManager: dagManager,
-          commandHistory: commandHistory,
-          onObjectCreated: onObjectCreated,
-          onObjectSelected: onObjectSelected,
-          onToolStateChanged: onToolStateChanged,
-          createFreePoint: _createFreePoint,
-        );
+    // Arc Three Points tool
+    registry.registerFromManager(
+      ToolType.arcThreePoints,
+      (context) => _ArcThreePointsTool(
+        dagManager: context.dagManager,
+        commandHistory: context.commandHistory,
+        onObjectCreated: context.onObjectCreated,
+        onObjectSelected: context.onObjectSelected,
+        onToolStateChanged: context.onToolStateChanged,
+        createFreePoint: context.createFreePoint!,
+      ),
+      const ToolCatalogEntry(
+        id: 'circular_arc',
+        label: 'Arc (3 Points)',
+        icon: Icons.panorama_fish_eye,
+        assetIcon: 'assets/tool_icons/arc.svg',
+        command: 'Arc3[]',
+        toolType: ToolType.arcThreePoints,
+        implemented: true,
+      ),
+    );
 
-      case ToolType.polyArcGon:
-        return _PolyArcGonTool(
-          dagManager: dagManager,
-          commandHistory: commandHistory,
-          onObjectCreated: onObjectCreated,
-          onObjectSelected: onObjectSelected,
-          onToolStateChanged: onToolStateChanged,
-          createFreePoint: _createFreePoint,
-        );
+    // PolyArc tool
+    registry.registerFromManager(
+      ToolType.polyArc,
+      (context) => _PolyArcTool(
+        dagManager: context.dagManager,
+        commandHistory: context.commandHistory,
+        onObjectCreated: context.onObjectCreated,
+        onObjectSelected: context.onObjectSelected,
+        onToolStateChanged: context.onToolStateChanged,
+        createFreePoint: context.createFreePoint!,
+      ),
+      const ToolCatalogEntry(
+        id: 'poly_arc',
+        label: 'Poly-Arc',
+        icon: Icons.architecture,
+        command: 'PolyArc[]',
+        toolType: ToolType.polyArc,
+        implemented: true,
+      ),
+    );
 
-      case ToolType.midpoint:
-        return _MidpointTool(
-          dagManager: dagManager,
-          commandHistory: commandHistory,
-          onObjectCreated: onObjectCreated,
-          onObjectSelected: onObjectSelected,
-          onToolStateChanged: onToolStateChanged,
-          createFreePoint: _createFreePoint,
-        );
+    // Polygon tool
+    registry.registerFromManager(
+      ToolType.polygon,
+      (context) => _PolygonTool(
+        dagManager: context.dagManager,
+        commandHistory: context.commandHistory,
+        onObjectCreated: context.onObjectCreated,
+        onObjectSelected: context.onObjectSelected,
+        onToolStateChanged: context.onToolStateChanged,
+        createFreePoint: context.createFreePoint!,
+      ),
+      const ToolCatalogEntry(
+        id: 'polygon',
+        label: 'Polygon',
+        icon: Icons.change_history,
+        assetIcon: 'assets/tool_icons/polygon.svg',
+        command: 'Polygon[]',
+        toolType: ToolType.polygon,
+        implemented: true,
+      ),
+    );
 
-      case ToolType.perpendicular:
-        return _PerpendicularTool(
-          dagManager: dagManager,
-          commandHistory: commandHistory,
-          onObjectCreated: onObjectCreated,
-          onObjectSelected: onObjectSelected,
-          onToolStateChanged: onToolStateChanged,
-          createFreePoint: _createFreePoint,
-        );
+    // PolyLine tool
+    registry.registerFromManager(
+      ToolType.polyLine,
+      (context) => _PolyLineTool(
+        dagManager: context.dagManager,
+        commandHistory: context.commandHistory,
+        onObjectCreated: context.onObjectCreated,
+        onObjectSelected: context.onObjectSelected,
+        onToolStateChanged: context.onToolStateChanged,
+        createFreePoint: context.createFreePoint!,
+      ),
+      const ToolCatalogEntry(
+        id: 'poly_line',
+        label: 'PolyLine',
+        icon: Icons.show_chart,
+        command: 'PolyLine[]',
+        toolType: ToolType.polyLine,
+        implemented: true,
+      ),
+    );
 
-      case ToolType.parallel:
-        return _ParallelTool(
-          dagManager: dagManager,
-          commandHistory: commandHistory,
-          onObjectCreated: onObjectCreated,
-          onObjectSelected: onObjectSelected,
-          onToolStateChanged: onToolStateChanged,
-          createFreePoint: _createFreePoint,
-        );
+    // PolyArcGon tool
+    registry.registerFromManager(
+      ToolType.polyArcGon,
+      (context) => _PolyArcGonTool(
+        dagManager: context.dagManager,
+        commandHistory: context.commandHistory,
+        onObjectCreated: context.onObjectCreated,
+        onObjectSelected: context.onObjectSelected,
+        onToolStateChanged: context.onToolStateChanged,
+        createFreePoint: context.createFreePoint!,
+      ),
+      const ToolCatalogEntry(
+        id: 'poly_arc_gon',
+        label: 'Poly-Arc-Gon',
+        icon: Icons.all_inclusive,
+        command: 'PolyArcGon[]',
+        toolType: ToolType.polyArcGon,
+        implemented: true,
+      ),
+    );
 
-      case ToolType.perpBisector:
-        return _PerpBisectorTool(
-          dagManager: dagManager,
-          commandHistory: commandHistory,
-          onObjectCreated: onObjectCreated,
-          onObjectSelected: onObjectSelected,
-          onToolStateChanged: onToolStateChanged,
-          createFreePoint: _createFreePoint,
-        );
+    // Midpoint tool
+    registry.registerFromManager(
+      ToolType.midpoint,
+      (context) => _MidpointTool(
+        dagManager: context.dagManager,
+        commandHistory: context.commandHistory,
+        onObjectCreated: context.onObjectCreated,
+        onObjectSelected: context.onObjectSelected,
+        onToolStateChanged: context.onToolStateChanged,
+        createFreePoint: context.createFreePoint!,
+      ),
+      const ToolCatalogEntry(
+        id: 'midpoint',
+        label: 'Midpoint',
+        icon: Icons.adjust,
+        assetIcon: 'assets/tool_icons/midpoint.svg',
+        command: 'Midpoint[]',
+        toolType: ToolType.midpoint,
+        implemented: true,
+      ),
+    );
 
-      case ToolType.angleBisector:
-        return _AngleBisectorTool(
-          dagManager: dagManager,
-          commandHistory: commandHistory,
-          onObjectCreated: onObjectCreated,
-          onObjectSelected: onObjectSelected,
-          onToolStateChanged: onToolStateChanged,
-          createFreePoint: _createFreePoint,
-        );
+    // Perpendicular tool
+    registry.registerFromManager(
+      ToolType.perpendicular,
+      (context) => _PerpendicularTool(
+        dagManager: context.dagManager,
+        commandHistory: context.commandHistory,
+        onObjectCreated: context.onObjectCreated,
+        onObjectSelected: context.onObjectSelected,
+        onToolStateChanged: context.onToolStateChanged,
+        createFreePoint: context.createFreePoint!,
+      ),
+      const ToolCatalogEntry(
+        id: 'perpendicular',
+        label: 'Perpendicular',
+        icon: Icons.rotate_90_degrees_ccw,
+        assetIcon: 'assets/tool_icons/perpendicularline.svg',
+        command: 'Perpendicular[]',
+        toolType: ToolType.perpendicular,
+        implemented: true,
+      ),
+    );
 
-      case ToolType.tangent:
-        return _TangentTool(
-          dagManager: dagManager,
-          commandHistory: commandHistory,
-          onObjectCreated: onObjectCreated,
-          onObjectSelected: onObjectSelected,
-          onToolStateChanged: onToolStateChanged,
-          createFreePoint: _createFreePoint,
-        );
+    // Parallel tool
+    registry.registerFromManager(
+      ToolType.parallel,
+      (context) => _ParallelTool(
+        dagManager: context.dagManager,
+        commandHistory: context.commandHistory,
+        onObjectCreated: context.onObjectCreated,
+        onObjectSelected: context.onObjectSelected,
+        onToolStateChanged: context.onToolStateChanged,
+        createFreePoint: context.createFreePoint!,
+      ),
+      const ToolCatalogEntry(
+        id: 'parallel',
+        label: 'Parallel',
+        icon: Icons.swap_calls,
+        assetIcon: 'assets/tool_icons/parallel_line.svg',
+        command: 'Parallel[]',
+        toolType: ToolType.parallel,
+        implemented: true,
+      ),
+    );
 
-      case ToolType.intersection:
-        return _IntersectionTool(
-          dagManager: dagManager,
-          commandHistory: commandHistory,
-          onObjectCreated: onObjectCreated,
-          onObjectSelected: onObjectSelected,
-          onToolStateChanged: onToolStateChanged,
-          createFreePoint: _createFreePoint,
-        );
+    // Perpendicular Bisector tool
+    registry.registerFromManager(
+      ToolType.perpBisector,
+      (context) => _PerpBisectorTool(
+        dagManager: context.dagManager,
+        commandHistory: context.commandHistory,
+        onObjectCreated: context.onObjectCreated,
+        onObjectSelected: context.onObjectSelected,
+        onToolStateChanged: context.onToolStateChanged,
+        createFreePoint: context.createFreePoint!,
+      ),
+      const ToolCatalogEntry(
+        id: 'perp_bisector',
+        label: 'Perp. Bisector',
+        icon: Icons.straighten,
+        assetIcon: 'assets/tool_icons/perpendicularbisector.svg',
+        command: 'PerpBisector[]',
+        toolType: ToolType.perpBisector,
+        implemented: true,
+      ),
+    );
 
-      case ToolType.reflectLine:
-        return _ReflectLineTool(
-          dagManager: dagManager,
-          commandHistory: commandHistory,
-          onObjectCreated: onObjectCreated,
-          onObjectSelected: onObjectSelected,
-          onToolStateChanged: onToolStateChanged,
-          onParameterRequest: null,
-        );
+    // Angle Bisector tool
+    registry.registerFromManager(
+      ToolType.angleBisector,
+      (context) => _AngleBisectorTool(
+        dagManager: context.dagManager,
+        commandHistory: context.commandHistory,
+        onObjectCreated: context.onObjectCreated,
+        onObjectSelected: context.onObjectSelected,
+        onToolStateChanged: context.onToolStateChanged,
+        createFreePoint: context.createFreePoint!,
+      ),
+      const ToolCatalogEntry(
+        id: 'angle_bisector',
+        label: 'Angle Bisector',
+        icon: Icons.call_split,
+        assetIcon: 'assets/tool_icons/angle_Bisector.svg',
+        command: 'AngleBisector[]',
+        toolType: ToolType.angleBisector,
+        implemented: true,
+      ),
+    );
 
-      case ToolType.reflectPoint:
-        return _ReflectPointTool(
-          dagManager: dagManager,
-          commandHistory: commandHistory,
-          onObjectCreated: onObjectCreated,
-          onObjectSelected: onObjectSelected,
-          onToolStateChanged: onToolStateChanged,
-          onParameterRequest: null,
-        );
+    // Tangent tool
+    registry.registerFromManager(
+      ToolType.tangent,
+      (context) => _TangentTool(
+        dagManager: context.dagManager,
+        commandHistory: context.commandHistory,
+        onObjectCreated: context.onObjectCreated,
+        onObjectSelected: context.onObjectSelected,
+        onToolStateChanged: context.onToolStateChanged,
+        createFreePoint: context.createFreePoint!,
+      ),
+      const ToolCatalogEntry(
+        id: 'tangent',
+        label: 'Tangent',
+        icon: Icons.rotate_90_degrees_cw,
+        assetIcon: 'assets/tool_icons/tangent_lines.svg',
+        command: 'Tangent[]',
+        toolType: ToolType.tangent,
+        implemented: true,
+      ),
+    );
 
-      case ToolType.reflectCircle:
-        return _ReflectCircleTool(
-          dagManager: dagManager,
-          commandHistory: commandHistory,
-          onObjectCreated: onObjectCreated,
-          onObjectSelected: onObjectSelected,
-          onToolStateChanged: onToolStateChanged,
-          onParameterRequest: null,
-        );
+    // Intersection tool
+    registry.registerFromManager(
+      ToolType.intersection,
+      (context) => _IntersectionTool(
+        dagManager: context.dagManager,
+        commandHistory: context.commandHistory,
+        onObjectCreated: context.onObjectCreated,
+        onObjectSelected: context.onObjectSelected,
+        onToolStateChanged: context.onToolStateChanged,
+        createFreePoint: context.createFreePoint!,
+      ),
+      const ToolCatalogEntry(
+        id: 'intersection',
+        label: 'Intersection',
+        icon: Icons.control_point,
+        assetIcon: 'assets/tool_icons/intersection.svg',
+        command: 'Intersect[]',
+        toolType: ToolType.intersection,
+        implemented: true,
+      ),
+    );
 
-      case ToolType.rotate:
-        return _RotateTool(
-          dagManager: dagManager,
-          commandHistory: commandHistory,
-          onObjectCreated: onObjectCreated,
-          onObjectSelected: onObjectSelected,
-          onToolStateChanged: onToolStateChanged,
-          onParameterRequest: null,
-        );
+    // Reflect Line tool
+    registry.registerFromManager(
+      ToolType.reflectLine,
+      (context) => _ReflectLineTool(
+        dagManager: context.dagManager,
+        commandHistory: context.commandHistory,
+        onObjectCreated: context.onObjectCreated,
+        onObjectSelected: context.onObjectSelected,
+        onToolStateChanged: context.onToolStateChanged,
+        onParameterRequest: context.onParameterRequest,
+      ),
+      const ToolCatalogEntry(
+        id: 'reflect_line',
+        label: 'Reflect Line',
+        icon: Icons.flip,
+        assetIcon: 'assets/tool_icons/invert_about_line.svg',
+        command: 'Reflect[]',
+        toolType: ToolType.reflectLine,
+        implemented: true,
+      ),
+    );
 
-      case ToolType.translate:
-        return _TranslateTool(
-          dagManager: dagManager,
-          commandHistory: commandHistory,
-          onObjectCreated: onObjectCreated,
-          onObjectSelected: onObjectSelected,
-          onToolStateChanged: onToolStateChanged,
-          onParameterRequest: null,
-        );
+    // Reflect Point tool
+    registry.registerFromManager(
+      ToolType.reflectPoint,
+      (context) => _ReflectPointTool(
+        dagManager: context.dagManager,
+        commandHistory: context.commandHistory,
+        onObjectCreated: context.onObjectCreated,
+        onObjectSelected: context.onObjectSelected,
+        onToolStateChanged: context.onToolStateChanged,
+        onParameterRequest: context.onParameterRequest,
+      ),
+      const ToolCatalogEntry(
+        id: 'reflect_point',
+        label: 'Reflect Point',
+        icon: Icons.flip_camera_android,
+        assetIcon: 'assets/tool_icons/reflection_about_point.svg',
+        command: 'Reflect[]',
+        toolType: ToolType.reflectPoint,
+        implemented: true,
+      ),
+    );
 
-      case ToolType.dilate:
-        return _DilateTool(
-          dagManager: dagManager,
-          commandHistory: commandHistory,
-          onObjectCreated: onObjectCreated,
-          onObjectSelected: onObjectSelected,
-          onToolStateChanged: onToolStateChanged,
-          onParameterRequest: null,
-        );
+    // Reflect Circle tool
+    registry.registerFromManager(
+      ToolType.reflectCircle,
+      (context) => _ReflectCircleTool(
+        dagManager: context.dagManager,
+        commandHistory: context.commandHistory,
+        onObjectCreated: context.onObjectCreated,
+        onObjectSelected: context.onObjectSelected,
+        onToolStateChanged: context.onToolStateChanged,
+        onParameterRequest: context.onParameterRequest,
+      ),
+      const ToolCatalogEntry(
+        id: 'reflect_circle',
+        label: 'Reflect Circle',
+        icon: Icons.flip_camera_ios,
+        assetIcon: 'assets/tool_icons/inversion.svg',
+        command: 'Reflect[]',
+        toolType: ToolType.reflectCircle,
+        implemented: true,
+      ),
+    );
 
-      case ToolType.select:
-      case ToolType.pan:
-        // These tools don't create geometry
-        return null;
+    // Rotate tool
+    registry.registerFromManager(
+      ToolType.rotate,
+      (context) => _RotateTool(
+        dagManager: context.dagManager,
+        commandHistory: context.commandHistory,
+        onObjectCreated: context.onObjectCreated,
+        onObjectSelected: context.onObjectSelected,
+        onToolStateChanged: context.onToolStateChanged,
+        onParameterRequest: context.onParameterRequest,
+      ),
+      const ToolCatalogEntry(
+        id: 'rotate',
+        label: 'Rotate',
+        icon: Icons.rotate_left,
+        assetIcon: 'assets/tool_icons/rotate.svg',
+        command: 'Rotate[]',
+        toolType: ToolType.rotate,
+        implemented: true,
+      ),
+    );
 
-      default:
-        // Other tools not yet implemented
-        return null;
-    }
+    // Translate tool
+    registry.registerFromManager(
+      ToolType.translate,
+      (context) => _TranslateTool(
+        dagManager: context.dagManager,
+        commandHistory: context.commandHistory,
+        onObjectCreated: context.onObjectCreated,
+        onObjectSelected: context.onObjectSelected,
+        onToolStateChanged: context.onToolStateChanged,
+        onParameterRequest: context.onParameterRequest,
+      ),
+      const ToolCatalogEntry(
+        id: 'translate',
+        label: 'Translate',
+        icon: Icons.open_in_full,
+        command: 'Translate[]',
+        toolType: ToolType.translate,
+        implemented: true,
+      ),
+    );
+
+    // Dilate tool
+    registry.registerFromManager(
+      ToolType.dilate,
+      (context) => _DilateTool(
+        dagManager: context.dagManager,
+        commandHistory: context.commandHistory,
+        onObjectCreated: context.onObjectCreated,
+        onObjectSelected: context.onObjectSelected,
+        onToolStateChanged: context.onToolStateChanged,
+        onParameterRequest: context.onParameterRequest,
+      ),
+      const ToolCatalogEntry(
+        id: 'dilate',
+        label: 'Dilate',
+        icon: Icons.center_focus_strong,
+        assetIcon: 'assets/tool_icons/dilation.svg',
+        command: 'Dilate[]',
+        toolType: ToolType.dilate,
+        implemented: true,
+      ),
+    );
+
+    // Select and Pan tools (no geometry creation, but register metadata)
+    registry.registerFromManager(
+      ToolType.select,
+      (context) => null,
+      const ToolCatalogEntry(
+        id: 'move',
+        label: 'Move',
+        icon: Icons.open_with,
+        assetIcon: 'assets/tool_icons/move.svg',
+        command: 'Move[]',
+        toolType: ToolType.select,
+        implemented: true,
+      ),
+    );
+
+    registry.registerFromManager(
+      ToolType.pan,
+      (context) => null,
+      const ToolCatalogEntry(
+        id: 'pan',
+        label: 'Pan',
+        icon: Icons.pan_tool,
+        assetIcon: 'assets/tool_icons/Standard View.svg',
+        command: 'Pan[]',
+        toolType: ToolType.pan,
+        implemented: true,
+      ),
+    );
   }
 
   GeoPointer _createFreePoint(Offset position) {
@@ -322,202 +633,13 @@ class ToolManager with ToolCallbacksMixin {
     return point;
   }
 
-  /// Get list of all available tools
-  List<ToolType> get availableTools => [
-    ToolType.select,
-    ToolType.pan,
-    ToolType.point,
-    ToolType.lineSegment,
-    ToolType.line,
-    ToolType.circle,
-    ToolType.circleThreePoints,
-    ToolType.arcThreePoints,
-    ToolType.polyArc,
-    ToolType.polygon,
-    ToolType.polyLine,
-    ToolType.polyArcGon,
-    ToolType.midpoint,
-    ToolType.perpendicular,
-    ToolType.parallel,
-    ToolType.perpBisector,
-    ToolType.angleBisector,
-    ToolType.tangent,
-    ToolType.intersection,
-    ToolType.reflectLine,
-    ToolType.reflectPoint,
-    ToolType.reflectCircle,
-    ToolType.rotate,
-    ToolType.translate,
-    ToolType.dilate,
-  ];
+  /// Get list of all available tools from registry
+  List<ToolType> get availableTools => ToolRegistry().availableTools;
 
   /// Check if a tool type is available
   bool isToolAvailable(ToolType type) {
-    return availableTools.contains(type);
+    return ToolRegistry().isToolAvailable(type);
   }
-
-  /// Get tool metadata
-  ToolMetadata getToolMetadata(ToolType type) {
-    switch (type) {
-      case ToolType.select:
-        return const ToolMetadata(
-          name: 'Select',
-          icon: Icons.touch_app,
-          tooltip: 'Select and move objects',
-        );
-      case ToolType.pan:
-        return const ToolMetadata(
-          name: 'Pan',
-          icon: Icons.pan_tool,
-          tooltip: 'Pan the canvas',
-        );
-      case ToolType.point:
-        return const ToolMetadata(
-          name: 'Point',
-          icon: Icons.circle,
-          tooltip: 'Create a free point',
-        );
-      case ToolType.lineSegment:
-        return const ToolMetadata(
-          name: 'Segment',
-          icon: Icons.show_chart,
-          tooltip: 'Create a segment between two points',
-        );
-      case ToolType.line:
-        return const ToolMetadata(
-          name: 'Line',
-          icon: Icons.horizontal_rule,
-          tooltip: 'Create a line through two points',
-        );
-      case ToolType.circle:
-        return const ToolMetadata(
-          name: 'Circle',
-          icon: Icons.circle_outlined,
-          tooltip: 'Create a circle',
-        );
-      case ToolType.circleThreePoints:
-        return const ToolMetadata(
-          name: 'Circle (3 Points)',
-          icon: Icons.circle,
-          tooltip: 'Create a circle through three points',
-        );
-      case ToolType.arcThreePoints:
-        return const ToolMetadata(
-          name: 'Arc (3 Points)',
-          icon: Icons.panorama_fish_eye,
-          tooltip: 'Create a circular arc through three points',
-        );
-      case ToolType.polyArc:
-        return const ToolMetadata(
-          name: 'Poly-Arc',
-          icon: Icons.architecture,
-          tooltip: 'Build a chain of arcs incrementally',
-        );
-      case ToolType.polygon:
-        return const ToolMetadata(
-          name: 'Polygon',
-          icon: Icons.change_history,
-          tooltip: 'Build a polygon incrementally',
-        );
-      case ToolType.polyLine:
-        return const ToolMetadata(
-          name: 'PolyLine',
-          icon: Icons.show_chart,
-          tooltip: 'Build a polyline incrementally',
-        );
-      case ToolType.polyArcGon:
-        return const ToolMetadata(
-          name: 'Poly-Arc-Gon',
-          icon: Icons.all_inclusive,
-          tooltip: 'Build a closed poly-arc incrementally',
-        );
-      case ToolType.midpoint:
-        return const ToolMetadata(
-          name: 'Midpoint',
-          icon: Icons.adjust,
-          tooltip: 'Create midpoint of two points',
-        );
-      case ToolType.perpendicular:
-        return const ToolMetadata(
-          name: 'Perpendicular Line',
-          icon: Icons.rotate_90_degrees_ccw,
-          tooltip: 'Create a line perpendicular to another line',
-        );
-      case ToolType.parallel:
-        return const ToolMetadata(
-          name: 'Parallel Line',
-          icon: Icons.swap_calls,
-          tooltip: 'Create a line parallel to another line',
-        );
-      case ToolType.perpBisector:
-        return const ToolMetadata(
-          name: 'Perpendicular Bisector',
-          icon: Icons.straighten,
-          tooltip: 'Create the perpendicular bisector of two points',
-        );
-      case ToolType.tangent:
-        return const ToolMetadata(
-          name: 'Tangent',
-          icon: Icons.rotate_90_degrees_cw,
-          tooltip: 'Create tangents between a point and circle or two circles',
-        );
-      case ToolType.reflectLine:
-        return const ToolMetadata(
-          name: 'Reflect Line',
-          icon: Icons.flip,
-          tooltip: 'Reflect object across a line',
-        );
-      case ToolType.reflectPoint:
-        return const ToolMetadata(
-          name: 'Reflect Point',
-          icon: Icons.flip_camera_android,
-          tooltip: 'Reflect object across a point',
-        );
-      case ToolType.reflectCircle:
-        return const ToolMetadata(
-          name: 'Reflect Circle',
-          icon: Icons.flip_camera_ios,
-          tooltip: 'Reflect object across a circle (inversion)',
-        );
-      case ToolType.rotate:
-        return const ToolMetadata(
-          name: 'Rotate',
-          icon: Icons.rotate_left,
-          tooltip: 'Rotate object around a center point',
-        );
-      case ToolType.translate:
-        return const ToolMetadata(
-          name: 'Translate',
-          icon: Icons.open_in_full,
-          tooltip: 'Translate object by a vector',
-        );
-      case ToolType.dilate:
-        return const ToolMetadata(
-          name: 'Dilate',
-          icon: Icons.center_focus_strong,
-          tooltip: 'Scale object from a center point',
-        );
-      default:
-        return const ToolMetadata(
-          name: 'Unknown',
-          icon: Icons.help_outline,
-          tooltip: 'Not implemented',
-        );
-    }
-  }
-}
-
-/// Tool metadata for UI display
-class ToolMetadata {
-  final String name;
-  final IconData icon;
-  final String tooltip;
-
-  const ToolMetadata({
-    required this.name,
-    required this.icon,
-    required this.tooltip,
-  });
 }
 
 // ============================================================================
@@ -1841,7 +1963,7 @@ class _MidpointTool extends UnifiedTool {
   }
 }
 
-/// Perpendicular line tool - builds a line perpendicular to a reference line
+/// Perpendicular line tool - builds a line perpendicular to a reference line through a point
 class _PerpendicularTool extends UnifiedTool {
   final GeoPointer Function(Offset position) createFreePoint;
 
@@ -1881,7 +2003,7 @@ class _PerpendicularTool extends UnifiedTool {
   @override
   void reset() {
     super.reset();
-    notifyStateChanged('Select a line and a point for perpendicular');
+    notifyStateChanged('Select a point and a line for perpendicular');
   }
 }
 

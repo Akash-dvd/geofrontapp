@@ -48,6 +48,30 @@ class CanvasStyleDefaults {
         pointRadius: 6.0,
         filled: true,
         strokeWidth: 1.5,
+        // Highlight: glowing effect for points
+        highlightUseGlow: true,
+        highlightGlowRadius: 3.0,
+        highlightStrokeColor: Colors.orange,
+        highlightFillColor: Colors.orange.withOpacity(0.8),
+        highlightStrokeWidthMultiplier: 1.3,
+      ),
+    );
+
+    // GeoPointer should always be solid (filled)
+    registerStyle(
+      GeoPointer,
+      CanvasStyle.baseDefaults.copyWith(
+        pointRadius: 6.0,
+        filled: true, // Solid/filled style
+        strokeWidth: 1.5,
+        strokeColor: CanvasStyle.colorFromHex('#cc8f2e'), // Darker stroke
+        fillColor: CanvasStyle.colorFromHex('#ffb239'),
+        // Highlight: glowing effect for pointer points
+        highlightUseGlow: true,
+        highlightGlowRadius: 3.0,
+        highlightStrokeColor: Colors.orange,
+        highlightFillColor: Colors.orange.withOpacity(0.8),
+        highlightStrokeWidthMultiplier: 1.3,
       ),
     );
 
@@ -57,6 +81,9 @@ class CanvasStyleDefaults {
         pointRadius: 0,
         filled: false,
         strokeWidth: 2.0,
+        // Highlight: green, thicker stroke
+        highlightStrokeColor: Colors.green,
+        highlightStrokeWidthMultiplier: 1.5,
       ),
     );
 
@@ -66,6 +93,9 @@ class CanvasStyleDefaults {
         pointRadius: 0,
         filled: false,
         strokeWidth: 2.0,
+        // Highlight: blue, thicker stroke
+        highlightStrokeColor: Colors.blue,
+        highlightStrokeWidthMultiplier: 1.5,
       ),
     );
   }

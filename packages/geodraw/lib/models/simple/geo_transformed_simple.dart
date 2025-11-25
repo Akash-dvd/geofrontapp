@@ -61,7 +61,7 @@ class GeoTransPoint extends GeoPoint {
         (style == null ? this.styleOverrides : resolveStyleOverrides(style));
     final updatedSource = sourcePointId ?? this.sourcePointId;
     final updatedTransform = transformId ?? this.transformId;
-  final List<String>? rawDependencies = dependencies ?? this.dependencies;
+  final List<String> rawDependencies = dependencies ?? this.dependencies;
   final normalizedDependencies =
     _normalizedDependencies(rawDependencies, updatedSource, updatedTransform);
 
@@ -128,13 +128,18 @@ class GeoTransPoint extends GeoPoint {
     final result = TransformationEngine.transformSimple(
       source: sourcePoint,
       transform: transform,
+      id: id,
+      label: label,
+      dependencies: dependencies,
+      visible: visible,
+      styleOverrides: styleOverrides,
     );
 
-    if (result.kind != SimpleTransformKind.point) {
+    if (result is! GeoTransPoint) {
       return copyWith();
     }
 
-    return copyWith(multivector: result.multivector);
+    return result;
   }
 
   GeoPoint? _findPoint(List<GeometryObject> parents, String targetId) {
@@ -189,7 +194,7 @@ class GeoTransLine extends GeoLine {
         (style == null ? this.styleOverrides : resolveStyleOverrides(style));
     final updatedSource = sourceObjectId ?? this.sourceObjectId;
     final updatedTransform = transformId ?? this.transformId;
-  final List<String>? rawDependencies = dependencies ?? this.dependencies;
+  final List<String> rawDependencies = dependencies ?? this.dependencies;
   final normalizedDependencies =
     _normalizedDependencies(rawDependencies, updatedSource, updatedTransform);
 
@@ -254,25 +259,20 @@ class GeoTransLine extends GeoLine {
     final result = TransformationEngine.transformSimple(
       source: source,
       transform: transform,
+      id: id,
+      label: label,
+      dependencies: dependencies,
+      visible: visible,
+      styleOverrides: styleOverrides,
     );
 
-    switch (result.kind) {
-      case SimpleTransformKind.line:
-        return copyWith(multivector: result.multivector);
-      case SimpleTransformKind.circle:
-        return GeoTransCircle(
-          id: id,
-          label: label,
-          dependencies: dependencies,
-          multivector: result.multivector,
-          sourceObjectId: sourceObjectId,
-          transformId: transformId,
-          visible: visible,
-          styleOverrides: styleOverrides,
-        );
-      default:
-        return copyWith();
+    if (result is GeoTransLine) {
+      return result;
     }
+    if (result is GeoTransCircle) {
+      return result;
+    }
+    return copyWith();
   }
 
   SimpleGeometryObject? _findSource(
@@ -330,7 +330,7 @@ class GeoTransCircle extends GeoCircle {
         (style == null ? this.styleOverrides : resolveStyleOverrides(style));
     final updatedSource = sourceObjectId ?? this.sourceObjectId;
     final updatedTransform = transformId ?? this.transformId;
-  final List<String>? rawDependencies = dependencies ?? this.dependencies;
+  final List<String> rawDependencies = dependencies ?? this.dependencies;
   final normalizedDependencies =
     _normalizedDependencies(rawDependencies, updatedSource, updatedTransform);
 
@@ -395,25 +395,20 @@ class GeoTransCircle extends GeoCircle {
     final result = TransformationEngine.transformSimple(
       source: source,
       transform: transform,
+      id: id,
+      label: label,
+      dependencies: dependencies,
+      visible: visible,
+      styleOverrides: styleOverrides,
     );
 
-    switch (result.kind) {
-      case SimpleTransformKind.circle:
-        return copyWith(multivector: result.multivector);
-      case SimpleTransformKind.line:
-        return GeoTransLine(
-          id: id,
-          label: label,
-          dependencies: dependencies,
-          multivector: result.multivector,
-          sourceObjectId: sourceObjectId,
-          transformId: transformId,
-          visible: visible,
-          styleOverrides: styleOverrides,
-        );
-      default:
-        return copyWith();
+    if (result is GeoTransCircle) {
+      return result;
     }
+    if (result is GeoTransLine) {
+      return result;
+    }
+    return copyWith();
   }
 
   SimpleGeometryObject? _findSource(

@@ -1,24 +1,18 @@
-part of geo_shapes_list;
+part of '../geo_shapes_list.dart';
 
 abstract class GeoRegularPolygon extends GeoPolygon {
   GeoRegularPolygon._({
-    required String id,
-    required String label,
+    required super.id,
+    required super.label,
     required List<GeoPoint> vertices,
     required this.sides,
     required List<String> dependencies,
-    bool visible = true,
-    CanvasStyle? style,
-    Map<String, dynamic>? styleOverrides,
-    Color color = Colors.brown,
+    super.visible,
+    super.style,
+    super.styleOverrides,
+    super.color,
   }) : super._fromChain(
-         id: id,
-         label: label,
          chain: _prepareClosedChain(id, label, vertices, color),
-         visible: visible,
-         style: style,
-         styleOverrides: styleOverrides,
-         color: color,
          dependencyIds: dependencies,
        ) {
     if (sides < 3) {
@@ -71,18 +65,16 @@ abstract class GeoRegularPolygon extends GeoPolygon {
 
 class GeoRegularPolygon2P extends GeoRegularPolygon {
   GeoRegularPolygon2P({
-    required String id,
-    required String label,
+    required super.id,
+    required super.label,
     required GeoPoint center,
     required GeoPoint reference,
-    required int sides,
-    bool visible = true,
-    CanvasStyle? style,
-    Map<String, dynamic>? styleOverrides,
-    Color color = Colors.deepPurple,
+    required super.sides,
+    super.visible,
+    super.style,
+    super.styleOverrides,
+    super.color = Colors.deepPurple,
   }) : super._(
-         id: id,
-         label: label,
          vertices: GeoRegularPolygon.verticesFromCenter(
            id: id,
            label: label,
@@ -90,12 +82,7 @@ class GeoRegularPolygon2P extends GeoRegularPolygon {
            reference: reference,
            sides: sides,
          ),
-         sides: sides,
          dependencies: [center.id, reference.id],
-         visible: visible,
-         style: style,
-         styleOverrides: styleOverrides,
-         color: color,
        );
 
   static GeoRegularPolygon2P fromDependencies({
@@ -192,29 +179,22 @@ class GeoRegularPolygon2P extends GeoRegularPolygon {
 
 class GeoRegularPolygonSegment extends GeoRegularPolygon {
   GeoRegularPolygonSegment({
-    required String id,
-    required String label,
+    required super.id,
+    required super.label,
     required GeoSegment2P baseSegment,
-    required int sides,
-    bool visible = true,
-    CanvasStyle? style,
-    Map<String, dynamic>? styleOverrides,
-    Color color = Colors.deepPurple,
+    required super.sides,
+    super.visible,
+    super.style,
+    super.styleOverrides,
+    super.color = Colors.deepPurple,
   }) : super._(
-         id: id,
-         label: label,
          vertices: GeoRegularPolygon.verticesFromSegment(
            id: id,
            label: label,
            segment: baseSegment,
            sides: sides,
          ),
-         sides: sides,
          dependencies: _segmentDependencies(baseSegment),
-         visible: visible,
-         style: style,
-         styleOverrides: styleOverrides,
-         color: color,
        );
 
   static GeoRegularPolygonSegment fromDependencies({

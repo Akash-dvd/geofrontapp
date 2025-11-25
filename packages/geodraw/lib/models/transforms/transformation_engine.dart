@@ -5,59 +5,117 @@ import '../simple/geo_trans.dart';
 import '../simple/geo_point.dart';
 import '../simple/geo_line.dart';
 import '../simple/geo_circle.dart';
+import '../simple/geo_transformed_simple.dart';
 import '../complex/complex_geometry_object.dart';
 import '../complex/geo_shapes.dart';
-
-/// Result of transforming a simple geometry object.
-class SimpleTransformResult {
-  SimpleTransformResult(this.multivector, this.kind);
-
-  final Multivector multivector;
-  final SimpleTransformKind kind;
-}
-
-/// Result of transforming a complex geometry object boundary.
-class ComplexTransformResult {
-  ComplexTransformResult({
-    required this.boundary,
-    required this.kind,
-    this.controlPoint,
-  });
-
-  final ComplexGeometryBoundary boundary;
-  final ComplexTransformKind kind;
-  final GeoPoint? controlPoint;
-}
+import '../complex/geo_transformed_complex.dart';
 
 /// Classification of the transformed simple object.
-enum SimpleTransformKind { point, line, circle, unknown }
+enum SimpleTransformKind { point, line, circle }
 
 /// Classification of a transformed complex object.
-enum ComplexTransformKind { segment, arc, unknown }
+enum ComplexTransformKind { segment, arc }
 
 /// Centralised helpers for applying [GeoTrans] instances to geometry objects.
 class TransformationEngine {
-  /// Apply [transform] to [source] and return the resulting multivector
-  /// alongside the inferred simple geometry kind.
-  static SimpleTransformResult transformSimple({
+  /// Apply [transform] to [source] and return the resulting GeometryObject.
+  /// Returns null if the transformation cannot produce a valid geometry object.
+  static GeometryObject? transformSimple({
     required SimpleGeometryObject source,
     required GeoTrans transform,
+    required String id,
+    required String label,
+    required List<String> dependencies,
+    bool? visible,
+    Map<String, dynamic>? styleOverrides,
   }) {
-    final transformed = transformMultivector(
+    print('[TransformationEngine] transformSimple: source=${source.runtimeType} (${source.id}), transform=${transform.runtimeType} (${transform.id})');
+    
+    // Special case: Points always remain points (reflection, rotation, dilation preserve point type)
+    if (source is GeoPoint) {
+      print('[TransformationEngine] Source is a point - points always remain points');
+      final transformed = transformMultivector(
+        subject: source.multivector,
+        transform: transform,
+      );
+      
+      // Force the result to be treated as a point, even if kind inference says otherwise
+      // This is because points should always remain points
+      print('[TransformationEngine] Creating GeoTransPoint (point type preserved)');
+      return GeoTransPoint(
+        id: id,
+        label: label,
+        dependencies: dependencies,
+        multivector: transformed,
+        sourcePointId: source.id,
+        transformId: transform.id,
+        visible: visible ?? source.visible,
+        styleOverrides: styleOverrides ?? source.styleOverrides,
+      );
+    }
+    
+    var transformed = transformMultivector(
       subject: source.multivector,
       transform: transform,
     );
 
-    return SimpleTransformResult(transformed, _inferKind(transformed));
+    print('[TransformationEngine] Original multivector: o=${source.multivector.o}, e1=${source.multivector.e1}, e2=${source.multivector.e2}, O=${source.multivector.O}');
+    print('[TransformationEngine] Transformed multivector (before normalization): o=${transformed.o}, e1=${transformed.e1}, e2=${transformed.e2}, O=${transformed.O}');
+    print('[TransformationEngine] Checking multivector type (before normalization): isPoint=${transformed.isPoint()}, isLine=${transformed.isLine()}, isCircle=${transformed.isCircle()}');
+    
+    // Normalize the multivector using the function from definitions.dart
+    transformed = normalizeTransformedMultivector(transformed);
+    print('[TransformationEngine] After normalization: o=${transformed.o}, e1=${transformed.e1}, e2=${transformed.e2}, O=${transformed.O}');
+    print('[TransformationEngine] Checking multivector type (after normalization): isPoint=${transformed.isPoint()}, isLine=${transformed.isLine()}, isCircle=${transformed.isCircle()}');
+    
+    final kind = _inferKind(transformed);
+    print('[TransformationEngine] Transformed multivector kind: $kind');
+    final sourceId = source.id;
+    final transformId = transform.id;
+    final isVisible = visible ?? source.visible;
+    final overrides = styleOverrides ?? source.styleOverrides;
+
+    switch (kind) {
+      case SimpleTransformKind.point:
+        print('[TransformationEngine] Kind is point, but source is not GeoPoint - this should not happen');
+        return null;
+      case SimpleTransformKind.line:
+        return GeoTransLine(
+          id: id,
+          label: label,
+          dependencies: dependencies,
+          multivector: transformed,
+          sourceObjectId: sourceId,
+          transformId: transformId,
+          visible: isVisible,
+          styleOverrides: overrides,
+        );
+      case SimpleTransformKind.circle:
+        return GeoTransCircle(
+          id: id,
+          label: label,
+          dependencies: dependencies,
+          multivector: transformed,
+          sourceObjectId: sourceId,
+          transformId: transformId,
+          visible: isVisible,
+          styleOverrides: overrides,
+        );
+    }
   }
 
   /// Apply [transform] to a raw multivector.
   static Multivector transformMultivector({
     required Multivector subject,
     required GeoTrans transform,
+    bool useSignedOperators = false,
   }) {
     if (transform is GeoInverse) {
-      return _applyInverseToMultivector(subject, transform.multivector);
+      return _applyInverseToMultivector(
+        subject,
+        transform.multivector,
+        useSignedOperators: useSignedOperators,
+      );
     }
 
     if (transform is GeoRotate) {
@@ -71,28 +129,52 @@ class TransformationEngine {
     return subject;
   }
 
-  /// Transform a complex geometry object.
-  static ComplexTransformResult transformComplex({
+  /// Transform a complex geometry object and return the resulting GeometryObject.
+  /// Returns null if the transformation cannot produce a valid geometry object.
+  static GeometryObject? transformComplex({
     required ComplexGeometryObject source,
     required GeoTrans transform,
+    required String id,
+    required String label,
+    required List<String> dependencies,
+    bool? visible,
+    Map<String, dynamic>? styleOverrides,
   }) {
     if (source is GeoSegment) {
-      return _transformSegment(source: source, transform: transform);
+      return _transformSegment(
+        source: source,
+        transform: transform,
+        id: id,
+        label: label,
+        dependencies: dependencies,
+        visible: visible,
+        styleOverrides: styleOverrides,
+      );
     }
 
     if (source is GeoArc) {
-      return _transformArc(source: source, transform: transform);
+      return _transformArc(
+        source: source,
+        transform: transform,
+        id: id,
+        label: label,
+        dependencies: dependencies,
+        visible: visible,
+        styleOverrides: styleOverrides,
+      );
     }
 
-    return ComplexTransformResult(
-      boundary: source.boundary,
-      kind: ComplexTransformKind.unknown,
-    );
+    return null;
   }
 
-  static ComplexTransformResult _transformSegment({
+  static GeometryObject? _transformSegment({
     required GeoSegment source,
     required GeoTrans transform,
+    required String id,
+    required String label,
+    required List<String> dependencies,
+    bool? visible,
+    Map<String, dynamic>? styleOverrides,
   }) {
     final start = _transformPoint(
       ownerId: source.id,
@@ -110,9 +192,14 @@ class TransformationEngine {
     final curve = transformMultivector(
       subject: source.boundary.multivector,
       transform: transform,
+      useSignedOperators: true,
     );
 
     final kind = _inferKind(curve);
+    final isVisible = visible ?? source.visible;
+    final overrides = styleOverrides ?? source.styleOverrides;
+    final sourceId = source.id;
+    final transformId = transform.id;
 
     if (kind == SimpleTransformKind.circle) {
       final control = _transformSegmentControlPoint(
@@ -120,30 +207,47 @@ class TransformationEngine {
         source: source,
         transform: transform,
       );
-      return ComplexTransformResult(
+      return GeoTransArc(
+        id: id,
+        label: label,
+        dependencies: dependencies,
         boundary: ComplexGeometryBoundary(
           startPoint: start,
           endPoint: end,
           multivector: curve,
         ),
-        kind: ComplexTransformKind.arc,
+        sourceObjectId: sourceId,
+        transformId: transformId,
         controlPoint: control,
+        visible: isVisible,
+        styleOverrides: overrides,
       );
     }
 
-    return ComplexTransformResult(
+    return GeoTransSegment(
+      id: id,
+      label: label,
+      dependencies: dependencies,
       boundary: ComplexGeometryBoundary(
         startPoint: start,
         endPoint: end,
         multivector: curve,
       ),
-      kind: ComplexTransformKind.segment,
+      sourceObjectId: sourceId,
+      transformId: transformId,
+      visible: isVisible,
+      styleOverrides: overrides,
     );
   }
 
-  static ComplexTransformResult _transformArc({
+  static GeometryObject? _transformArc({
     required GeoArc source,
     required GeoTrans transform,
+    required String id,
+    required String label,
+    required List<String> dependencies,
+    bool? visible,
+    Map<String, dynamic>? styleOverrides,
   }) {
     final start = _transformPoint(
       ownerId: source.id,
@@ -161,18 +265,29 @@ class TransformationEngine {
     final curve = transformMultivector(
       subject: source.boundary.multivector,
       transform: transform,
+      useSignedOperators: true,
     );
 
     final kind = _inferKind(curve);
+    final isVisible = visible ?? source.visible;
+    final overrides = styleOverrides ?? source.styleOverrides;
+    final sourceId = source.id;
+    final transformId = transform.id;
 
     if (kind == SimpleTransformKind.line) {
-      return ComplexTransformResult(
+      return GeoTransSegment(
+        id: id,
+        label: label,
+        dependencies: dependencies,
         boundary: ComplexGeometryBoundary(
           startPoint: start,
           endPoint: end,
           multivector: curve,
         ),
-        kind: ComplexTransformKind.segment,
+        sourceObjectId: sourceId,
+        transformId: transformId,
+        visible: isVisible,
+        styleOverrides: overrides,
       );
     }
 
@@ -182,14 +297,20 @@ class TransformationEngine {
       transform: transform,
     );
 
-    return ComplexTransformResult(
+    return GeoTransArc(
+      id: id,
+      label: label,
+      dependencies: dependencies,
       boundary: ComplexGeometryBoundary(
         startPoint: start,
         endPoint: end,
         multivector: curve,
       ),
-      kind: ComplexTransformKind.arc,
+      sourceObjectId: sourceId,
+      transformId: transformId,
       controlPoint: control,
+      visible: isVisible,
+      styleOverrides: overrides,
     );
   }
 
@@ -271,18 +392,25 @@ class TransformationEngine {
 
   static Multivector _applyInverseToMultivector(
     Multivector object,
-    Multivector subject,
-  ) {
+    Multivector subject, {
+    bool useSignedOperators = false,
+  }) {
     if (subject.isLine()) {
-      return constructReflectionAcrossLine(object, subject);
+      return useSignedOperators
+          ? constructSignedReflectionAcrossLine(object, subject)
+          : constructReflectionAcrossLine(object, subject);
     }
 
     if (subject.isCircle()) {
-      return constructReflectionAcrossCircle(object, subject);
+      return useSignedOperators
+          ? constructSignedReflectionAcrossCircle(object, subject)
+          : constructReflectionAcrossCircle(object, subject);
     }
 
     if (subject.isPoint()) {
-      return constructReflectionAcrossPoint(object, subject);
+      return useSignedOperators
+          ? constructSignedReflectionAcrossPoint(object, subject)
+          : constructReflectionAcrossPoint(object, subject);
     }
 
     return subject.reflection(object).getOrElse(() => object);
@@ -298,7 +426,9 @@ class TransformationEngine {
     if (mv.isCircle()) {
       return SimpleTransformKind.circle;
     }
-    return SimpleTransformKind.unknown;
+    // Multivector should be normalized before calling this function
+    // If we still can't determine the kind, something is wrong
+    throw ArgumentError('Cannot determine geometry type from multivector. Multivector may need normalization.');
   }
 
   /// Translate a geometry object by a vector (dx, dy)

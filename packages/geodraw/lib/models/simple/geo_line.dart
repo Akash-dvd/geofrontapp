@@ -32,8 +32,16 @@ abstract class GeoLine extends SimpleGeometryObject {
     if (!visible) return;
 
     final effectiveStyle = style;
-    final strokeColor = effectiveStyle.strokeColor;
-    final strokeWidth = effectiveStyle.strokeWidth;
+    
+    // Check if paint has highlight colors (different from base style)
+    final isHighlighted = paint.color != effectiveStyle.strokeColor ||
+        (effectiveStyle.highlightStrokeColor != null &&
+            paint.color == effectiveStyle.highlightStrokeColor);
+    
+    // Use highlight colors if paint indicates highlighting, otherwise use style
+    final strokeColor = effectiveStyle.getEffectiveStrokeColor(isHighlighted);
+    // Use paint's strokeWidth (already includes 1.5x multiplier when selected)
+    final strokeWidth = paint.strokeWidth;
     final resolvedLineStyle =
         _lineStyleFromPattern(effectiveStyle.linePattern) ?? LineStyle.solid;
 
@@ -589,7 +597,7 @@ class GeoPerpendicularLine extends GeoLine {
     return fromDependencies(
       id: id,
       label: label,
-      dependencies: [line, point],
+      dependencies: [point, line],
       visible: visible,
       style: style,
       styleOverrides: styleOverrides,
@@ -612,16 +620,16 @@ class GeoPerpendicularLine extends GeoLine {
   }) {
     if (dependencies.length != 2) {
       throw ArgumentError(
-        'GeoPerpendicularLine requires exactly a line and a point dependency',
+        'GeoPerpendicularLine requires exactly a point and a line dependency',
       );
     }
 
-    final line = dependencies[0];
-    final point = dependencies[1];
+    final point = dependencies[0];
+    final line = dependencies[1];
 
-    if (line is! GeoLine || point is! GeoPoint) {
+    if (point is! GeoPoint || line is! GeoLine) {
       throw ArgumentError(
-        'GeoPerpendicularLine expects dependencies of type GeoLine and GeoPoint',
+        'GeoPerpendicularLine expects dependencies of type GeoPoint and GeoLine',
       );
     }
 
@@ -638,7 +646,7 @@ class GeoPerpendicularLine extends GeoLine {
     return GeoPerpendicularLine(
       id: id,
       label: label,
-      dependencies: [line.id, point.id],
+      dependencies: [point.id, line.id],
       multivector: mv,
       visible: visible,
       styleOverrides: normalizedOverrides,

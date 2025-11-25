@@ -1,25 +1,19 @@
-part of geo_shapes_list;
+part of '../geo_shapes_list.dart';
 
 class GeoPolygon extends GeoPolyArcGon<GeoSegment> {
   GeoPolygon._fromChain({
-    required String id,
-    required String label,
+    required super.id,
+    required super.label,
     required _PolyChainData<GeoSegment> chain,
-    bool visible = true,
-    CanvasStyle? style,
-    Map<String, dynamic>? styleOverrides,
-    Color color = Colors.brown,
+    super.visible,
+    super.style,
+    super.styleOverrides,
+    super.color = Colors.brown,
     List<String>? dependencyIds,
   }) : _chain = chain,
        super(
-         id: id,
-         label: label,
          dependencies: dependencyIds ?? chain.dependencies,
          elements: chain.elements,
-         visible: visible,
-         style: style,
-         styleOverrides: styleOverrides,
-         color: color,
          styleType: GeoPolygon,
        );
 

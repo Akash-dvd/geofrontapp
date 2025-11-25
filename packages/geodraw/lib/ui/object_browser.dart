@@ -5,7 +5,7 @@ import '../models/canvas_style.dart';
 import '../models/geometry_object.dart';
 
 /// Browser widget for viewing and managing geometric objects
-class ObjectBrowser extends StatelessWidget {
+class ObjectBrowser extends StatefulWidget {
   final DAGManager dagManager;
   final Set<String> selectedIds;
   final ValueChanged<Set<String>>? onSelectionChanged;
@@ -22,8 +22,19 @@ class ObjectBrowser extends StatelessWidget {
   });
 
   @override
+  State<ObjectBrowser> createState() => _ObjectBrowserState();
+}
+
+class _ObjectBrowserState extends State<ObjectBrowser> {
+  @override
   Widget build(BuildContext context) {
-    final sortedNodes = dagManager
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final outlineColor = colorScheme.outlineVariant.withOpacity(0.35);
+    final panelColor = colorScheme.surfaceContainerHighest.withOpacity(0.92);
+    final headerColor = colorScheme.surface;
+    final headerBorder = BorderSide(color: outlineColor, width: 1);
+    final sortedNodes = widget.dagManager
         .topologicalSort()
         .where((node) => node.object is GeometryObject)
         .toList();
@@ -31,15 +42,21 @@ class ObjectBrowser extends StatelessWidget {
     Future<void> handleEdit(GeometryObject object) async {
       final updated = await _showEditDialog(context, object);
       if (updated != null) {
-        dagManager.updateObject(object.id, updated);
+        widget.dagManager.updateObject(object.id, updated);
+        setState(() {});
       }
     }
 
+    void handleVisibilityToggle(GeometryObject object) {
+      final updated = object.copyWith(visible: !object.visible);
+      widget.dagManager.updateObject(object.id, updated);
+      setState(() {});
+    }
+
     return Container(
-      // width controlled by parent, not internally
       decoration: BoxDecoration(
-        color: Colors.grey[100],
-        border: Border(left: BorderSide(color: Colors.grey[300]!, width: 1)),
+        color: panelColor,
+        border: Border(left: BorderSide(color: outlineColor, width: 1)),
       ),
       child: Column(
         children: [
@@ -47,18 +64,19 @@ class ObjectBrowser extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: Colors.white,
-              border: Border(
-                bottom: BorderSide(color: Colors.grey[300]!, width: 1),
-              ),
+              color: headerColor,
+              border: Border(bottom: headerBorder),
             ),
             child: Row(
               children: [
                 const Icon(Icons.list, size: 20),
                 const SizedBox(width: 8),
                 Text(
-                  'Objects (${dagManager.nodeCount})',
-                  style: const TextStyle(
+                  'Objects (${widget.dagManager.nodeCount})',
+                  style: theme.textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ) ??
+                      const TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.bold,
                   ),
@@ -73,7 +91,10 @@ class ObjectBrowser extends StatelessWidget {
                 ? Center(
                     child: Text(
                       'No objects',
-                      style: TextStyle(color: Colors.grey[600]),
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ) ??
+                          TextStyle(color: colorScheme.onSurfaceVariant),
                     ),
                   )
                 : ListView.builder(
@@ -84,12 +105,13 @@ class ObjectBrowser extends StatelessWidget {
                       return _ObjectListTile(
                         node: node,
                         object: geometry,
-                        isSelected: selectedIds.contains(node.id),
+                        isSelected: widget.selectedIds.contains(node.id),
+                        onToggleVisibility: () => handleVisibilityToggle(geometry),
                         onTap: () {
-                          onSelectionChanged?.call({node.id});
+                          widget.onSelectionChanged?.call({node.id});
                         },
                         onDelete: () {
-                          onDeleteRequested?.call(node.id);
+                          widget.onDeleteRequested?.call(node.id);
                         },
                         onEdit: () => handleEdit(geometry),
                       );
@@ -303,6 +325,7 @@ class _ObjectListTile extends StatelessWidget {
   final node;
   final GeometryObject object;
   final bool isSelected;
+  final VoidCallback onToggleVisibility;
   final VoidCallback onTap;
   final VoidCallback onDelete;
   final VoidCallback onEdit;
@@ -311,6 +334,7 @@ class _ObjectListTile extends StatelessWidget {
     required this.node,
     required this.object,
     required this.isSelected,
+    required this.onToggleVisibility,
     required this.onTap,
     required this.onDelete,
     required this.onEdit,
@@ -318,32 +342,82 @@ class _ObjectListTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final outlineColor = colorScheme.outlineVariant.withOpacity(0.3);
+    final selectionColor =
+        isSelected ? colorScheme.primary.withOpacity(0.12) : Colors.transparent;
+    final iconAccent = colorScheme.primary;
+    final secondaryIcon = colorScheme.onSurfaceVariant;
+
     return Container(
       decoration: BoxDecoration(
-        color: isSelected ? Colors.blue[50] : null,
-        border: Border(bottom: BorderSide(color: Colors.grey[300]!, width: 1)),
+        color: selectionColor,
+        border: Border(bottom: BorderSide(color: outlineColor, width: 1)),
       ),
       child: ListTile(
         dense: true,
-        leading: Container(
+        leading: Tooltip(
+          message: object.visible ? 'Click to hide' : 'Click to show',
+          waitDuration: const Duration(milliseconds: 250),
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: onToggleVisibility,
+            child: SizedBox(
+              width: 32,
+              height: 32,
+              child: Center(
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 160),
           width: 24,
           height: 24,
           decoration: BoxDecoration(
-            color: object.style.strokeColor.withOpacity(0.3),
+                    color: object.visible
+                        ? object.style.strokeColor.withOpacity(0.22)
+                        : Colors.transparent,
             shape: BoxShape.circle,
-            border: Border.all(color: object.style.strokeColor, width: 2),
+                    border: Border.all(
+                      color: object.style.strokeColor.withOpacity(
+                        object.visible ? 1 : 0.5,
+                      ),
+                      width: 2,
+                    ),
+                  ),
+                  child: object.visible
+                      ? const SizedBox.shrink()
+                      : Icon(
+                          Icons.visibility_off,
+                          size: 14,
+                          color: secondaryIcon,
+                        ),
+                ),
+              ),
+            ),
           ),
         ),
-        title: Text(
+        title: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: onTap,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
           object.label.isEmpty ? object.id : object.label,
-          style: TextStyle(
+                style: theme.textTheme.bodyMedium?.copyWith(
+                      fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                    ) ??
+                    TextStyle(
             fontSize: 13,
             fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
           ),
         ),
-        subtitle: Text(
+              Text(
           '${object.runtimeType.toString().replaceAll('Geo', '')} • Depth: ${node.depth}',
-          style: const TextStyle(fontSize: 11),
+                style: theme.textTheme.labelSmall,
+              ),
+            ],
+          ),
         ),
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
@@ -351,34 +425,30 @@ class _ObjectListTile extends StatelessWidget {
             if (node.isFree)
               Tooltip(
                 message: 'Free object',
-                child: Icon(
-                  Icons.lock_open,
-                  size: 14,
-                  color: Colors.green[700],
-                ),
+                child: Icon(Icons.lock_open, size: 14, color: iconAccent),
               )
             else
               Tooltip(
                 message: '${node.parentIds.length} dependencies',
-                child: Icon(Icons.link, size: 14, color: Colors.grey[600]),
+                child: Icon(Icons.link, size: 14, color: secondaryIcon),
               ),
             const SizedBox(width: 8),
             IconButton(
               icon: const Icon(Icons.edit, size: 16),
-              color: Colors.blueGrey[600],
+              color: secondaryIcon,
               tooltip: 'Edit',
               onPressed: onEdit,
             ),
             const SizedBox(width: 4),
             IconButton(
               icon: const Icon(Icons.delete, size: 16),
-              color: Colors.red[400],
+              color: theme.colorScheme.error,
               tooltip: 'Delete',
               onPressed: onDelete,
             ),
           ],
         ),
-        onTap: onTap,
+        onTap: null,
       ),
     );
   }

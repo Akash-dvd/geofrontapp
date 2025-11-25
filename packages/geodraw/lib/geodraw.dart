@@ -50,7 +50,6 @@ export 'tools/unified_tool.dart';
 // CLI system (selective exports to avoid conflicts)
 export 'cli/cli.dart' hide ExecutionResult;
 export 'cli/cli_adapter.dart';
-export 'cli/command_history.dart';
 
 // AI system
 export 'ai/ai_service.dart';

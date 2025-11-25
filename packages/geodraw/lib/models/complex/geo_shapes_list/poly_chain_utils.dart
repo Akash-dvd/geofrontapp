@@ -1,4 +1,4 @@
-part of geo_shapes_list;
+part of '../geo_shapes_list.dart';
 
 class _PolyChainData<T extends ComplexGeometryObject> {
   const _PolyChainData({

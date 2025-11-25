@@ -1,23 +1,18 @@
-part of geo_shapes_list;
+part of '../geo_shapes_list.dart';
 
 class GeoPolyArcGon<T extends ComplexGeometryObject> extends GeoPolyArcBase<T> {
   GeoPolyArcGon({
     required super.id,
     required super.label,
     required super.dependencies,
-    required List<T> elements,
-    required Type styleType,
+    required super.elements,
+    required super.styleType,
     super.visible,
-    CanvasStyle? style,
-    Map<String, dynamic>? styleOverrides,
-    Color color = Colors.indigo,
+    super.style,
+    super.styleOverrides,
+    Color super.color = Colors.indigo,
   }) : super(
-         elements: elements,
          isClosedLoop: true,
-         style: style,
-         styleOverrides: styleOverrides,
-         color: color,
-         styleType: styleType,
        );
 
   @override
@@ -109,6 +104,7 @@ class GeoPolyArcGon<T extends ComplexGeometryObject> extends GeoPolyArcBase<T> {
     );
   }
 
+  @override
   GeoPolyArcGon<T> copyWith({
     String? id,
     String? label,

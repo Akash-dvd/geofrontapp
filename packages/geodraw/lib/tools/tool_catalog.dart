@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'tool.dart';
+import 'tool_registry.dart';
 
 /// Represents a single tool descriptor for palette rendering.
 class ToolCatalogEntry {
@@ -34,130 +35,31 @@ class ToolCategoryGroup {
   const ToolCategoryGroup({required this.name, required this.tools});
 }
 
+/// Internal structure for defining tool groups by ToolType (before registry lookup)
+class _ToolGroupDefinition {
+  final String name;
+  final List<ToolType> toolTypes;
+  final List<ToolCatalogEntry> placeholders;
+
+  const _ToolGroupDefinition({
+    required this.name,
+    this.toolTypes = const [],
+    this.placeholders = const [],
+  });
+}
+
 /// Palette tiers inspired by GeoGebra layouts.
 enum ToolPaletteLevel { level1, level2, level3 }
 
-const ToolCatalogEntry _moveTool = ToolCatalogEntry(
-  id: 'move',
-  label: 'Move',
-  icon: Icons.open_with,
-  assetIcon: 'assets/tool_icons/move.svg',
-  command: 'Move[]',
-  toolType: ToolType.select,
-  implemented: true,
-);
-
-const ToolCatalogEntry _panTool = ToolCatalogEntry(
-  id: 'pan',
-  label: 'Pan',
-  icon: Icons.pan_tool,
-  assetIcon: 'assets/tool_icons/Standard View.svg',
-  command: 'Pan[]',
-  toolType: ToolType.pan,
-  implemented: true,
-);
-
-const ToolCatalogEntry _pointTool = ToolCatalogEntry(
-  id: 'point',
-  label: 'Point',
-  icon: Icons.gps_fixed,
-  assetIcon: 'assets/tool_icons/point.svg',
-  command: 'Point[]',
-  toolType: ToolType.point,
-  implemented: true,
-);
-
-const ToolCatalogEntry _segmentTool = ToolCatalogEntry(
-  id: 'segment',
-  label: 'Segment',
-  icon: Icons.show_chart,
-  assetIcon: 'assets/tool_icons/segment.svg',
-  command: 'Segment[]',
-  toolType: ToolType.lineSegment,
-  implemented: true,
-);
-
-const ToolCatalogEntry _lineTool = ToolCatalogEntry(
-  id: 'line',
-  label: 'Line',
-  icon: Icons.horizontal_rule,
-  assetIcon: 'assets/tool_icons/line.svg',
-  command: 'Line[]',
-  toolType: ToolType.line,
-  implemented: true,
-);
-
-const ToolCatalogEntry _polygonTool = ToolCatalogEntry(
-  id: 'polygon',
-  label: 'Polygon',
-  icon: Icons.change_history,
-  assetIcon: 'assets/tool_icons/polygon.svg',
-  command: 'Polygon[]',
-  toolType: ToolType.polygon,
-  implemented: true,
-);
-
-const ToolCatalogEntry _polyLineTool = ToolCatalogEntry(
-  id: 'poly_line',
-  label: 'PolyLine',
-  icon: Icons.show_chart,
-  command: 'PolyLine[]',
-  toolType: ToolType.polyLine,
-  implemented: true,
-);
-
-const ToolCatalogEntry _polyArcToolEntry = ToolCatalogEntry(
-  id: 'poly_arc',
-  label: 'Poly-Arc',
-  icon: Icons.architecture,
-  command: 'PolyArc[]',
-  toolType: ToolType.polyArc,
-  implemented: true,
-);
-
-const ToolCatalogEntry _polyArcGonTool = ToolCatalogEntry(
-  id: 'poly_arc_gon',
-  label: 'Poly-Arc-Gon',
-  icon: Icons.all_inclusive,
-  command: 'PolyArcGon[]',
-  toolType: ToolType.polyArcGon,
-  implemented: true,
-);
-
-const ToolCatalogEntry _circleCenterTool = ToolCatalogEntry(
-  id: 'circle_center',
-  label: 'Circle (Center)',
-  icon: Icons.circle_outlined,
-  assetIcon: 'assets/tool_icons/circle2.svg',
-  command: 'Circle[]',
-  toolType: ToolType.circle,
-  implemented: true,
-);
-
-const ToolCatalogEntry _textTool = ToolCatalogEntry(
-  id: 'text',
-  label: 'Text',
-  icon: Icons.text_fields,
-  command: 'Text(x, y, "Label")',
-  toolType: ToolType.text,
-  implemented: true,
-);
-
+// Placeholder entries for non-implemented tools (those without ToolType)
+// Implemented tools are defined in ToolRegistry and queried dynamically
 const ToolCatalogEntry _eraserTool = ToolCatalogEntry(
   id: 'eraser',
   label: 'Eraser',
   icon: Icons.auto_fix_off,
   assetIcon: 'assets/tool_icons/delete.svg',
   command: 'Delete[]',
-);
-
-const ToolCatalogEntry _selectTool = ToolCatalogEntry(
-  id: 'select',
-  label: 'Select',
-  icon: Icons.touch_app,
-  command: 'Select[]',
-  toolType: ToolType.select,
-  implemented: true,
+  implemented: false,
 );
 
 const ToolCatalogEntry _deleteTool = ToolCatalogEntry(
@@ -166,6 +68,7 @@ const ToolCatalogEntry _deleteTool = ToolCatalogEntry(
   icon: Icons.delete_outline,
   assetIcon: 'assets/tool_icons/delete.svg',
   command: 'Delete[]',
+  implemented: false,
 );
 
 const ToolCatalogEntry _copyTool = ToolCatalogEntry(
@@ -173,6 +76,7 @@ const ToolCatalogEntry _copyTool = ToolCatalogEntry(
   label: 'Copy',
   icon: Icons.copy,
   command: 'Copy[]',
+  implemented: false,
 );
 
 const ToolCatalogEntry _redefineTool = ToolCatalogEntry(
@@ -180,63 +84,17 @@ const ToolCatalogEntry _redefineTool = ToolCatalogEntry(
   label: 'Redefine',
   icon: Icons.edit_note,
   command: 'Redefine[]',
+  implemented: false,
 );
 
-const ToolCatalogEntry _perpendicularTool = ToolCatalogEntry(
-  id: 'perpendicular',
-  label: 'Perpendicular',
-  icon: Icons.rotate_90_degrees_ccw,
-  assetIcon: 'assets/tool_icons/perpendicularline.svg',
-  command: 'Perpendicular[]',
-  toolType: ToolType.perpendicular,
-  implemented: true,
-);
-
-const ToolCatalogEntry _parallelTool = ToolCatalogEntry(
-  id: 'parallel',
-  label: 'Parallel',
-  icon: Icons.swap_calls,
-  assetIcon: 'assets/tool_icons/parallel_line.svg',
-  command: 'Parallel[]',
-  toolType: ToolType.parallel,
-  implemented: true,
-);
-
-const ToolCatalogEntry _angleBisectorTool = ToolCatalogEntry(
-  id: 'angle_bisector',
-  label: 'Angle Bisector',
-  icon: Icons.call_split,
-  assetIcon: 'assets/tool_icons/angle_Bisector.svg',
-  command: 'AngleBisector[]',
-  toolType: ToolType.angleBisector,
-  implemented: true,
-);
-
-const ToolCatalogEntry _midpointTool = ToolCatalogEntry(
-  id: 'midpoint',
-  label: 'Midpoint',
-  icon: Icons.adjust,
-  assetIcon: 'assets/tool_icons/midpoint.svg',
-  command: 'Midpoint[]',
-  toolType: ToolType.midpoint,
-  implemented: true,
-);
-
-const ToolCatalogEntry _tangentTool = ToolCatalogEntry(
-  id: 'tangent',
-  label: 'Tangent',
-  icon: Icons.rotate_90_degrees_cw,
-  assetIcon: 'assets/tool_icons/tangent_lines.svg',
-  command: 'Tangent[]',
-  toolType: ToolType.tangent,
-  implemented: true,
-);
+// All construction tools are registered in ToolRegistry
 
 const ToolCatalogEntry _distanceTool = ToolCatalogEntry(
   id: 'distance',
   label: 'Distance',
   icon: Icons.straighten,
   command: 'Distance[]',
+  implemented: false,
 );
 
 const ToolCatalogEntry _angleMeasureTool = ToolCatalogEntry(
@@ -245,6 +103,7 @@ const ToolCatalogEntry _angleMeasureTool = ToolCatalogEntry(
   icon: Icons.rotate_right,
   assetIcon: 'assets/tool_icons/angle.svg',
   command: 'Angle[]',
+  implemented: false,
 );
 
 const ToolCatalogEntry _areaTool = ToolCatalogEntry(
@@ -253,6 +112,7 @@ const ToolCatalogEntry _areaTool = ToolCatalogEntry(
   icon: Icons.crop_square,
   assetIcon: 'assets/tool_icons/area.svg',
   command: 'Area[]',
+  implemented: false,
 );
 
 const ToolCatalogEntry _slopeTool = ToolCatalogEntry(
@@ -260,6 +120,7 @@ const ToolCatalogEntry _slopeTool = ToolCatalogEntry(
   label: 'Slope',
   icon: Icons.trending_up,
   command: 'Slope[]',
+  implemented: false,
 );
 
 const ToolCatalogEntry _rayTool = ToolCatalogEntry(
@@ -268,7 +129,7 @@ const ToolCatalogEntry _rayTool = ToolCatalogEntry(
   icon: Icons.linear_scale,
   assetIcon: 'assets/tool_icons/ray.svg',
   command: 'Ray[]',
-  toolType: ToolType.line,
+  implemented: false,
 );
 
 const ToolCatalogEntry _vectorTool = ToolCatalogEntry(
@@ -277,37 +138,10 @@ const ToolCatalogEntry _vectorTool = ToolCatalogEntry(
   icon: Icons.arrow_forward,
   assetIcon: 'assets/tool_icons/polar.svg',
   command: 'Vector[]',
+  implemented: false,
 );
 
-const ToolCatalogEntry _circleThreePointsTool = ToolCatalogEntry(
-  id: 'circle_three_points',
-  label: 'Circle (3 Points)',
-  icon: Icons.circle,
-  assetIcon: 'assets/tool_icons/circle3.svg',
-  command: 'Circle3[]',
-  toolType: ToolType.circleThreePoints,
-  implemented: true,
-);
-
-const ToolCatalogEntry _perpBisectorTool = ToolCatalogEntry(
-  id: 'perp_bisector',
-  label: 'Perp. Bisector',
-  icon: Icons.straighten,
-  assetIcon: 'assets/tool_icons/perpendicularbisector.svg',
-  command: 'PerpBisector[]',
-  toolType: ToolType.perpBisector,
-  implemented: true,
-);
-
-const ToolCatalogEntry _circularArcTool = ToolCatalogEntry(
-  id: 'circular_arc',
-  label: 'Arc (3 Points)',
-  icon: Icons.panorama_fish_eye,
-  assetIcon: 'assets/tool_icons/arc.svg',
-  command: 'Arc3[]',
-  toolType: ToolType.arcThreePoints,
-  implemented: true,
-);
+// All circle/arc tools are registered in ToolRegistry
 
 const ToolCatalogEntry _regularPolygonTool = ToolCatalogEntry(
   id: 'regular_polygon',
@@ -315,6 +149,7 @@ const ToolCatalogEntry _regularPolygonTool = ToolCatalogEntry(
   icon: Icons.all_inclusive,
   assetIcon: 'assets/tool_icons/regular_Polygon.svg',
   command: 'RegularPolygon[]',
+  implemented: false,
 );
 
 const ToolCatalogEntry _rigidPolygonTool = ToolCatalogEntry(
@@ -322,83 +157,20 @@ const ToolCatalogEntry _rigidPolygonTool = ToolCatalogEntry(
   label: 'Rigid Polygon',
   icon: Icons.category,
   command: 'RigidPolygon[]',
+  implemented: false,
 );
 
-const ToolCatalogEntry _reflectLineTool = ToolCatalogEntry(
-  id: 'reflect_line',
-  label: 'Reflect Line',
-  icon: Icons.flip,
-  assetIcon: 'assets/tool_icons/invert_about_line.svg',
-  command: 'Reflect[]',
-  toolType: ToolType.reflectLine,
-  implemented: true,
-);
-
-const ToolCatalogEntry _rotateTool = ToolCatalogEntry(
-  id: 'rotate',
-  label: 'Rotate',
-  icon: Icons.rotate_left,
-  assetIcon: 'assets/tool_icons/rotate.svg',
-  command: 'Rotate[]',
-  toolType: ToolType.rotate,
-  implemented: true,
-);
-
-const ToolCatalogEntry _translateTool = ToolCatalogEntry(
-  id: 'translate',
-  label: 'Translate',
-  icon: Icons.open_in_full,
-  command: 'Translate[]',
-  toolType: ToolType.translate,
-  implemented: true,
-);
-
-const ToolCatalogEntry _dilateTool = ToolCatalogEntry(
-  id: 'dilate',
-  label: 'Dilate',
-  icon: Icons.center_focus_strong,
-  assetIcon: 'assets/tool_icons/dilation.svg',
-  command: 'Dilate[]',
-  toolType: ToolType.dilate,
-  implemented: true,
-);
-
-const ToolCatalogEntry _reflectPointTool = ToolCatalogEntry(
-  id: 'reflect_point',
-  label: 'Reflect Point',
-  icon: Icons.flip_camera_android,
-  assetIcon: 'assets/tool_icons/reflection_about_point.svg',
-  command: 'Reflect[]',
-  toolType: ToolType.reflectPoint,
-  implemented: true,
-);
-
-const ToolCatalogEntry _reflectCircleTool = ToolCatalogEntry(
-  id: 'reflect_circle',
-  label: 'Reflect Circle',
-  icon: Icons.flip_camera_ios,
-  assetIcon: 'assets/tool_icons/inversion.svg',
-  command: 'Reflect[]',
-  toolType: ToolType.reflectCircle,
-  implemented: true,
-);
+// All transformation tools are registered in ToolRegistry
 
 const ToolCatalogEntry _locusTool = ToolCatalogEntry(
   id: 'locus',
   label: 'Locus',
   icon: Icons.timeline,
   command: 'Locus[]',
+  implemented: false,
 );
 
-const ToolCatalogEntry _intersectTool = ToolCatalogEntry(
-  id: 'intersection',
-  label: 'Intersection',
-  icon: Icons.control_point,
-  assetIcon: 'assets/tool_icons/intersection.svg',
-  command: 'Intersect[]',
-  toolType: ToolType.intersection,
-  implemented: true,
-);
+// Intersection tool is registered in ToolRegistry
 
 const ToolCatalogEntry _pointOnObjectTool = ToolCatalogEntry(
   id: 'point_on_object',
@@ -406,6 +178,7 @@ const ToolCatalogEntry _pointOnObjectTool = ToolCatalogEntry(
   icon: Icons.my_location,
   assetIcon: 'assets/tool_icons/point_on_object.svg',
   command: 'PointOn[]',
+  implemented: false,
 );
 
 const ToolCatalogEntry _attachPointTool = ToolCatalogEntry(
@@ -414,6 +187,7 @@ const ToolCatalogEntry _attachPointTool = ToolCatalogEntry(
   icon: Icons.link,
   assetIcon: 'assets/tool_icons/attach_detach.svg',
   command: 'AttachCopyToView[]',
+  implemented: false,
 );
 
 const ToolCatalogEntry _ellipseTool = ToolCatalogEntry(
@@ -421,6 +195,7 @@ const ToolCatalogEntry _ellipseTool = ToolCatalogEntry(
   label: 'Ellipse',
   icon: Icons.tonality,
   command: 'Ellipse[]',
+  implemented: false,
 );
 
 const ToolCatalogEntry _hyperbolaTool = ToolCatalogEntry(
@@ -428,6 +203,7 @@ const ToolCatalogEntry _hyperbolaTool = ToolCatalogEntry(
   label: 'Hyperbola',
   icon: Icons.leak_add,
   command: 'Hyperbola[]',
+  implemented: false,
 );
 
 const ToolCatalogEntry _parabolaTool = ToolCatalogEntry(
@@ -435,6 +211,7 @@ const ToolCatalogEntry _parabolaTool = ToolCatalogEntry(
   label: 'Parabola',
   icon: Icons.stacked_line_chart,
   command: 'Parabola[]',
+  implemented: false,
 );
 
 const ToolCatalogEntry _conicTool = ToolCatalogEntry(
@@ -442,6 +219,7 @@ const ToolCatalogEntry _conicTool = ToolCatalogEntry(
   label: 'Conic (5 Points)',
   icon: Icons.blur_circular,
   command: 'Conic[]',
+  implemented: false,
 );
 
 const ToolCatalogEntry _shearTool = ToolCatalogEntry(
@@ -449,6 +227,7 @@ const ToolCatalogEntry _shearTool = ToolCatalogEntry(
   label: 'Shear',
   icon: Icons.swap_horiz,
   command: 'Shear[]',
+  implemented: false,
 );
 
 const ToolCatalogEntry _stretchTool = ToolCatalogEntry(
@@ -456,6 +235,7 @@ const ToolCatalogEntry _stretchTool = ToolCatalogEntry(
   label: 'Stretch',
   icon: Icons.unfold_more,
   command: 'Stretch[]',
+  implemented: false,
 );
 
 const ToolCatalogEntry _invertTool = ToolCatalogEntry(
@@ -464,6 +244,7 @@ const ToolCatalogEntry _invertTool = ToolCatalogEntry(
   icon: Icons.blur_on,
   assetIcon: 'assets/tool_icons/inversion.svg',
   command: 'Invert[]',
+  implemented: false,
 );
 
 const ToolCatalogEntry _bestFitLineTool = ToolCatalogEntry(
@@ -471,6 +252,7 @@ const ToolCatalogEntry _bestFitLineTool = ToolCatalogEntry(
   label: 'Best Fit Line',
   icon: Icons.trending_flat,
   command: 'FitLine[]',
+  implemented: false,
 );
 
 const ToolCatalogEntry _traceTool = ToolCatalogEntry(
@@ -478,6 +260,7 @@ const ToolCatalogEntry _traceTool = ToolCatalogEntry(
   label: 'Trace',
   icon: Icons.brush,
   command: 'Trace[]',
+  implemented: false,
 );
 
 const ToolCatalogEntry _relationTool = ToolCatalogEntry(
@@ -485,6 +268,7 @@ const ToolCatalogEntry _relationTool = ToolCatalogEntry(
   label: 'Relation',
   icon: Icons.device_hub,
   command: 'Relation[]',
+  implemented: false,
 );
 
 const ToolCatalogEntry _mirrorCurveTool = ToolCatalogEntry(
@@ -492,178 +276,186 @@ const ToolCatalogEntry _mirrorCurveTool = ToolCatalogEntry(
   label: 'Mirror Curve',
   icon: Icons.multiline_chart,
   command: 'MirrorCurve[]',
+  implemented: false,
 );
 
-const List<ToolCategoryGroup> level1ToolGroups = [
-  ToolCategoryGroup(
+// Group definitions using ToolType references - entries built from registry
+const List<_ToolGroupDefinition> _level1GroupDefinitions = [
+  _ToolGroupDefinition(
     name: 'Basic Tools',
-    tools: [
-      _moveTool,
-      _pointTool,
-      _segmentTool,
-      _lineTool,
-      _polygonTool,
-      _polyArcToolEntry,
-      _circleCenterTool,
-      _textTool,
-      _eraserTool,
+    toolTypes: [
+      ToolType.select,
+      ToolType.point,
+      ToolType.lineSegment,
+      ToolType.line,
+      ToolType.polygon,
+      ToolType.polyArc,
+      ToolType.circle,
     ],
+    placeholders: [_eraserTool],
   ),
 ];
 
-const List<ToolCategoryGroup> level2ToolGroups = [
-  ToolCategoryGroup(
+const List<_ToolGroupDefinition> _level2GroupDefinitions = [
+  _ToolGroupDefinition(
     name: 'Basic Tools',
-    tools: [
-      _moveTool,
-      _panTool,
-      _pointTool,
-      _segmentTool,
-      _lineTool,
-      _polygonTool,
-      _polyArcToolEntry,
-      _circleCenterTool,
-      _textTool,
-      _eraserTool,
+    toolTypes: [
+      ToolType.select,
+      ToolType.pan,
+      ToolType.point,
+      ToolType.lineSegment,
+      ToolType.line,
+      ToolType.polygon,
+      ToolType.polyArc,
+      ToolType.circle,
     ],
+    placeholders: [_eraserTool],
   ),
-  ToolCategoryGroup(
+  _ToolGroupDefinition(
     name: 'Edit Tools',
-    tools: [_moveTool, _deleteTool, _selectTool, _copyTool, _redefineTool],
+    toolTypes: [ToolType.select],
+    placeholders: [_deleteTool, _copyTool, _redefineTool],
   ),
-  ToolCategoryGroup(
+  _ToolGroupDefinition(
     name: 'Construct Tools',
-    tools: [
-      _perpendicularTool,
-      _parallelTool,
-      _perpBisectorTool,
-      _angleBisectorTool,
-      _midpointTool,
-      _tangentTool,
+    toolTypes: [
+      ToolType.perpendicular,
+      ToolType.parallel,
+      ToolType.perpBisector,
+      ToolType.angleBisector,
+      ToolType.midpoint,
+      ToolType.tangent,
     ],
   ),
-  ToolCategoryGroup(
+  _ToolGroupDefinition(
     name: 'Measure Tools',
-    tools: [_distanceTool, _angleMeasureTool, _areaTool, _slopeTool],
+    placeholders: [_distanceTool, _angleMeasureTool, _areaTool, _slopeTool],
   ),
-  ToolCategoryGroup(
+  _ToolGroupDefinition(
     name: 'Lines & Segments',
-    tools: [_lineTool, _rayTool, _segmentTool, _vectorTool],
+    toolTypes: [ToolType.line, ToolType.lineSegment],
+    placeholders: [_rayTool, _vectorTool],
   ),
-  ToolCategoryGroup(
+  _ToolGroupDefinition(
     name: 'Circles & Arcs',
-    tools: [_circleCenterTool, _circleThreePointsTool, _circularArcTool],
-  ),
-  ToolCategoryGroup(
-    name: 'Polygons',
-    tools: [
-      _polygonTool,
-      _polyLineTool,
-      _polyArcToolEntry,
-      _polyArcGonTool,
-      _regularPolygonTool,
-      _rigidPolygonTool,
+    toolTypes: [
+      ToolType.circle,
+      ToolType.circleThreePoints,
+      ToolType.arcThreePoints,
     ],
   ),
-  ToolCategoryGroup(
+  _ToolGroupDefinition(
+    name: 'Polygons',
+    toolTypes: [
+      ToolType.polygon,
+      ToolType.polyLine,
+      ToolType.polyArc,
+      ToolType.polyArcGon,
+    ],
+    placeholders: [_regularPolygonTool, _rigidPolygonTool],
+  ),
+  _ToolGroupDefinition(
     name: 'Transformations',
-    tools: [_reflectLineTool, _rotateTool, _translateTool, _dilateTool],
+    toolTypes: [
+      ToolType.reflectLine,
+      ToolType.rotate,
+      ToolType.translate,
+      ToolType.dilate,
+    ],
   ),
 ];
 
-const List<ToolCategoryGroup> level3ToolGroups = [
-  ToolCategoryGroup(
+const List<_ToolGroupDefinition> _level3GroupDefinitions = [
+  _ToolGroupDefinition(
     name: 'Basic Tools',
-    tools: [
-      _moveTool,
-      _pointTool,
-      _segmentTool,
-      _lineTool,
-      _polygonTool,
-      _circleCenterTool,
-      _textTool,
+    toolTypes: [
+      ToolType.select,
+      ToolType.point,
+      ToolType.lineSegment,
+      ToolType.line,
+      ToolType.polygon,
+      ToolType.circle,
     ],
   ),
-  ToolCategoryGroup(
+  _ToolGroupDefinition(
     name: 'Edit Tools',
-    tools: [_moveTool, _deleteTool, _redefineTool, _copyTool, _selectTool],
+    toolTypes: [ToolType.select],
+    placeholders: [_deleteTool, _redefineTool, _copyTool],
   ),
-  ToolCategoryGroup(
+  _ToolGroupDefinition(
     name: 'Construct Tools',
-    tools: [
-      _midpointTool,
-      _intersectTool,
-      _perpendicularTool,
-      _parallelTool,
-      _perpBisectorTool,
-      _tangentTool,
-      _locusTool,
+    toolTypes: [
+      ToolType.midpoint,
+      ToolType.intersection,
+      ToolType.perpendicular,
+      ToolType.parallel,
+      ToolType.perpBisector,
+      ToolType.tangent,
     ],
+    placeholders: [_locusTool],
   ),
-  ToolCategoryGroup(
+  _ToolGroupDefinition(
     name: 'Measure Tools',
-    tools: [_distanceTool, _angleMeasureTool, _areaTool, _slopeTool],
+    placeholders: [_distanceTool, _angleMeasureTool, _areaTool, _slopeTool],
   ),
-  ToolCategoryGroup(
+  _ToolGroupDefinition(
     name: 'Points',
-    tools: [
-      _pointTool,
-      _pointOnObjectTool,
-      _intersectTool,
-      _midpointTool,
-      _attachPointTool,
+    toolTypes: [
+      ToolType.point,
+      ToolType.intersection,
+      ToolType.midpoint,
     ],
+    placeholders: [_pointOnObjectTool, _attachPointTool],
   ),
-  ToolCategoryGroup(
+  _ToolGroupDefinition(
     name: 'Lines',
-    tools: [
-      _lineTool,
-      _rayTool,
-      _segmentTool,
-      _vectorTool,
-      _perpendicularTool,
-      _parallelTool,
-      _perpBisectorTool,
-      _angleBisectorTool,
+    toolTypes: [
+      ToolType.line,
+      ToolType.lineSegment,
+      ToolType.perpendicular,
+      ToolType.parallel,
+      ToolType.perpBisector,
+      ToolType.angleBisector,
     ],
+    placeholders: [_rayTool, _vectorTool],
   ),
-  ToolCategoryGroup(
+  _ToolGroupDefinition(
     name: 'Circles',
-    tools: [_circleCenterTool, _circleThreePointsTool, _circularArcTool],
+    toolTypes: [
+      ToolType.circle,
+      ToolType.circleThreePoints,
+      ToolType.arcThreePoints,
+    ],
   ),
-  ToolCategoryGroup(
+  _ToolGroupDefinition(
     name: 'Polygons',
-    tools: [
-      _polygonTool,
-      _polyLineTool,
-      _polyArcToolEntry,
-      _polyArcGonTool,
-      _regularPolygonTool,
-      _rigidPolygonTool,
-      _locusTool,
+    toolTypes: [
+      ToolType.polygon,
+      ToolType.polyLine,
+      ToolType.polyArc,
+      ToolType.polyArcGon,
     ],
+    placeholders: [_regularPolygonTool, _rigidPolygonTool, _locusTool],
   ),
-  ToolCategoryGroup(
+  _ToolGroupDefinition(
     name: 'Conics',
-    tools: [_conicTool, _ellipseTool, _parabolaTool, _hyperbolaTool],
+    placeholders: [_conicTool, _ellipseTool, _parabolaTool, _hyperbolaTool],
   ),
-  ToolCategoryGroup(
+  _ToolGroupDefinition(
     name: 'Transformations',
-    tools: [
-      _reflectLineTool,
-      _reflectPointTool,
-      _reflectCircleTool,
-      _rotateTool,
-      _translateTool,
-      _dilateTool,
-      _shearTool,
-      _stretchTool,
-      _invertTool,
+    toolTypes: [
+      ToolType.reflectLine,
+      ToolType.reflectPoint,
+      ToolType.reflectCircle,
+      ToolType.rotate,
+      ToolType.translate,
+      ToolType.dilate,
     ],
+    placeholders: [_shearTool, _stretchTool, _invertTool],
   ),
-  ToolCategoryGroup(
+  _ToolGroupDefinition(
     name: 'Other / Advanced',
-    tools: [
+    placeholders: [
       _locusTool,
       _mirrorCurveTool,
       _traceTool,
@@ -673,12 +465,32 @@ const List<ToolCategoryGroup> level3ToolGroups = [
   ),
 ];
 
-const Map<ToolPaletteLevel, List<ToolCategoryGroup>> toolPaletteCatalog = {
-  ToolPaletteLevel.level1: level1ToolGroups,
-  ToolPaletteLevel.level2: level2ToolGroups,
-  ToolPaletteLevel.level3: level3ToolGroups,
+const Map<ToolPaletteLevel, List<_ToolGroupDefinition>> _toolPaletteDefinitions =
+    {
+  ToolPaletteLevel.level1: _level1GroupDefinitions,
+  ToolPaletteLevel.level2: _level2GroupDefinitions,
+  ToolPaletteLevel.level3: _level3GroupDefinitions,
 };
 
+/// Get tool groups for a level, building entries from registry
 List<ToolCategoryGroup> toolGroupsForLevel(ToolPaletteLevel level) {
-  return toolPaletteCatalog[level] ?? const [];
+  final registry = ToolRegistry();
+  final definitions = _toolPaletteDefinitions[level] ?? const [];
+
+  return definitions.map((def) {
+    final tools = <ToolCatalogEntry>[];
+
+    // Add entries from registry for implemented tools
+    for (final toolType in def.toolTypes) {
+      final entry = registry.getCatalogEntry(toolType);
+      if (entry != null) {
+        tools.add(entry);
+      }
+    }
+
+    // Add placeholder entries for non-implemented tools
+    tools.addAll(def.placeholders);
+
+    return ToolCategoryGroup(name: def.name, tools: tools);
+  }).toList();
 }
