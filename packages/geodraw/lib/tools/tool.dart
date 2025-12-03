@@ -29,6 +29,13 @@ enum ToolType {
   rotate,
   translate,
   dilate,
+  // L3 Flexible commands
+  circleFlex,
+  circle3Flex,
+  lineFlex,
+  perpbisectorFlex,
+  perpendicularFlex,
+  parallelFlex,
 }
 
 /// Abstract base class for all construction tools

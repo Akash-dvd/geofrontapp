@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:geodraw/geodraw.dart';
+import 'package:geodraw/ui/parameter_input_dialog.dart';
 
 import '../config/env_config.dart';
 import '../models/problem.dart';
@@ -123,13 +124,16 @@ class _GeoDrawCreateScreenState extends State<GeoDrawCreateScreen> {
         setState(() {});
       },
       onObjectSelected: (objectId) {
-        // Update highlighting for tool-based selection (staged selection tools)
+        // Update highlighting for tool-based selection
         setState(() {
           if (objectId.isEmpty) {
             // Empty string means clear all highlights
             _selectedIds.clear();
           } else {
-            // Add to highlights (for multi-step selection like inversion/reflection)
+            // Clear previous selections first, then add new one
+            // This ensures clean highlighting like the select tool
+            // For multi-step selection tools (staged), they will call this multiple times
+            _selectedIds.clear();
             _selectedIds.add(objectId);
           }
         });
@@ -137,6 +141,9 @@ class _GeoDrawCreateScreenState extends State<GeoDrawCreateScreen> {
       onToolStateChanged: (state) {
         // Could update UI with tool state
         setState(() {});
+      },
+      onParameterRequest: (title, parameters) async {
+        return await showParameterInputDialog(context, title, parameters);
       },
     );
     _commandExecutor = UnifiedCLIExecutor(dagManager: _dagManager);
@@ -318,19 +325,25 @@ class _GeoDrawEditScreenState extends State<GeoDrawEditScreen> {
         setState(() {});
       },
       onObjectSelected: (objectId) {
-        // Update highlighting for tool-based selection (staged selection tools)
+        // Update highlighting for tool-based selection
         setState(() {
           if (objectId.isEmpty) {
             // Empty string means clear all highlights
             _selectedIds.clear();
           } else {
-            // Add to highlights (for multi-step selection like inversion/reflection)
+            // Clear previous selections first, then add new one
+            // This ensures clean highlighting like the select tool
+            // For multi-step selection tools (staged), they will call this multiple times
+            _selectedIds.clear();
             _selectedIds.add(objectId);
           }
         });
       },
       onToolStateChanged: (state) {
         setState(() {});
+      },
+      onParameterRequest: (title, parameters) async {
+        return await showParameterInputDialog(context, title, parameters);
       },
     );
     _commandExecutor = UnifiedCLIExecutor(dagManager: _dagManager);
@@ -462,6 +475,9 @@ class _GeoDrawViewScreenState extends State<GeoDrawViewScreen> {
       },
       onToolStateChanged: (state) {
         setState(() {});
+      },
+      onParameterRequest: (title, parameters) async {
+        return await showParameterInputDialog(context, title, parameters);
       },
     );
   }

@@ -1,7 +1,8 @@
+import 'package:flutter/foundation.dart';
 import 'package:geocalc/Multivector.dart';
 
 import '../geometry_object.dart';
-import '../simple/geo_trans.dart';
+import 'geo_trans.dart';
 import '../simple/geo_point.dart';
 import '../simple/geo_line.dart';
 import '../simple/geo_circle.dart';
@@ -29,11 +30,11 @@ class TransformationEngine {
     bool? visible,
     Map<String, dynamic>? styleOverrides,
   }) {
-    print('[TransformationEngine] transformSimple: source=${source.runtimeType} (${source.id}), transform=${transform.runtimeType} (${transform.id})');
+    //debugPrint('[TransformationEngine] transformSimple: source=${source.runtimeType} (${source.id}), transform=${transform.runtimeType} (${transform.id})');
     
     // Special case: Points always remain points (reflection, rotation, dilation preserve point type)
     if (source is GeoPoint) {
-      print('[TransformationEngine] Source is a point - points always remain points');
+      //debugPrint('[TransformationEngine] Source is a point - points always remain points');
       final transformed = transformMultivector(
         subject: source.multivector,
         transform: transform,
@@ -41,7 +42,7 @@ class TransformationEngine {
       
       // Force the result to be treated as a point, even if kind inference says otherwise
       // This is because points should always remain points
-      print('[TransformationEngine] Creating GeoTransPoint (point type preserved)');
+      //debugPrint('[TransformationEngine] Creating GeoTransPoint (point type preserved)');
       return GeoTransPoint(
         id: id,
         label: label,
@@ -59,17 +60,17 @@ class TransformationEngine {
       transform: transform,
     );
 
-    print('[TransformationEngine] Original multivector: o=${source.multivector.o}, e1=${source.multivector.e1}, e2=${source.multivector.e2}, O=${source.multivector.O}');
-    print('[TransformationEngine] Transformed multivector (before normalization): o=${transformed.o}, e1=${transformed.e1}, e2=${transformed.e2}, O=${transformed.O}');
-    print('[TransformationEngine] Checking multivector type (before normalization): isPoint=${transformed.isPoint()}, isLine=${transformed.isLine()}, isCircle=${transformed.isCircle()}');
+    //debugPrint('[TransformationEngine] Original multivector: o=${source.multivector.o}, e1=${source.multivector.e1}, e2=${source.multivector.e2}, O=${source.multivector.O}');
+    //debugPrint('[TransformationEngine] Transformed multivector (before normalization): o=${transformed.o}, e1=${transformed.e1}, e2=${transformed.e2}, O=${transformed.O}');
+    //debugPrint('[TransformationEngine] Checking multivector type (before normalization): isPoint=${transformed.isPoint()}, isLine=${transformed.isLine()}, isCircle=${transformed.isCircle()}');
     
     // Normalize the multivector using the function from definitions.dart
     transformed = normalizeTransformedMultivector(transformed);
-    print('[TransformationEngine] After normalization: o=${transformed.o}, e1=${transformed.e1}, e2=${transformed.e2}, O=${transformed.O}');
-    print('[TransformationEngine] Checking multivector type (after normalization): isPoint=${transformed.isPoint()}, isLine=${transformed.isLine()}, isCircle=${transformed.isCircle()}');
+    //debugPrint('[TransformationEngine] After normalization: o=${transformed.o}, e1=${transformed.e1}, e2=${transformed.e2}, O=${transformed.O}');
+    //debugPrint('[TransformationEngine] Checking multivector type (after normalization): isPoint=${transformed.isPoint()}, isLine=${transformed.isLine()}, isCircle=${transformed.isCircle()}');
     
     final kind = _inferKind(transformed);
-    print('[TransformationEngine] Transformed multivector kind: $kind');
+    //debugPrint('[TransformationEngine] Transformed multivector kind: $kind');
     final sourceId = source.id;
     final transformId = transform.id;
     final isVisible = visible ?? source.visible;
@@ -77,7 +78,7 @@ class TransformationEngine {
 
     switch (kind) {
       case SimpleTransformKind.point:
-        print('[TransformationEngine] Kind is point, but source is not GeoPoint - this should not happen');
+        //debugPrint('[TransformationEngine] Kind is point, but source is not GeoPoint - this should not happen');
         return null;
       case SimpleTransformKind.line:
         return GeoTransLine(
@@ -110,6 +111,11 @@ class TransformationEngine {
     required GeoTrans transform,
     bool useSignedOperators = false,
   }) {
+    // All reflection-based operators (rotation, dilation) use the same pattern
+    if (transform is GeoRotate || transform is GeoDilate) {
+      return applyOperator(transform.multivector, subject);
+    }
+
     if (transform is GeoInverse) {
       return _applyInverseToMultivector(
         subject,
@@ -118,12 +124,8 @@ class TransformationEngine {
       );
     }
 
-    if (transform is GeoRotate) {
-      return applyRotationOperator(transform.multivector, subject);
-    }
-
-    if (transform is GeoDilate) {
-      return applyDilationOperator(transform.multivector, subject);
+    if (transform is GeoTranslate) {
+      return applyTranslationOperator(transform.multivector, subject);
     }
 
     return subject;
@@ -395,25 +397,8 @@ class TransformationEngine {
     Multivector subject, {
     bool useSignedOperators = false,
   }) {
-    if (subject.isLine()) {
-      return useSignedOperators
-          ? constructSignedReflectionAcrossLine(object, subject)
-          : constructReflectionAcrossLine(object, subject);
-    }
-
-    if (subject.isCircle()) {
-      return useSignedOperators
-          ? constructSignedReflectionAcrossCircle(object, subject)
-          : constructReflectionAcrossCircle(object, subject);
-    }
-
-    if (subject.isPoint()) {
-      return useSignedOperators
-          ? constructSignedReflectionAcrossPoint(object, subject)
-          : constructReflectionAcrossPoint(object, subject);
-    }
-
-    return subject.reflection(object).getOrElse(() => object);
+    // Use the consolidated helper from definitions.dart
+    return applyReflectionByType(object, subject, useSignedOperators);
   }
 
   static SimpleTransformKind _inferKind(Multivector mv) {

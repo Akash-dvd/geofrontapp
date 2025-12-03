@@ -168,9 +168,9 @@ class ProblemBloc extends Bloc<ProblemEvent, ProblemState> {
     Emitter<ProblemState> emit,
   ) async {
     try {
-      print('DEBUG: BLoC received CreateProblem event');
-      print('DEBUG: Title: ${event.title}');
-      print('DEBUG: ThumbnailId: ${event.thumbnailId}');
+      debugPrint('DEBUG: BLoC received CreateProblem event');
+      debugPrint('DEBUG: Title: ${event.title}');
+      debugPrint('DEBUG: ThumbnailId: ${event.thumbnailId}');
 
       emit(
         ProblemOperationInProgress(
@@ -295,7 +295,7 @@ class ProblemBloc extends Bloc<ProblemEvent, ProblemState> {
       );
 
       if (result.hasException) {
-        print('DEBUG: GraphQL error: ${result.exception.toString()}');
+        debugPrint('DEBUG: GraphQL error: ${result.exception.toString()}');
         emit(
           ProblemError(
             message:
@@ -306,7 +306,7 @@ class ProblemBloc extends Bloc<ProblemEvent, ProblemState> {
         return;
       }
 
-      print('DEBUG: Problem created successfully');
+      debugPrint('DEBUG: Problem created successfully');
       // Handle response from both Hasura and Directus
       Map<String, dynamic>? problemData;
 
@@ -322,7 +322,7 @@ class ProblemBloc extends Bloc<ProblemEvent, ProblemState> {
       }
 
       if (problemData == null) {
-        print('DEBUG: No problem data in response');
+        debugPrint('DEBUG: No problem data in response');
         emit(
           ProblemError(
             message: 'Failed to create problem: No data returned',
@@ -333,7 +333,7 @@ class ProblemBloc extends Bloc<ProblemEvent, ProblemState> {
       }
 
       final newProblem = Problem.fromJson(problemData);
-      print(
+      debugPrint(
         'DEBUG: New problem ID: ${newProblem.id}, ThumbnailId: ${newProblem.thumbnailId}',
       );
 
@@ -349,7 +349,7 @@ class ProblemBloc extends Bloc<ProblemEvent, ProblemState> {
         ),
       );
 
-      print('DEBUG: ProblemOperationSuccess emitted');
+      debugPrint('DEBUG: ProblemOperationSuccess emitted');
     } catch (e) {
       emit(
         ProblemError(

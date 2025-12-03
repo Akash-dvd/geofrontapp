@@ -15,6 +15,7 @@ import '../models/geometry_object.dart';
 import '../models/simple/geo_point.dart';
 import '../models/simple/geo_line.dart';
 import '../models/simple/geo_circle.dart';
+import 'package:geocalc/Multivector.dart' show getCircleCenter;
 
 /// Manages the active tool and tool state
 class ToolManager with ToolCallbacksMixin {
@@ -26,12 +27,15 @@ class ToolManager with ToolCallbacksMixin {
 
   final _PointLabelGenerator _pointLabelGenerator = _PointLabelGenerator();
 
+  final OnParameterRequest? onParameterRequest;
+
   ToolManager({
     required this.dagManager,
     this.commandHistory,
     OnObjectCreated? onObjectCreated,
     OnObjectSelected? onObjectSelected,
     OnToolStateChanged? onToolStateChanged,
+    this.onParameterRequest,
   }) {
     this.onObjectCreated = onObjectCreated;
     this.onObjectSelected = onObjectSelected;
@@ -78,7 +82,7 @@ class ToolManager with ToolCallbacksMixin {
           onToolStateChanged: onToolStateChanged,
       createFreePoint: _createFreePoint,
           labelGenerator: _pointLabelGenerator,
-      onParameterRequest: null,
+      onParameterRequest: onParameterRequest,
     );
 
     return ToolRegistry().createTool(type, context);
@@ -615,6 +619,142 @@ class ToolManager with ToolCallbacksMixin {
         assetIcon: 'assets/tool_icons/Standard View.svg',
         command: 'Pan[]',
         toolType: ToolType.pan,
+        implemented: true,
+      ),
+    );
+
+    // ========================================================================
+    // L3 FLEXIBLE COMMANDS - Relaxed type constraints
+    // ========================================================================
+
+    // Circle Flex tool
+    registry.registerFromManager(
+      ToolType.circleFlex,
+      (context) => _CircleFlexTool(
+        dagManager: context.dagManager,
+        commandHistory: context.commandHistory,
+        onObjectCreated: context.onObjectCreated,
+        onObjectSelected: context.onObjectSelected,
+        onToolStateChanged: context.onToolStateChanged,
+        createFreePoint: context.createFreePoint!,
+      ),
+      const ToolCatalogEntry(
+        id: 'circle_flex',
+        label: 'Circle (Flex)',
+        icon: Icons.circle_outlined,
+        assetIcon: 'assets/tool_icons/circle2.svg',
+        command: 'CircleFlex[]',
+        toolType: ToolType.circleFlex,
+        implemented: true,
+      ),
+    );
+
+    // Circle 3 Flex tool
+    registry.registerFromManager(
+      ToolType.circle3Flex,
+      (context) => _Circle3FlexTool(
+        dagManager: context.dagManager,
+        commandHistory: context.commandHistory,
+        onObjectCreated: context.onObjectCreated,
+        onObjectSelected: context.onObjectSelected,
+        onToolStateChanged: context.onToolStateChanged,
+        createFreePoint: context.createFreePoint!,
+      ),
+      const ToolCatalogEntry(
+        id: 'circle3_flex',
+        label: 'Circle 3 (Flex)',
+        icon: Icons.circle,
+        assetIcon: 'assets/tool_icons/circle3.svg',
+        command: 'Circle3Flex[]',
+        toolType: ToolType.circle3Flex,
+        implemented: true,
+      ),
+    );
+
+    // Line Flex tool
+    registry.registerFromManager(
+      ToolType.lineFlex,
+      (context) => _LineFlexTool(
+        dagManager: context.dagManager,
+        commandHistory: context.commandHistory,
+        onObjectCreated: context.onObjectCreated,
+        onObjectSelected: context.onObjectSelected,
+        onToolStateChanged: context.onToolStateChanged,
+        createFreePoint: context.createFreePoint!,
+      ),
+      const ToolCatalogEntry(
+        id: 'line_flex',
+        label: 'Line (Flex)',
+        icon: Icons.horizontal_rule,
+        assetIcon: 'assets/tool_icons/line.svg',
+        command: 'LineFlex[]',
+        toolType: ToolType.lineFlex,
+        implemented: true,
+      ),
+    );
+
+    // Perpendicular Bisector Flex tool
+    registry.registerFromManager(
+      ToolType.perpbisectorFlex,
+      (context) => _PerpBisectorFlexTool(
+        dagManager: context.dagManager,
+        commandHistory: context.commandHistory,
+        onObjectCreated: context.onObjectCreated,
+        onObjectSelected: context.onObjectSelected,
+        onToolStateChanged: context.onToolStateChanged,
+        createFreePoint: context.createFreePoint!,
+      ),
+      const ToolCatalogEntry(
+        id: 'perpbisector_flex',
+        label: 'Perp. Bisector (Flex)',
+        icon: Icons.straighten,
+        assetIcon: 'assets/tool_icons/perpendicularbisector.svg',
+        command: 'PerpBisectorFlex[]',
+        toolType: ToolType.perpbisectorFlex,
+        implemented: true,
+      ),
+    );
+
+    // Perpendicular Flex tool
+    registry.registerFromManager(
+      ToolType.perpendicularFlex,
+      (context) => _PerpendicularFlexTool(
+        dagManager: context.dagManager,
+        commandHistory: context.commandHistory,
+        onObjectCreated: context.onObjectCreated,
+        onObjectSelected: context.onObjectSelected,
+        onToolStateChanged: context.onToolStateChanged,
+        createFreePoint: context.createFreePoint!,
+      ),
+      const ToolCatalogEntry(
+        id: 'perpendicular_flex',
+        label: 'Perpendicular (Flex)',
+        icon: Icons.rotate_90_degrees_ccw,
+        assetIcon: 'assets/tool_icons/perpendicularline.svg',
+        command: 'PerpendicularFlex[]',
+        toolType: ToolType.perpendicularFlex,
+        implemented: true,
+      ),
+    );
+
+    // Parallel Flex tool
+    registry.registerFromManager(
+      ToolType.parallelFlex,
+      (context) => _ParallelFlexTool(
+        dagManager: context.dagManager,
+        commandHistory: context.commandHistory,
+        onObjectCreated: context.onObjectCreated,
+        onObjectSelected: context.onObjectSelected,
+        onToolStateChanged: context.onToolStateChanged,
+        createFreePoint: context.createFreePoint!,
+      ),
+      const ToolCatalogEntry(
+        id: 'parallel_flex',
+        label: 'Parallel (Flex)',
+        icon: Icons.swap_calls,
+        assetIcon: 'assets/tool_icons/parallel_line.svg',
+        command: 'ParallelFlex[]',
+        toolType: ToolType.parallelFlex,
         implemented: true,
       ),
     );
@@ -1735,17 +1875,17 @@ class _RotateTool extends StagedSelectionTool {
   @override
   List<Set<Type>> get stageTypeConstraints => [
     {}, // Stage 0: Any geometry object
-    {GeoPoint, GeoPointer, GeoMidpoint}, // Stage 1: Center point
+    {GeoPoint, GeoPointer, GeoMidpoint, GeoCircle}, // Stage 1: Center point or circle
   ];
 
   @override
   List<ParameterSpec> get parameterSpecs => const [
     ParameterSpec(
       key: 'angle',
-      label: 'Angle (degrees)',
+      label: 'Angle',
       type: ParameterType.angle,
       defaultValue: 90.0,
-      hint: 'Enter rotation angle in degrees (+ for CCW, - for CW)',
+      hint: 'Enter rotation angle',
     ),
   ];
 
@@ -1755,7 +1895,7 @@ class _RotateTool extends StagedSelectionTool {
       case 0:
         return 'Select object to rotate';
       case 1:
-        return 'Select center point for rotation';
+        return 'Select center point or circle for rotation';
       default:
         return 'Rotating...';
     }
@@ -1767,7 +1907,20 @@ class _RotateTool extends StagedSelectionTool {
     Map<String, dynamic>? parameters,
   ) {
     final angle = (parameters?['angle'] ?? 90.0) as double;
-    return [selectedObjects[0], selectedObjects[1], angle];
+    // If center is a circle, extract its center point
+    final center = selectedObjects[1];
+    GeometryObject centerPoint = center;
+    if (center is GeoCircle) {
+      // Create a temporary point at the circle's center
+      final centerMv = getCircleCenter(center.multivector);
+      centerPoint = GeoPointer(
+        id: '${center.id}_center',
+        label: '${center.label}_center',
+        x: centerMv.e1,
+        y: centerMv.e2,
+      );
+    }
+    return [selectedObjects[0], centerPoint, angle];
   }
 
   @override
@@ -1875,7 +2028,7 @@ class _DilateTool extends StagedSelectionTool {
   @override
   List<Set<Type>> get stageTypeConstraints => [
     {}, // Stage 0: Any geometry object
-    {GeoPoint, GeoPointer, GeoMidpoint}, // Stage 1: Center point
+    {GeoPoint, GeoPointer, GeoMidpoint, GeoCircle}, // Stage 1: Center point or circle
   ];
 
   @override
@@ -1885,7 +2038,7 @@ class _DilateTool extends StagedSelectionTool {
       label: 'Scale Factor',
       type: ParameterType.number,
       defaultValue: 2.0,
-      hint: 'Enter scale factor (> 1 to enlarge, < 1 to shrink)',
+      hint: 'Enter scale factor (positive for dilation, negative for compression)',
     ),
   ];
 
@@ -1895,7 +2048,7 @@ class _DilateTool extends StagedSelectionTool {
       case 0:
         return 'Select object to dilate';
       case 1:
-        return 'Select center point for dilation';
+        return 'Select center point or circle for dilation';
       default:
         return 'Dilating...';
     }
@@ -1907,7 +2060,20 @@ class _DilateTool extends StagedSelectionTool {
     Map<String, dynamic>? parameters,
   ) {
     final scale = (parameters?['scale'] ?? 2.0) as double;
-    return [selectedObjects[0], selectedObjects[1], scale];
+    // If center is a circle, extract its center point
+    final center = selectedObjects[1];
+    GeometryObject centerPoint = center;
+    if (center is GeoCircle) {
+      // Create a temporary point at the circle's center
+      final centerMv = getCircleCenter(center.multivector);
+      centerPoint = GeoPointer(
+        id: '${center.id}_center',
+        label: '${center.label}_center',
+        x: centerMv.e1,
+        y: centerMv.e2,
+      );
+    }
+    return [selectedObjects[0], centerPoint, scale];
   }
 
   @override
@@ -2225,6 +2391,272 @@ class _TangentTool extends UnifiedTool {
   void reset() {
     super.reset();
     notifyStateChanged('Select point or circle for tangent');
+  }
+}
+
+/// Circle Flex tool - creates circles with flexible center and point
+class _CircleFlexTool extends UnifiedTool {
+  final GeoPointer Function(Offset position) createFreePoint;
+
+  _CircleFlexTool({
+    required super.dagManager,
+    super.commandHistory,
+    super.onObjectCreated,
+    super.onObjectSelected,
+    super.onToolStateChanged,
+    required this.createFreePoint,
+  });
+
+  @override
+  ToolType get type => ToolType.circleFlex;
+
+  @override
+  String get commandName => 'circleFlex';
+
+  @override
+  String get name => 'Circle (Flex)';
+
+  @override
+  IconData get icon => Icons.circle_outlined;
+
+  @override
+  String get tooltip => 'Create a circle with flexible center and point';
+
+  @override
+  GeometryObject? createObjectAtPosition(Offset position) {
+    final nextType = verifier.schema.nextConstraint(verifier.arguments);
+    if (nextType?.accepts(SimpleGeometryObject) ?? false) {
+      return createFreePoint(position);
+    }
+    return null;
+  }
+
+  @override
+  void reset() {
+    super.reset();
+    notifyStateChanged('Select center (point or circle) for circle');
+  }
+}
+
+/// Circle 3 Flex tool - creates circles through three flexible objects
+class _Circle3FlexTool extends UnifiedTool {
+  final GeoPointer Function(Offset position) createFreePoint;
+
+  _Circle3FlexTool({
+    required super.dagManager,
+    super.commandHistory,
+    super.onObjectCreated,
+    super.onObjectSelected,
+    super.onToolStateChanged,
+    required this.createFreePoint,
+  });
+
+  @override
+  ToolType get type => ToolType.circle3Flex;
+
+  @override
+  String get commandName => 'circle3Flex';
+
+  @override
+  String get name => 'Circle 3 (Flex)';
+
+  @override
+  IconData get icon => Icons.circle;
+
+  @override
+  String get tooltip => 'Create a circle through three flexible objects';
+
+  @override
+  GeometryObject? createObjectAtPosition(Offset position) {
+    final nextType = verifier.schema.nextConstraint(verifier.arguments);
+    if (nextType?.accepts(SimpleGeometryObject) ?? false) {
+      return createFreePoint(position);
+    }
+    return null;
+  }
+
+  @override
+  void reset() {
+    super.reset();
+    notifyStateChanged('Select three objects for circle');
+  }
+}
+
+/// Line Flex tool - creates lines through two flexible objects
+class _LineFlexTool extends UnifiedTool {
+  final GeoPointer Function(Offset position) createFreePoint;
+
+  _LineFlexTool({
+    required super.dagManager,
+    super.commandHistory,
+    super.onObjectCreated,
+    super.onObjectSelected,
+    super.onToolStateChanged,
+    required this.createFreePoint,
+  });
+
+  @override
+  ToolType get type => ToolType.lineFlex;
+
+  @override
+  String get commandName => 'lineFlex';
+
+  @override
+  String get name => 'Line (Flex)';
+
+  @override
+  IconData get icon => Icons.horizontal_rule;
+
+  @override
+  String get tooltip => 'Create a line through two flexible objects';
+
+  @override
+  GeometryObject? createObjectAtPosition(Offset position) {
+    final nextType = verifier.schema.nextConstraint(verifier.arguments);
+    if (nextType?.accepts(SimpleGeometryObject) ?? false) {
+      return createFreePoint(position);
+    }
+    return null;
+  }
+
+  @override
+  void reset() {
+    super.reset();
+    notifyStateChanged('Select two objects for line');
+  }
+}
+
+/// Perpendicular Bisector Flex tool - creates bisector with flexible arguments
+class _PerpBisectorFlexTool extends UnifiedTool {
+  final GeoPointer Function(Offset position) createFreePoint;
+
+  _PerpBisectorFlexTool({
+    required super.dagManager,
+    super.commandHistory,
+    super.onObjectCreated,
+    super.onObjectSelected,
+    super.onToolStateChanged,
+    required this.createFreePoint,
+  });
+
+  @override
+  ToolType get type => ToolType.perpbisectorFlex;
+
+  @override
+  String get commandName => 'perpbisectorFlex';
+
+  @override
+  String get name => 'Perp. Bisector (Flex)';
+
+  @override
+  IconData get icon => Icons.straighten;
+
+  @override
+  String get tooltip => 'Create perpendicular bisector with flexible arguments';
+
+  @override
+  GeometryObject? createObjectAtPosition(Offset position) {
+    final nextType = verifier.schema.nextConstraint(verifier.arguments);
+    if (nextType?.accepts(SimpleGeometryObject) ?? false) {
+      return createFreePoint(position);
+    }
+    return null;
+  }
+
+  @override
+  void reset() {
+    super.reset();
+    notifyStateChanged('Select two objects (point or circle) for bisector');
+  }
+}
+
+/// Perpendicular Flex tool - creates perpendicular line with flexible point
+class _PerpendicularFlexTool extends UnifiedTool {
+  final GeoPointer Function(Offset position) createFreePoint;
+
+  _PerpendicularFlexTool({
+    required super.dagManager,
+    super.commandHistory,
+    super.onObjectCreated,
+    super.onObjectSelected,
+    super.onToolStateChanged,
+    required this.createFreePoint,
+  });
+
+  @override
+  ToolType get type => ToolType.perpendicularFlex;
+
+  @override
+  String get commandName => 'perpendicularFlex';
+
+  @override
+  String get name => 'Perpendicular (Flex)';
+
+  @override
+  IconData get icon => Icons.rotate_90_degrees_ccw;
+
+  @override
+  String get tooltip => 'Create perpendicular line with flexible point';
+
+  @override
+  GeometryObject? createObjectAtPosition(Offset position) {
+    final nextType = verifier.schema.nextConstraint(verifier.arguments);
+    if (nextType != null && 
+        (nextType.accepts(GeoPoint) || nextType.accepts(GeoCircle))) {
+      return createFreePoint(position);
+    }
+    return null;
+  }
+
+  @override
+  void reset() {
+    super.reset();
+    notifyStateChanged('Select point (point or circle) and line for perpendicular');
+  }
+}
+
+/// Parallel Flex tool - creates parallel line with flexible point
+class _ParallelFlexTool extends UnifiedTool {
+  final GeoPointer Function(Offset position) createFreePoint;
+
+  _ParallelFlexTool({
+    required super.dagManager,
+    super.commandHistory,
+    super.onObjectCreated,
+    super.onObjectSelected,
+    super.onToolStateChanged,
+    required this.createFreePoint,
+  });
+
+  @override
+  ToolType get type => ToolType.parallelFlex;
+
+  @override
+  String get commandName => 'parallelFlex';
+
+  @override
+  String get name => 'Parallel (Flex)';
+
+  @override
+  IconData get icon => Icons.swap_calls;
+
+  @override
+  String get tooltip => 'Create parallel line with flexible point';
+
+  @override
+  GeometryObject? createObjectAtPosition(Offset position) {
+    final nextType = verifier.schema.nextConstraint(verifier.arguments);
+    if (nextType != null && 
+        (nextType.accepts(GeoPoint) || nextType.accepts(GeoCircle))) {
+      return createFreePoint(position);
+    }
+    return null;
+  }
+
+  @override
+  void reset() {
+    super.reset();
+    notifyStateChanged('Select line and point (point or circle) for parallel');
   }
 }
 

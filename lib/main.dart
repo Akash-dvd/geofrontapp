@@ -13,13 +13,13 @@ void main() async {
   // 1. Validate configuration (hardcoded in env_config.dart)
   EnvConfig.validate();
 
-  // 2. Print current mode for debugging
+  // 2. debugPrint current mode for debugging
   EnvConfig.printConfig();
-  print('═══════════════════════════════════════════════════════');
-  print(
+  debugPrint('═══════════════════════════════════════════════════════');
+  debugPrint(
     '🚀 Starting app in ${BuildFlags.useDirectus ? "LOCAL (Directus)" : "CLOUD (Hasura+Supabase)"} mode',
   );
-  print('═══════════════════════════════════════════════════════');
+  debugPrint('═══════════════════════════════════════════════════════');
 
   // 3. Initialize Supabase (shared auth + database)
   try {
@@ -38,9 +38,18 @@ void main() async {
   // additional web-specific initialization for PKCE, import the
   // implementation from the package that exposes it or handle PKCE
   // callback detection in your web entrypoint.
-    print('✅ Supabase initialized successfully');
+    debugPrint('✅ Supabase initialized successfully');
+  } on AuthException catch (e) {
+    // Handle specific auth errors gracefully
+    if (e.message.contains('Code verifier could not be found')) {
+      // Silently handle stale OAuth sessions - this is non-critical
+      // The app will continue to work, just without the session
+      // No need to log this as it's expected when OAuth flow is interrupted
+    } else {
+      debugPrint('❌ Supabase auth error: ${e.message}');
+    }
   } catch (e) {
-    print('❌ Supabase initialization failed: $e');
+    debugPrint('❌ Supabase initialization failed: $e');
   }
 
   // 4. Initialize app services (auth + data providers)

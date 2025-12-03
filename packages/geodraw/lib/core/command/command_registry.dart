@@ -14,7 +14,7 @@ import '../../models/geometry_object.dart';
 import '../../models/simple/geo_point.dart';
 import '../../models/simple/geo_line.dart';
 import '../../models/simple/geo_circle.dart';
-import '../../models/simple/geo_trans.dart';
+import '../../models/transforms/geo_trans.dart';
 import '../../models/simple/geo_transformed_simple.dart';
 import '../../models/simple_lists/geo_tangent.dart';
 import '../../models/simple_lists/geo_angle_bisector.dart';
@@ -25,6 +25,7 @@ import '../../models/complex/geo_shapes_list.dart';
 import '../../models/complex/geo_transformed_complex.dart';
 import '../../models/text/canvas_text.dart';
 import '../../models/transforms/transformation_engine.dart';
+import '../label_manager.dart';
 
 /// Stores command definitions and provides lookup by name
 class CommandRegistry {
@@ -39,71 +40,169 @@ class CommandRegistry {
   final LinkedHashSet<CommandDefinition> _definitions =
       LinkedHashSet<CommandDefinition>.identity();
 
-  int _pointLabelCounter = 0;
-  int _lineLabelCounter = 0;
-  int _segmentLabelCounter = 0;
-  int _circleLabelCounter = 0;
-  int _circleThreeLabelCounter = 0;
-  int _arcThreeLabelCounter = 0;
-  int _midpointLabelCounter = 0;
-  int _perpendicularLabelCounter = 0;
-  int _parallelLabelCounter = 0;
-  int _perpBisectorLabelCounter = 0;
-  int _tangentLabelCounter = 0;
-  int _angleBisectorLabelCounter = 0;
-  int _intersectionLabelCounter = 0;
-  int _textLabelCounter = 0;
-  int _inverseLabelCounter = 0;
-  int _rotateLabelCounter = 0;
-  int _dilateLabelCounter = 0;
-  int _unionLabelCounter = 0;
-  int _polyArcLabelCounter = 0;
-  int _polygonLabelCounter = 0;
-  int _polyLineLabelCounter = 0;
-  int _polyArcGonLabelCounter = 0;
-
   void _registerDefaults() {
     // Register core geometry constructors
     _register(
       CommandDefinition(
         name: 'point',
-        description: 'Create a free point at coordinates',
+        description: 'Create a free point at coordinates or a glider point on an object',
         schema: CommandSchema(
-          description: 'Free point',
-          argumentTypes: [
-            TypeConstraint.numeric(description: 'x-coordinate'),
-            TypeConstraint.numeric(description: 'y-coordinate'),
-            TypeConstraint.text(description: 'Label', optional: true),
+          description: 'Point (free or glider)',
+          patterns: [
+            // Pattern 0: Free point with coordinates
+            [
+              TypeConstraint.numeric(description: 'x-coordinate'),
+              TypeConstraint.numeric(description: 'y-coordinate'),
+              TypeConstraint.text(description: 'Label', optional: true),
+            ],
+            // Pattern 1: Glider point on an object
+            [
+              TypeConstraint.geometry(
+                allowedTypes: {
+                  GeoLine,
+                  GeoCircle,
+                  GeoSegment,
+                  GeoArc,
+                  UnionGeometryObjectList,
+                  GenSimpleGeometryObjectList,
+                },
+                description: 'Object to glide on',
+              ),
+              TypeConstraint.text(description: 'Label', optional: true),
+            ],
           ],
           argumentHints: [
-            'Enter x-coordinate',
-            'Enter y-coordinate',
+            'Enter x-coordinate or select object',
+            'Enter y-coordinate or enter label (optional)',
             'Enter label (optional)',
           ],
         ),
-        executor: (context, arguments) async {
-          final x = (arguments[0] as num).toDouble();
-          final y = (arguments[1] as num).toDouble();
-          final providedLabel = arguments.length >= 3
-              ? (arguments[2] as String).trim()
-              : '';
-          final point = GeoPointer(
-            id: context.generateId('point'),
-            label: providedLabel.isNotEmpty
+        patternExecutors: [
+          // Pattern 0: Free point (x, y)
+          (context, arguments) async {
+            final x = (arguments[0] as num).toDouble();
+            final y = (arguments[1] as num).toDouble();
+            final providedLabel = arguments.length >= 3
+                ? (arguments[2] as String).trim()
+                : '';
+            final label = providedLabel.isNotEmpty
                 ? providedLabel
-                : context.resolveLabel(_nextPointLabel),
-            x: x,
-            y: y,
-          );
+                : LabelManager.getNextAvailableLabel(
+                    context.dagManager,
+                    GeometryObjectType.point,
+                  );
+            final point = GeoPointer(
+              id: label, // In new system: ID = label for user-friendly access
+              label: label,
+              x: x,
+              y: y,
+            );
 
-          context.dagManager.addObject(point, []);
+            context.dagManager.addObject(point, []);
 
-          return ExecutionResult.successful(
-            objectId: point.id,
-            message: 'Created ${point.label}',
-            object: point,
-          );
-        },
+            return ExecutionResult.successful(
+              objectId: point.id,
+              message: 'Created ${point.label}',
+              object: point,
+            );
+          },
+          // Pattern 1: Glider point on object
+          (context, arguments) async {
+            final object = arguments[0] as GeometryObject;
+            final providedLabel = arguments.length >= 2
+                ? (arguments[1] as String).trim()
+                : '';
+            
+            // Get the object's position for initial placement
+            Offset initialPosition;
+            if (object is GeoPoint) {
+              // Shouldn't happen (filtered out), but handle gracefully
+              initialPosition = object.position;
+            } else if (object is GeoLine) {
+              // For lines, use a point on the line (e.g., closest to origin)
+              final lineMv = object.multivector;
+              // Project origin onto line
+              final origin = constructFreePoint(0, 0);
+              final projected = projectPointToLine(origin, lineMv);
+              initialPosition = Offset(projected.e1, projected.e2);
+            } else if (object is GeoCircle) {
+              // For circles, use a point on the circle (e.g., rightmost point)
+              final center = getCircleCenter(object.multivector);
+              final radius = measureCircleRadius(object.multivector);
+              initialPosition = Offset(center.e1 + radius, center.e2);
+            } else if (object is GeoSegment) {
+              // Use midpoint of segment
+              final start = object.startPoint.position;
+              final end = object.endPoint.position;
+              initialPosition = Offset(
+                (start.dx + end.dx) / 2,
+                (start.dy + end.dy) / 2,
+              );
+            } else if (object is GeoArc) {
+              // Use midpoint of arc (approximate)
+              final start = object.startPoint.position;
+              final end = object.endPoint.position;
+              initialPosition = Offset(
+                (start.dx + end.dx) / 2,
+                (start.dy + end.dy) / 2,
+              );
+            } else if (object is UnionGeometryObjectList) {
+              // Use first element's position
+              if (object.elements.isNotEmpty) {
+                final firstElement = object.elements.first;
+                if (firstElement is GeoPoint) {
+                  initialPosition = firstElement.position;
+                } else {
+                  // Fallback to center of bounds
+                  final bounds = object.getBounds();
+                  initialPosition = bounds.center;
+                }
+              } else {
+                return ExecutionResult.error('Union object has no elements');
+              }
+            } else if (object is GenSimpleGeometryObjectList) {
+              // Use first element's position
+              if (object.objects.isNotEmpty) {
+                final firstElement = object.objects.first;
+                if (firstElement is GeoPoint) {
+                  initialPosition = firstElement.position;
+                } else {
+                  // Fallback to center of bounds
+                  final bounds = object.getBounds();
+                  initialPosition = bounds.center;
+                }
+              } else {
+                return ExecutionResult.error('List object has no elements');
+              }
+            } else {
+              // Fallback to center of bounds
+              final bounds = object.getBounds();
+              initialPosition = bounds.center;
+            }
+            
+            final label = providedLabel.isNotEmpty
+                ? providedLabel
+                : LabelManager.getNextAvailableLabel(
+                    context.dagManager,
+                    GeometryObjectType.point,
+                  );
+            final gliderPoint = GeoGliderPoint(
+              id: label, // In new system: ID = label
+              label: label,
+              objectId: object.id,
+              initialX: initialPosition.dx,
+              initialY: initialPosition.dy,
+            );
+
+            context.dagManager.addObject(gliderPoint, [object.id]);
+
+            return ExecutionResult.successful(
+              objectId: gliderPoint.id,
+              message: 'Created glider point ${gliderPoint.label} on ${object.runtimeType}',
+              object: gliderPoint,
+            );
+          },
+        ],
       ),
     );
 
@@ -130,12 +229,16 @@ class CommandRegistry {
           final providedText = arguments.length >= 3
               ? (arguments[2] as String).trim()
               : '';
+          // Text labels can be custom content, so use provided text or generate a simple label
           final textContent = providedText.isNotEmpty
               ? providedText
-              : context.resolveLabel(_nextTextContent);
+              : LabelManager.getNextAvailableLabel(
+                  context.dagManager,
+                  GeometryObjectType.text,
+                );
 
           final text = CanvasText(
-            id: context.generateId('text'),
+            id: context.generateId('text'), // Text objects keep generated IDs
             text: textContent,
             position: Offset(x, y),
           );
@@ -180,11 +283,15 @@ class CommandRegistry {
           final providedLabel = arguments.length >= 3
               ? (arguments[2] as String).trim()
               : '';
+          final label = providedLabel.isNotEmpty
+              ? providedLabel
+              : LabelManager.getNextAvailableLabel(
+                  context.dagManager,
+                  GeometryObjectType.line,
+                );
           final line = GeoLine2P.fromDependencies(
-            id: context.generateId('line'),
-            label: providedLabel.isNotEmpty
-                ? providedLabel
-                : context.resolveLabel(_nextLineLabel),
+            id: label, // In new system: ID = label
+            label: label,
             points: [p1, p2],
           );
 
@@ -230,11 +337,15 @@ class CommandRegistry {
               ? (arguments[2] as String).trim()
               : '';
 
+          final label = providedLabel.isNotEmpty
+              ? providedLabel
+              : LabelManager.getNextAvailableLabel(
+                  context.dagManager,
+                  GeometryObjectType.line,
+                );
           final segment = GeoSegment2P.fromDependencies(
-            id: context.generateId('segment'),
-            label: providedLabel.isNotEmpty
-                ? providedLabel
-                : context.resolveLabel(_nextSegmentLabel),
+            id: label, // In new system: ID = label
+            label: label,
             points: [p1, p2],
           );
 
@@ -278,11 +389,15 @@ class CommandRegistry {
           final providedLabel = arguments.length >= 3
               ? (arguments[2] as String).trim()
               : '';
+          final label = providedLabel.isNotEmpty
+              ? providedLabel
+              : LabelManager.getNextAvailableLabel(
+                  context.dagManager,
+                  GeometryObjectType.circle,
+                );
           final circle = GeoCircle2P.fromDependencies(
-            id: context.generateId('circle'),
-            label: providedLabel.isNotEmpty
-                ? providedLabel
-                : context.resolveLabel(_nextCircleLabel),
+            id: label, // In new system: ID = label
+            label: label,
             points: [center, pointOnCircle],
           );
 
@@ -333,11 +448,15 @@ class CommandRegistry {
           final providedLabel = arguments.length >= 4
               ? (arguments[3] as String).trim()
               : '';
+          final label = providedLabel.isNotEmpty
+              ? providedLabel
+              : LabelManager.getNextAvailableLabel(
+                  context.dagManager,
+                  GeometryObjectType.circle,
+                );
           final circle = GeoCircle3P.fromDependencies(
-            id: context.generateId('circle'),
-            label: providedLabel.isNotEmpty
-                ? providedLabel
-                : context.resolveLabel(_nextCircleThreeLabel),
+            id: label, // In new system: ID = label
+            label: label,
             points: [p1, p2, p3],
           );
 
@@ -395,11 +514,15 @@ class CommandRegistry {
               ? (arguments[3] as String).trim()
               : '';
 
+          final label = providedLabel.isNotEmpty
+              ? providedLabel
+              : LabelManager.getNextAvailableLabel(
+                  context.dagManager,
+                  GeometryObjectType.arc,
+                );
           final arc = GeoArc3P.fromDependencies(
-            id: context.generateId('arc'),
-            label: providedLabel.isNotEmpty
-                ? providedLabel
-                : context.resolveLabel(_nextArcThreeLabel),
+            id: label, // In new system: ID = label
+            label: label,
             points: [p1, p2, p3],
           );
 
@@ -466,11 +589,15 @@ class CommandRegistry {
 
           GeoPolyArc polyArc;
           try {
+            final label = providedLabel.isNotEmpty
+                ? providedLabel
+                : LabelManager.getNextAvailableLabel(
+                    context.dagManager,
+                    GeometryObjectType.polyArc,
+                  );
             polyArc = GeoPolyArc.fromDependencies(
-              id: context.generateId('poly_arc'),
-              label: providedLabel.isNotEmpty
-                  ? providedLabel
-                  : context.resolveLabel(_nextPolyArcLabel),
+              id: label, // In new system: ID = label
+              label: label,
               points: points,
             );
           } on ArgumentError catch (error) {
@@ -602,11 +729,15 @@ class CommandRegistry {
 
           GeoPolygon polygon;
           try {
+            final label = providedLabel.isNotEmpty
+                ? providedLabel
+                : LabelManager.getNextAvailableLabel(
+                    context.dagManager,
+                    GeometryObjectType.polygon,
+                  );
             polygon = GeoPolygon.fromDependencies(
-              id: context.generateId('polygon'),
-              label: providedLabel.isNotEmpty
-                  ? providedLabel
-                  : context.resolveLabel(_nextPolygonLabel),
+              id: label, // In new system: ID = label
+              label: label,
               points: points,
             );
           } on ArgumentError catch (error) {
@@ -732,11 +863,15 @@ class CommandRegistry {
 
           GeoPolyLine polyLine;
           try {
+            final label = providedLabel.isNotEmpty
+                ? providedLabel
+                : LabelManager.getNextAvailableLabel(
+                    context.dagManager,
+                    GeometryObjectType.polyLine,
+                  );
             polyLine = GeoPolyLine.fromDependencies(
-              id: context.generateId('polyline'),
-              label: providedLabel.isNotEmpty
-                  ? providedLabel
-                  : context.resolveLabel(_nextPolyLineLabel),
+              id: label, // In new system: ID = label
+              label: label,
               points: points,
             );
           } on ArgumentError catch (error) {
@@ -870,11 +1005,15 @@ class CommandRegistry {
 
           GeoPolyArcGon<GeoArc> polyArcGon;
           try {
+            final label = providedLabel.isNotEmpty
+                ? providedLabel
+                : LabelManager.getNextAvailableLabel(
+                    context.dagManager,
+                    GeometryObjectType.polyArcGon,
+                  );
             polyArcGon = GeoPolyArcGon.fromDependencies(
-              id: context.generateId('polyarcgon'),
-              label: providedLabel.isNotEmpty
-                  ? providedLabel
-                  : context.resolveLabel(_nextPolyArcGonLabel),
+              id: label, // In new system: ID = label
+              label: label,
               points: points,
             );
           } on ArgumentError catch (error) {
@@ -1023,11 +1162,15 @@ class CommandRegistry {
               );
             }
 
+            final label = providedLabel.isNotEmpty
+                ? providedLabel
+                : LabelManager.getNextAvailableLabel(
+                    context.dagManager,
+                    GeometryObjectType.point,
+                  );
             final midpoint = GeoMidpoint.fromDependencies(
-              id: context.generateId('midpoint'),
-              label: providedLabel.isNotEmpty
-                  ? providedLabel
-                  : context.resolveLabel(_nextMidpointLabel),
+              id: label, // In new system: ID = label
+              label: label,
               points: [p1, p2],
             );
 
@@ -1068,11 +1211,15 @@ class CommandRegistry {
               );
             }
 
+            final label = providedLabel.isNotEmpty
+                ? providedLabel
+                : LabelManager.getNextAvailableLabel(
+                    context.dagManager,
+                    GeometryObjectType.point,
+                  );
             final midpoint = GeoMidpoint.fromDependencies(
-              id: context.generateId('midpoint'),
-              label: providedLabel.isNotEmpty
-                  ? providedLabel
-                  : context.resolveLabel(_nextMidpointLabel),
+              id: label, // In new system: ID = label
+              label: label,
               points: [p1, p2],
             );
 
@@ -1118,11 +1265,15 @@ class CommandRegistry {
           final providedLabel = arguments.length >= 3
               ? (arguments[2] as String).trim()
               : '';
+          final label = providedLabel.isNotEmpty
+              ? providedLabel
+              : LabelManager.getNextAvailableLabel(
+                  context.dagManager,
+                  GeometryObjectType.line,
+                );
           final perpendicular = GeoPerpendicularLine.fromDependencies(
-            id: context.generateId('line'),
-            label: providedLabel.isNotEmpty
-                ? providedLabel
-                : context.resolveLabel(_nextPerpendicularLabel),
+            id: label, // In new system: ID = label
+            label: label,
             dependencies: [point, reference],
           );
 
@@ -1167,11 +1318,15 @@ class CommandRegistry {
           final providedLabel = arguments.length >= 3
               ? (arguments[2] as String).trim()
               : '';
+          final label = providedLabel.isNotEmpty
+              ? providedLabel
+              : LabelManager.getNextAvailableLabel(
+                  context.dagManager,
+                  GeometryObjectType.line,
+                );
           final parallel = GeoParallelLine.fromDependencies(
-            id: context.generateId('line'),
-            label: providedLabel.isNotEmpty
-                ? providedLabel
-                : context.resolveLabel(_nextParallelLabel),
+            id: label, // In new system: ID = label
+            label: label,
             dependencies: [reference, point],
           );
 
@@ -1216,11 +1371,15 @@ class CommandRegistry {
           final providedLabel = arguments.length >= 3
               ? (arguments[2] as String).trim()
               : '';
+          final label = providedLabel.isNotEmpty
+              ? providedLabel
+              : LabelManager.getNextAvailableLabel(
+                  context.dagManager,
+                  GeometryObjectType.line,
+                );
           final bisector = GeoPerpendicularBisector.fromDependencies(
-            id: context.generateId('line'),
-            label: providedLabel.isNotEmpty
-                ? providedLabel
-                : context.resolveLabel(_nextPerpBisectorLabel),
+            id: label, // In new system: ID = label
+            label: label,
             points: [p1, p2],
           );
 
@@ -1265,17 +1424,22 @@ class CommandRegistry {
           final providedLabel = arguments.length >= 3
               ? (arguments[2] as String).trim()
               : '';
-          final label = providedLabel.isNotEmpty
+          // Get container label (SL1, SL2, etc.) if no label provided
+          final containerLabel = providedLabel.isNotEmpty
               ? providedLabel
-              : context.resolveLabel(_nextTangentLabel);
+              : LabelManager.getNextAvailableLabel(
+                  context.dagManager,
+                  GeometryObjectType.simpleList,
+                );
 
           GeoTangent tangent;
           try {
             tangent = GeoTangent.constructFromObjects(
-              id: context.generateId('tangent'),
-              label: label,
+              id: containerLabel,
+              label: containerLabel,
               first: first,
               second: second,
+              dagManager: context.dagManager,
             );
           } on ArgumentError catch (e) {
             final message = e.message;
@@ -1345,9 +1509,13 @@ class CommandRegistry {
             final providedLabel = arguments.length >= 4
                 ? (arguments[3] as String).trim()
                 : '';
+            // GeoAngleBisector3P is a single line, use lowercase labels
             final label = providedLabel.isNotEmpty
                 ? providedLabel
-                : context.resolveLabel(_nextAngleBisectorLabel);
+                : LabelManager.getNextAvailableLabel(
+                    context.dagManager,
+                    GeometryObjectType.line,
+                  );
 
             final p1 = arguments[0] as GeoPoint;
             final vertex = arguments[1] as GeoPoint;
@@ -1355,7 +1523,7 @@ class CommandRegistry {
 
             try {
               final bisector = GeoAngleBisector3P.fromDependencies(
-                id: context.generateId('anglebisector'),
+                id: label,
                 label: label,
                 dependencies: [p1, vertex, p2],
               );
@@ -1377,19 +1545,24 @@ class CommandRegistry {
             final providedLabel = arguments.length >= 3
                 ? (arguments[2] as String).trim()
                 : '';
-            final label = providedLabel.isNotEmpty
+            // Get container label (SL1, SL2, etc.) if no label provided
+            final containerLabel = providedLabel.isNotEmpty
                 ? providedLabel
-                : context.resolveLabel(_nextAngleBisectorLabel);
+                : LabelManager.getNextAvailableLabel(
+                    context.dagManager,
+                    GeometryObjectType.simpleList,
+                  );
 
             final line1 = arguments[0] as GeoLine;
             final line2 = arguments[1] as GeoLine;
 
             try {
               final bisectors = GeoAngleBisector2L.constructFromLines(
-                id: context.generateId('anglebisector'),
-                label: label,
+                id: containerLabel,
+                label: containerLabel,
                 line1: line1,
                 line2: line2,
+                dagManager: context.dagManager,
               );
 
               context.dagManager.addObject(bisectors, bisectors.dependencies);
@@ -1490,24 +1663,24 @@ class CommandRegistry {
 
           // Pattern 1: Object + mirror line/circle/point
           (context, arguments) async {
-            print('[Reflect Command] Pattern 1: Object + mirror');
+            debugPrint('[Reflect Command] Pattern 1: Object + mirror');
             final subject = arguments[0] as GeometryObject;
             final mirror = arguments[1] as GeometryObject;
-            print('[Reflect Command] Subject: ${subject.runtimeType} (${subject.id})');
-            print('[Reflect Command] Mirror: ${mirror.runtimeType} (${mirror.id})');
+            debugPrint('[Reflect Command] Subject: ${subject.runtimeType} (${subject.id})');
+            debugPrint('[Reflect Command] Mirror: ${mirror.runtimeType} (${mirror.id})');
             
             final label = _extractTrailingLabel(arguments);
-            print('[Reflect Command] Resolving inverse transform from mirror...');
+            debugPrint('[Reflect Command] Resolving inverse transform from mirror...');
             final transform = _resolveInverseTransform(context, arguments[1]);
             if (transform == null) {
-              print('[Reflect Command] ❌ Failed to resolve inverse transform');
+              debugPrint('[Reflect Command] ❌ Failed to resolve inverse transform');
               return ExecutionResult.error(
                 'Reflect requires a mirror line, circle, or point.',
               );
             }
-            print('[Reflect Command] ✅ Resolved transform: ${transform.runtimeType} (${transform.id})');
+            debugPrint('[Reflect Command] ✅ Resolved transform: ${transform.runtimeType} (${transform.id})');
 
-            print('[Reflect Command] Creating transformed geometry...');
+            debugPrint('[Reflect Command] Creating transformed geometry...');
             final transformed = _createTransformedGeometry(
               context: context,
               subject: subject,
@@ -1515,19 +1688,19 @@ class CommandRegistry {
               providedLabel: label,
             );
 
-            print('[Reflect Command] Transformed result: ${transformed?.runtimeType}');
+            debugPrint('[Reflect Command] Transformed result: ${transformed?.runtimeType}');
             if (transformed == null) {
-              print('[Reflect Command] ❌ Transformation returned null for ${subject.runtimeType}');
+              debugPrint('[Reflect Command] ❌ Transformation returned null for ${subject.runtimeType}');
               return ExecutionResult.error(
                 'Reflect does not support transforming ${subject.runtimeType}.',
               );
             }
-            print('[Reflect Command] ✅ Transformation successful: ${transformed.runtimeType} (${transformed.id})');
-            print('[Reflect Command] Adding object to DAG: ${transformed.id} with dependencies: ${transformed.dependencies}');
+            debugPrint('[Reflect Command] ✅ Transformation successful: ${transformed.runtimeType} (${transformed.id})');
+            debugPrint('[Reflect Command] Adding object to DAG: ${transformed.id} with dependencies: ${transformed.dependencies}');
             context.dagManager.addObject(transformed, transformed.dependencies);
-            print('[Reflect Command] Object added to DAG. Checking if object exists in DAG...');
+            debugPrint('[Reflect Command] Object added to DAG. Checking if object exists in DAG...');
             final dagObject = context.dagManager.getObject(transformed.id);
-            print('[Reflect Command] Object in DAG: ${dagObject != null ? "YES (${dagObject.runtimeType})" : "NO"}');
+            debugPrint('[Reflect Command] Object in DAG: ${dagObject != null ? "YES (${dagObject.runtimeType})" : "NO"}');
 
             return ExecutionResult.successful(
               objectId: transformed.id,
@@ -1574,8 +1747,8 @@ class CommandRegistry {
                 description: 'Object to transform',
               ),
               TypeConstraint.geometry(
-                allowedTypes: {GeoPoint},
-                description: 'Center of rotation',
+                allowedTypes: {GeoPoint, GeoCircle},
+                description: 'Center of rotation (point or circle)',
               ),
               TypeConstraint.numeric(description: 'Angle in degrees'),
               TypeConstraint.text(description: 'Label', optional: true),
@@ -1618,12 +1791,31 @@ class CommandRegistry {
             );
           },
 
-          // Pattern 1: Object + center point + angle
+          // Pattern 1: Object + center point/circle + angle
           (context, arguments) async {
             final subject = arguments[0] as GeometryObject;
             final label = _extractTrailingLabel(arguments);
-            final center = arguments[1] as GeoPoint;
+            final centerArg = arguments[1] as GeometryObject;
             final angle = arguments[2] as num;
+
+            // Extract center point from argument (could be GeoPoint or GeoCircle)
+            GeoPoint center;
+            if (centerArg is GeoCircle) {
+              // Extract center from circle
+              final centerMv = getCircleCenter(centerArg.multivector);
+              center = GeoPointer(
+                id: '${centerArg.id}_center',
+                label: '${centerArg.label}_center',
+                x: centerMv.e1,
+                y: centerMv.e2,
+              );
+            } else if (centerArg is GeoPoint) {
+              center = centerArg;
+            } else {
+              return ExecutionResult.error(
+                'Center must be a point or circle, got ${centerArg.runtimeType}',
+              );
+            }
 
             final transform = _createRotationTransform(
               context: context,
@@ -1735,12 +1927,31 @@ class CommandRegistry {
             );
           },
 
-          // Pattern 1: Object + center point + scale factor
+          // Pattern 1: Object + center point/circle + scale factor
           (context, arguments) async {
             final subject = arguments[0] as GeometryObject;
             final label = _extractTrailingLabel(arguments);
-            final center = arguments[1] as GeoPoint;
+            final centerArg = arguments[1] as GeometryObject;
             final factor = arguments[2] as num;
+
+            // Extract center point from argument (could be GeoPoint or GeoCircle)
+            GeoPoint center;
+            if (centerArg is GeoCircle) {
+              // Extract center from circle
+              final centerMv = getCircleCenter(centerArg.multivector);
+              center = GeoPointer(
+                id: '${centerArg.id}_center',
+                label: '${centerArg.label}_center',
+                x: centerMv.e1,
+                y: centerMv.e2,
+              );
+            } else if (centerArg is GeoPoint) {
+              center = centerArg;
+            } else {
+              return ExecutionResult.error(
+                'Center must be a point or circle, got ${centerArg.runtimeType}',
+              );
+            }
 
             final transform = _createDilateTransform(
               context: context,
@@ -1833,15 +2044,19 @@ class CommandRegistry {
           final dx = endPoint.x - startPoint.x;
           final dy = endPoint.y - startPoint.y;
 
-          // Create translated object
+          // Create translated object with apostrophe suffix
+          final transformedLabel = label.isNotEmpty
+              ? label
+              : LabelManager.getNextAvailableLabelForTransformation(
+                  context.dagManager,
+                  subject.label.isNotEmpty ? subject.label : subject.id,
+                );
           final transformed = TransformationEngine.translate(
             subject,
             dx,
             dy,
-            newLabel: label.isNotEmpty
-                ? label
-                : '${subject.label}\'',
-            newId: context.generateId('translate'),
+            newLabel: transformedLabel,
+            newId: transformedLabel, // In new system: ID = label
             dependencies: [subject.id, segment.id],
           );
 
@@ -1861,44 +2076,99 @@ class CommandRegistry {
     _register(
       CommandDefinition(
         name: 'intersection',
-        description: 'Find intersection of simple objects',
+        description: 'Find intersection of geometry objects (lines, circles, segments, arcs, unions)',
         schema: CommandSchema(
           description: 'Intersection',
           argumentTypes: [
             TypeConstraint.geometry(
-              allowedTypes: {GeoLine, GeoCircle, GeoPoint},
+              allowedTypes: {
+                GeoLine,
+                GeoCircle,
+                GeoPoint,
+                GeoSegment,
+                GeoArc,
+                UnionGeometryObjectList,
+              },
               description: 'First object',
             ),
             TypeConstraint.geometry(
-              allowedTypes: {GeoLine, GeoCircle, GeoPoint},
+              allowedTypes: {
+                GeoLine,
+                GeoCircle,
+                GeoPoint,
+                GeoSegment,
+                GeoArc,
+                UnionGeometryObjectList,
+              },
               description: 'Second object',
             ),
           ],
           argumentHints: ['Select first object', 'Select second object'],
         ),
         executor: (context, arguments) async {
+          // Sort parents by ID for stable element ID generation
           final first = arguments[0] as GeometryObject;
           final second = arguments[1] as GeometryObject;
-        print(
+          final sorted = [first, second]..sort((a, b) => a.id.compareTo(b.id));
+          final sortedFirst = sorted[0];
+          final sortedSecond = sorted[1];
+          
+        debugPrint(
           '[IntersectionCommand] Received ${first.runtimeType} (${first.id}) and ${second.runtimeType} (${second.id})',
         );
           final providedLabel = arguments.length >= 3
               ? (arguments[2] as String).trim()
               : '';
-          final label = providedLabel.isNotEmpty
+          // Get container label (SL1, SL2, etc.) if no label provided
+          final containerLabel = providedLabel.isNotEmpty
               ? providedLabel
-              : context.resolveLabel(_nextIntersectionLabel);
+              : LabelManager.getNextAvailableLabel(
+                  context.dagManager,
+                  GeometryObjectType.simpleList,
+                );
 
           GeoIntersection intersection;
 
           try {
-            // Handle different combinations of objects
-            if (first is GeoLine && second is GeoLine) {
+            // Handle Union × Union case first
+            // Use sorted order for consistent element IDs
+            if (sortedFirst is UnionGeometryObjectList && sortedSecond is UnionGeometryObjectList) {
+              intersection = GeoIntersection.unionWithUnion(
+                id: containerLabel,
+                label: containerLabel,
+                union1: sortedFirst,
+                union2: sortedSecond,
+                dagManager: context.dagManager,
+              );
+            }
+            // Handle Union × Object cases
+            // Use sorted order for consistent element IDs
+            else if (sortedFirst is UnionGeometryObjectList) {
+              intersection = GeoIntersection.unionWithObject(
+                id: containerLabel,
+                label: containerLabel,
+                union: sortedFirst,
+                other: sortedSecond,
+                dagManager: context.dagManager,
+              );
+            } else if (sortedSecond is UnionGeometryObjectList) {
+              intersection = GeoIntersection.unionWithObject(
+                id: containerLabel,
+                label: containerLabel,
+                union: sortedSecond,
+                other: sortedFirst,
+                dagManager: context.dagManager,
+              );
+            }
+            // Handle Simple × Simple cases
+            // Use sorted order for consistent element IDs
+            else if (sortedFirst is GeoLine && sortedSecond is GeoLine) {
               final lineIntersection = GeoIntersection.lineLine(
-                id: context.generateId('intersection'),
-                label: label,
-                line1: first,
-                line2: second,
+                id: containerLabel,
+                label: containerLabel,
+                line1: sortedFirst,
+                line2: sortedSecond,
+                dagManager: context.dagManager,
               );
               if (lineIntersection == null) {
                 return ExecutionResult.error(
@@ -1906,27 +2176,136 @@ class CommandRegistry {
                 );
               }
               intersection = lineIntersection;
-            } else if (first is GeoLine && second is GeoCircle) {
+            } else if (sortedFirst is GeoLine && sortedSecond is GeoCircle) {
               intersection = GeoIntersection.lineCircle(
-                id: context.generateId('intersection'),
-                label: label,
-                line: first,
-                circle: second,
+                id: containerLabel,
+                label: containerLabel,
+                line: sortedFirst,
+                circle: sortedSecond,
+                dagManager: context.dagManager,
               );
-            } else if (first is GeoCircle && second is GeoLine) {
+            } else if (sortedFirst is GeoCircle && sortedSecond is GeoLine) {
+              // Reverse order: circle comes first after sorting by ID
               intersection = GeoIntersection.lineCircle(
-                id: context.generateId('intersection'),
-                label: label,
-                line: second,
-                circle: first,
+                id: containerLabel,
+                label: containerLabel,
+                line: sortedSecond,
+                circle: sortedFirst,
+                dagManager: context.dagManager,
+              );
+            } else if (sortedFirst is GeoCircle && sortedSecond is GeoCircle) {
+              intersection = GeoIntersection.circleCircle(
+                id: containerLabel,
+                label: containerLabel,
+                circle1: sortedFirst,
+                circle2: sortedSecond,
+                dagManager: context.dagManager,
+              );
+            }
+            // Handle Simple × Complex cases
+            // Use sorted order for consistent element IDs
+            else if (sortedFirst is GeoLine && sortedSecond is GeoSegment) {
+              intersection = GeoIntersection.lineSegment(
+                id: containerLabel,
+                label: containerLabel,
+                line: sortedFirst,
+                segment: sortedSecond,
+                dagManager: context.dagManager,
+              );
+            } else if (sortedFirst is GeoSegment && sortedSecond is GeoLine) {
+              intersection = GeoIntersection.lineSegment(
+                id: containerLabel,
+                label: containerLabel,
+                line: sortedSecond,
+                segment: sortedFirst,
+                dagManager: context.dagManager,
+              );
+            } else if (sortedFirst is GeoLine && sortedSecond is GeoArc) {
+              intersection = GeoIntersection.lineArc(
+                id: containerLabel,
+                label: containerLabel,
+                line: sortedFirst,
+                arc: sortedSecond,
+                dagManager: context.dagManager,
+              );
+            } else if (sortedFirst is GeoArc && sortedSecond is GeoLine) {
+              intersection = GeoIntersection.lineArc(
+                id: containerLabel,
+                label: containerLabel,
+                line: sortedSecond,
+                arc: sortedFirst,
+                dagManager: context.dagManager,
+              );
+            } else if (sortedFirst is GeoCircle && sortedSecond is GeoSegment) {
+              intersection = GeoIntersection.circleSegment(
+                id: containerLabel,
+                label: containerLabel,
+                circle: sortedFirst,
+                segment: sortedSecond,
+                dagManager: context.dagManager,
+              );
+            } else if (sortedFirst is GeoSegment && sortedSecond is GeoCircle) {
+              intersection = GeoIntersection.circleSegment(
+                id: containerLabel,
+                label: containerLabel,
+                circle: sortedSecond,
+                segment: sortedFirst,
+                dagManager: context.dagManager,
+              );
+            } else if (sortedFirst is GeoCircle && sortedSecond is GeoArc) {
+              intersection = GeoIntersection.circleArc(
+                id: containerLabel,
+                label: containerLabel,
+                circle: sortedFirst,
+                arc: sortedSecond,
+                dagManager: context.dagManager,
+              );
+            } else if (sortedFirst is GeoArc && sortedSecond is GeoCircle) {
+              intersection = GeoIntersection.circleArc(
+                id: containerLabel,
+                label: containerLabel,
+                circle: sortedSecond,
+                arc: sortedFirst,
+                dagManager: context.dagManager,
+              );
+            }
+            // Handle Complex × Complex cases
+            // Use sorted order for consistent element IDs
+            else if (sortedFirst is GeoSegment && sortedSecond is GeoSegment) {
+              intersection = GeoIntersection.segmentSegment(
+                id: containerLabel,
+                label: containerLabel,
+                segment1: sortedFirst,
+                segment2: sortedSecond,
+                dagManager: context.dagManager,
+              );
+            } else if (sortedFirst is GeoSegment && sortedSecond is GeoArc) {
+              intersection = GeoIntersection.segmentArc(
+                id: containerLabel,
+                label: containerLabel,
+                segment: sortedFirst,
+                arc: sortedSecond,
+                dagManager: context.dagManager,
+              );
+            } else if (sortedFirst is GeoArc && sortedSecond is GeoSegment) {
+              intersection = GeoIntersection.segmentArc(
+                id: containerLabel,
+                label: containerLabel,
+                segment: sortedSecond,
+                arc: sortedFirst,
+                dagManager: context.dagManager,
+              );
+            } else if (sortedFirst is GeoArc && sortedSecond is GeoArc) {
+              intersection = GeoIntersection.arcArc(
+                id: containerLabel,
+                label: containerLabel,
+                arc1: sortedFirst,
+                arc2: sortedSecond,
+                dagManager: context.dagManager,
               );
             } else {
-              // first is GeoCircle && second is GeoCircle (validated by schema)
-              intersection = GeoIntersection.circleCircle(
-                id: context.generateId('intersection'),
-                label: label,
-                circle1: first as GeoCircle,
-                circle2: second as GeoCircle,
+              return ExecutionResult.error(
+                'Intersection not supported for ${sortedFirst.runtimeType} and ${sortedSecond.runtimeType}',
               );
             }
 
@@ -1946,6 +2325,368 @@ class CommandRegistry {
             return ExecutionResult.error(e.message);
           } catch (e) {
             return ExecutionResult.error('Intersection calculation failed: $e');
+          }
+        },
+      ),
+    );
+
+    // ========================================================================
+    // FLEXIBLE COMMANDS (L3) - Relaxed type constraints
+    // ========================================================================
+
+    // 1. Flexible circle from center and point
+    _register(
+      CommandDefinition(
+        name: 'circleFlex',
+        description: 'Create a circle with flexible center and point (center: point/circle, point: point/circle)',
+        aliases: const ['circleFlexible', 'circle2'],
+        schema: CommandSchema(
+          description: 'Circle with flexible arguments',
+          argumentTypes: [
+            TypeConstraint.geometry(
+              allowedTypes: {SimpleGeometryObject},
+              description: 'Center (point or circle)',
+            ),
+            TypeConstraint.geometry(
+              allowedTypes: {SimpleGeometryObject},
+              description: 'Point on circle (point or circle, not line)',
+            ),
+            TypeConstraint.text(description: 'Label', optional: true),
+          ],
+          argumentHints: [
+            'Select center (point or circle)',
+            'Select point on circle (point or circle)',
+            'Enter label (optional)',
+          ],
+        ),
+        executor: (context, arguments) async {
+          final centerObj = arguments[0] as SimpleGeometryObject;
+          final pointObj = arguments[1] as SimpleGeometryObject;
+          final providedLabel = arguments.length >= 3
+              ? (arguments[2] as String).trim()
+              : '';
+
+          try {
+            final label = providedLabel.isNotEmpty
+                ? providedLabel
+                : LabelManager.getNextAvailableLabel(
+                    context.dagManager,
+                    GeometryObjectType.circle,
+                  );
+            final circle = GeoCircleFlex.fromDependencies(
+              id: label, // In new system: ID = label
+              label: label,
+              objects: [centerObj, pointObj],
+            );
+
+            context.dagManager.addObject(circle, [centerObj.id, pointObj.id]);
+
+            return ExecutionResult.successful(
+              objectId: circle.id,
+              message: 'Created ${circle.label}',
+              object: circle,
+            );
+          } catch (e) {
+            return ExecutionResult.error(e.toString());
+          }
+        },
+      ),
+    );
+
+    // 2. Flexible circle through three objects
+    _register(
+      CommandDefinition(
+        name: 'circle3Flex',
+        description: 'Create a circle through three flexible objects (any SimpleGeometryObject)',
+        aliases: const ['circle3Flexible', 'circleThrough3Flex'],
+        schema: CommandSchema(
+          description: 'Circle through three flexible objects',
+          argumentTypes: [
+            TypeConstraint.geometry(
+              allowedTypes: {SimpleGeometryObject},
+              description: 'First object',
+            ),
+            TypeConstraint.geometry(
+              allowedTypes: {SimpleGeometryObject},
+              description: 'Second object',
+            ),
+            TypeConstraint.geometry(
+              allowedTypes: {SimpleGeometryObject},
+              description: 'Third object',
+            ),
+            TypeConstraint.text(description: 'Label', optional: true),
+          ],
+          argumentHints: [
+            'Select first object',
+            'Select second object',
+            'Select third object',
+            'Enter label (optional)',
+          ],
+        ),
+        executor: (context, arguments) async {
+          final obj1 = arguments[0] as SimpleGeometryObject;
+          final obj2 = arguments[1] as SimpleGeometryObject;
+          final obj3 = arguments[2] as SimpleGeometryObject;
+          final providedLabel = arguments.length >= 4
+              ? (arguments[3] as String).trim()
+              : '';
+
+          final label = providedLabel.isNotEmpty
+              ? providedLabel
+              : LabelManager.getNextAvailableLabel(
+                  context.dagManager,
+                  GeometryObjectType.circle,
+                );
+          final circle = GeoCircle3Flex.fromDependencies(
+            id: label, // In new system: ID = label
+            label: label,
+            objects: [obj1, obj2, obj3],
+          );
+
+          if (circle == null) {
+            return ExecutionResult.error(
+              'Cannot create circle: the three objects are collinear.',
+            );
+          }
+
+          context.dagManager.addObject(circle, [obj1.id, obj2.id, obj3.id]);
+
+          return ExecutionResult.successful(
+            objectId: circle.id,
+            message: 'Created ${circle.label}',
+            object: circle,
+          );
+        },
+      ),
+    );
+
+    // 3. Flexible line through two objects
+    _register(
+      CommandDefinition(
+        name: 'lineFlex',
+        description: 'Create a line through two flexible objects (any SimpleGeometryObject)',
+        aliases: const ['lineFlexible', 'line2'],
+        schema: CommandSchema(
+          description: 'Line through two flexible objects',
+          argumentTypes: [
+            TypeConstraint.geometry(
+              allowedTypes: {SimpleGeometryObject},
+              description: 'First object',
+            ),
+            TypeConstraint.geometry(
+              allowedTypes: {SimpleGeometryObject},
+              description: 'Second object',
+            ),
+            TypeConstraint.text(description: 'Label', optional: true),
+          ],
+          argumentHints: [
+            'Select first object',
+            'Select second object',
+            'Enter label (optional)',
+          ],
+        ),
+        executor: (context, arguments) async {
+          final obj1 = arguments[0] as SimpleGeometryObject;
+          final obj2 = arguments[1] as SimpleGeometryObject;
+          final providedLabel = arguments.length >= 3
+              ? (arguments[2] as String).trim()
+              : '';
+
+          final label = providedLabel.isNotEmpty
+              ? providedLabel
+              : LabelManager.getNextAvailableLabel(
+                  context.dagManager,
+                  GeometryObjectType.line,
+                );
+          final line = GeoLineFlex.fromDependencies(
+            id: label, // In new system: ID = label
+            label: label,
+            objects: [obj1, obj2],
+          );
+
+          context.dagManager.addObject(line, [obj1.id, obj2.id]);
+
+          return ExecutionResult.successful(
+            objectId: line.id,
+            message: 'Created ${line.label}',
+            object: line,
+          );
+        },
+      ),
+    );
+
+    // 4. Flexible perpendicular bisector (both can be circle or point, not line)
+    _register(
+      CommandDefinition(
+        name: 'perpbisectorFlex',
+        description: 'Create perpendicular bisector with flexible arguments (circle or point, not line)',
+        aliases: const ['perpbisFlex', 'perpbisectorFlexible'],
+        schema: CommandSchema(
+          description: 'Perpendicular bisector with flexible arguments',
+          argumentTypes: [
+            TypeConstraint.geometry(
+              allowedTypes: {SimpleGeometryObject},
+              description: 'First object (point or circle, not line)',
+            ),
+            TypeConstraint.geometry(
+              allowedTypes: {SimpleGeometryObject},
+              description: 'Second object (point or circle, not line)',
+            ),
+            TypeConstraint.text(description: 'Label', optional: true),
+          ],
+          argumentHints: [
+            'Select first object (point or circle)',
+            'Select second object (point or circle)',
+            'Enter label (optional)',
+          ],
+        ),
+        executor: (context, arguments) async {
+          final obj1 = arguments[0] as SimpleGeometryObject;
+          final obj2 = arguments[1] as SimpleGeometryObject;
+          final providedLabel = arguments.length >= 3
+              ? (arguments[2] as String).trim()
+              : '';
+
+          try {
+            final label = providedLabel.isNotEmpty
+                ? providedLabel
+                : LabelManager.getNextAvailableLabel(
+                    context.dagManager,
+                    GeometryObjectType.line,
+                  );
+            final bisector = GeoPerpendicularBisectorFlex.fromDependencies(
+              id: label, // In new system: ID = label
+              label: label,
+              objects: [obj1, obj2],
+            );
+
+            context.dagManager.addObject(bisector, [obj1.id, obj2.id]);
+
+            return ExecutionResult.successful(
+              objectId: bisector.id,
+              message: 'Created ${bisector.label}',
+              object: bisector,
+            );
+          } catch (e) {
+            return ExecutionResult.error(e.toString());
+          }
+        },
+      ),
+    );
+
+    // 5. Flexible perpendicular line (point can be circle or point)
+    _register(
+      CommandDefinition(
+        name: 'perpendicularFlex',
+        description: 'Create perpendicular line with flexible point (point or circle)',
+        aliases: const ['perpFlex', 'perpendicularFlexible'],
+        schema: CommandSchema(
+          description: 'Perpendicular line with flexible point',
+          argumentTypes: [
+            TypeConstraint.geometry(
+              allowedTypes: {GeoPoint, GeoCircle},
+              description: 'Point on perpendicular (point or circle)',
+            ),
+            TypeConstraint.geometry(
+              allowedTypes: {GeoLine},
+              description: 'Reference line',
+            ),
+            TypeConstraint.text(description: 'Label', optional: true),
+          ],
+          argumentHints: [
+            'Select point (point or circle)',
+            'Select reference line',
+            'Enter label (optional)',
+          ],
+        ),
+        executor: (context, arguments) async {
+          final pointObj = arguments[0] as SimpleGeometryObject;
+          final reference = arguments[1] as GeoLine;
+          final providedLabel = arguments.length >= 3
+              ? (arguments[2] as String).trim()
+              : '';
+
+          try {
+            final label = providedLabel.isNotEmpty
+                ? providedLabel
+                : LabelManager.getNextAvailableLabel(
+                    context.dagManager,
+                    GeometryObjectType.line,
+                  );
+            final perpendicular = GeoPerpendicularLineFlex.fromDependencies(
+              id: label, // In new system: ID = label
+              label: label,
+              dependencies: [pointObj, reference],
+            );
+
+            context.dagManager.addObject(perpendicular, [pointObj.id, reference.id]);
+
+            return ExecutionResult.successful(
+              objectId: perpendicular.id,
+              message: 'Created ${perpendicular.label}',
+              object: perpendicular,
+            );
+          } catch (e) {
+            return ExecutionResult.error(e.toString());
+          }
+        },
+      ),
+    );
+
+    // 6. Flexible parallel line (point can be circle or point)
+    _register(
+      CommandDefinition(
+        name: 'parallelFlex',
+        description: 'Create parallel line with flexible point (point or circle)',
+        aliases: const ['paraFlex', 'parallelFlexible'],
+        schema: CommandSchema(
+          description: 'Parallel line with flexible point',
+          argumentTypes: [
+            TypeConstraint.geometry(
+              allowedTypes: {GeoLine},
+              description: 'Reference line',
+            ),
+            TypeConstraint.geometry(
+              allowedTypes: {GeoPoint, GeoCircle},
+              description: 'Point on parallel (point or circle)',
+            ),
+            TypeConstraint.text(description: 'Label', optional: true),
+          ],
+          argumentHints: [
+            'Select reference line',
+            'Select point (point or circle)',
+            'Enter label (optional)',
+          ],
+        ),
+        executor: (context, arguments) async {
+          final reference = arguments[0] as GeoLine;
+          final pointObj = arguments[1] as SimpleGeometryObject;
+          final providedLabel = arguments.length >= 3
+              ? (arguments[2] as String).trim()
+              : '';
+
+          try {
+            final label = providedLabel.isNotEmpty
+                ? providedLabel
+                : LabelManager.getNextAvailableLabel(
+                    context.dagManager,
+                    GeometryObjectType.line,
+                  );
+            final parallel = GeoParallelLineFlex.fromDependencies(
+              id: label, // In new system: ID = label
+              label: label,
+              dependencies: [reference, pointObj],
+            );
+
+            context.dagManager.addObject(parallel, [reference.id, pointObj.id]);
+
+            return ExecutionResult.successful(
+              objectId: parallel.id,
+              message: 'Created ${parallel.label}',
+              object: parallel,
+            );
+          } catch (e) {
+            return ExecutionResult.error(e.toString());
           }
         },
       ),
@@ -2107,9 +2848,13 @@ class CommandRegistry {
     required List<String> dependencies,
     double power = 1,
   }) {
+    final label = LabelManager.getNextAvailableLabel(
+      context.dagManager,
+      GeometryObjectType.transform,
+    );
     final inverse = GeoInverse(
-      id: context.generateId('inverse'),
-      label: _nextInverseLabel(),
+      id: label, // In new system: ID = label
+      label: label,
       dependencies: dependencies,
       multivector: operator,
       centerPointId: '',
@@ -2126,9 +2871,13 @@ class CommandRegistry {
     required double angleRadians,
   }) {
     final rotor = constructRotationOperator(center.multivector, angleRadians);
+    final label = LabelManager.getNextAvailableLabel(
+      context.dagManager,
+      GeometryObjectType.transform,
+    );
     final rotate = GeoRotate(
-      id: context.generateId('rotate'),
-      label: _nextRotateLabel(),
+      id: label, // In new system: ID = label
+      label: label,
       dependencies: [center.id],
       multivector: rotor,
       centerPointId: center.id,
@@ -2145,9 +2894,13 @@ class CommandRegistry {
     required double factor,
   }) {
     final dilator = constructDilationOperator(center.multivector, factor);
+    final label = LabelManager.getNextAvailableLabel(
+      context.dagManager,
+      GeometryObjectType.transform,
+    );
     final dilate = GeoDilate(
-      id: context.generateId('dilate'),
-      label: _nextDilateLabel(),
+      id: label, // In new system: ID = label
+      label: label,
       dependencies: [center.id],
       multivector: dilator,
       centerPointId: center.id,
@@ -2164,36 +2917,46 @@ class CommandRegistry {
     required GeoTrans transform,
     required String providedLabel,
   }) {
-    print('[Reflect Command] _createTransformedGeometry: subject=${subject.runtimeType} (${subject.id}), transform=${transform.runtimeType} (${transform.id})');
+    debugPrint('[Reflect Command] _createTransformedGeometry: subject=${subject.runtimeType} (${subject.id}), transform=${transform.runtimeType} (${transform.id})');
     
     if (subject is GeoPoint) {
-      print('[Reflect Command] Subject is GeoPoint, transforming...');
-      final label = _resolveLabel(context, providedLabel, _nextPointLabel);
+      debugPrint('[Reflect Command] Subject is GeoPoint, transforming...');
+      final label = providedLabel.isNotEmpty
+          ? providedLabel
+          : LabelManager.getNextAvailableLabelForTransformation(
+              context.dagManager,
+              subject.label.isNotEmpty ? subject.label : subject.id,
+            );
       final result = TransformationEngine.transformSimple(
         source: subject,
         transform: transform,
-        id: context.generateId('point'),
+        id: label, // In new system: ID = label (with apostrophe for transformed)
         label: label,
         dependencies: [subject.id, transform.id],
         visible: subject.visible,
         styleOverrides: subject.styleOverrides,
       );
 
-      print('[Reflect Command] Transformation result: ${result?.runtimeType}');
+      debugPrint('[Reflect Command] Transformation result: ${result?.runtimeType}');
       if (result is GeoTransPoint) {
-        print('[Reflect Command] ✅ Successfully created GeoTransPoint');
+        debugPrint('[Reflect Command] ✅ Successfully created GeoTransPoint');
         return result;
       }
-      print('[Reflect Command] ❌ Point transformation did not produce GeoTransPoint, returning null');
+      debugPrint('[Reflect Command] ❌ Point transformation did not produce GeoTransPoint, returning null');
       return null;
     }
 
     if (subject is GeoLine) {
-      final label = _resolveLabel(context, providedLabel, _nextLineLabel);
+      final label = providedLabel.isNotEmpty
+          ? providedLabel
+          : LabelManager.getNextAvailableLabelForTransformation(
+              context.dagManager,
+              subject.label.isNotEmpty ? subject.label : subject.id,
+            );
       final result = TransformationEngine.transformSimple(
         source: subject,
         transform: transform,
-        id: context.generateId('line'),
+        id: label, // In new system: ID = label (with apostrophe for transformed)
         label: label,
         dependencies: [subject.id, transform.id],
         visible: subject.visible,
@@ -2204,9 +2967,14 @@ class CommandRegistry {
         return result;
       }
       if (result is GeoTransCircle) {
-        final circleLabel = _resolveLabel(context, providedLabel, _nextCircleLabel);
+        final circleLabel = providedLabel.isNotEmpty
+            ? providedLabel
+            : LabelManager.getNextAvailableLabelForTransformation(
+                context.dagManager,
+                subject.label.isNotEmpty ? subject.label : subject.id,
+              );
         return GeoTransCircle(
-          id: context.generateId('circle'),
+          id: circleLabel, // In new system: ID = label
           label: circleLabel,
           dependencies: [subject.id, transform.id],
           multivector: result.multivector,
@@ -2220,11 +2988,16 @@ class CommandRegistry {
     }
 
     if (subject is GeoCircle) {
-      final label = _resolveLabel(context, providedLabel, _nextCircleLabel);
+      final label = providedLabel.isNotEmpty
+          ? providedLabel
+          : LabelManager.getNextAvailableLabelForTransformation(
+              context.dagManager,
+              subject.label.isNotEmpty ? subject.label : subject.id,
+            );
       final result = TransformationEngine.transformSimple(
         source: subject,
         transform: transform,
-        id: context.generateId('circle'),
+        id: label, // In new system: ID = label (with apostrophe for transformed)
         label: label,
         dependencies: [subject.id, transform.id],
         visible: subject.visible,
@@ -2235,9 +3008,14 @@ class CommandRegistry {
         return result;
       }
       if (result is GeoTransLine) {
-        final lineLabel = _resolveLabel(context, providedLabel, _nextLineLabel);
+        final lineLabel = providedLabel.isNotEmpty
+            ? providedLabel
+            : LabelManager.getNextAvailableLabelForTransformation(
+                context.dagManager,
+                subject.label.isNotEmpty ? subject.label : subject.id,
+              );
         return GeoTransLine(
-          id: context.generateId('line'),
+          id: lineLabel, // In new system: ID = label
           label: lineLabel,
           dependencies: [subject.id, transform.id],
           multivector: result.multivector,
@@ -2251,15 +3029,16 @@ class CommandRegistry {
     }
 
     if (subject is GeoSegment) {
-      final label = _resolveLabel(
-        context,
-        providedLabel,
-        _nextSegmentLabel,
-      );
+      final label = providedLabel.isNotEmpty
+          ? providedLabel
+          : LabelManager.getNextAvailableLabelForTransformation(
+              context.dagManager,
+              subject.label.isNotEmpty ? subject.label : subject.id,
+            );
       final result = TransformationEngine.transformComplex(
         source: subject,
         transform: transform,
-        id: context.generateId('segment'),
+        id: label, // In new system: ID = label (with apostrophe for transformed)
         label: label,
         dependencies: [subject.id, transform.id],
         visible: subject.visible,
@@ -2270,13 +3049,14 @@ class CommandRegistry {
         return result;
       }
       if (result is GeoTransArc) {
-        final arcLabel = _resolveLabel(
-          context,
-          providedLabel,
-          _nextArcThreeLabel,
-        );
+        final arcLabel = providedLabel.isNotEmpty
+            ? providedLabel
+            : LabelManager.getNextAvailableLabelForTransformation(
+                context.dagManager,
+                subject.label.isNotEmpty ? subject.label : subject.id,
+              );
         return GeoTransArc(
-          id: context.generateId('arc'),
+          id: arcLabel, // In new system: ID = label
           label: arcLabel,
           dependencies: [subject.id, transform.id],
           boundary: result.boundary,
@@ -2291,15 +3071,16 @@ class CommandRegistry {
     }
 
     if (subject is GeoArc) {
-      final label = _resolveLabel(
-        context,
-        providedLabel,
-        _nextArcThreeLabel,
-      );
+      final label = providedLabel.isNotEmpty
+          ? providedLabel
+          : LabelManager.getNextAvailableLabelForTransformation(
+              context.dagManager,
+              subject.label.isNotEmpty ? subject.label : subject.id,
+            );
       final result = TransformationEngine.transformComplex(
         source: subject,
         transform: transform,
-        id: context.generateId('arc'),
+        id: label, // In new system: ID = label (with apostrophe for transformed)
         label: label,
         dependencies: [subject.id, transform.id],
         visible: subject.visible,
@@ -2310,13 +3091,14 @@ class CommandRegistry {
         return result;
       }
       if (result is GeoTransSegment) {
-        final segmentLabel = _resolveLabel(
-          context,
-          providedLabel,
-          _nextSegmentLabel,
-        );
+        final segmentLabel = providedLabel.isNotEmpty
+            ? providedLabel
+            : LabelManager.getNextAvailableLabelForTransformation(
+                context.dagManager,
+                subject.label.isNotEmpty ? subject.label : subject.id,
+              );
         return GeoTransSegment(
-          id: context.generateId('segment'),
+          id: segmentLabel, // In new system: ID = label
           label: segmentLabel,
           dependencies: [subject.id, transform.id],
           boundary: result.boundary,
@@ -2330,10 +3112,15 @@ class CommandRegistry {
     }
 
     if (subject is UnionGeometryObjectList) {
-      final label = _resolveLabel(context, providedLabel, _nextUnionLabel);
+      final label = providedLabel.isNotEmpty
+          ? providedLabel
+          : LabelManager.getNextAvailableLabelForTransformation(
+              context.dagManager,
+              subject.label.isNotEmpty ? subject.label : subject.id,
+            );
       final elements = _transformUnionElements(subject, transform);
       return GeoTransUnionGeometryObjectList(
-        id: context.generateId('union'),
+        id: label, // In new system: ID = label (with apostrophe for transformed)
         label: label,
         dependencies: [subject.id, transform.id],
         elements: elements,
@@ -2402,18 +3189,6 @@ class CommandRegistry {
     return transformedElements;
   }
 
-  String _resolveLabel(
-    CommandExecutionContext context,
-    String providedLabel,
-    String Function() fallback,
-  ) {
-    final trimmed = providedLabel.trim();
-    if (trimmed.isNotEmpty) {
-      return trimmed;
-    }
-    return context.resolveLabel(fallback);
-  }
-
   void _register(CommandDefinition definition) {
     final canonicalName = definition.name.toLowerCase();
     _byName[canonicalName] = definition;
@@ -2436,27 +3211,4 @@ class CommandRegistry {
 
   bool isImplemented(String name) =>
       definitionByName(name)?.implemented ?? false;
-
-  String _nextPointLabel() => 'P${++_pointLabelCounter}';
-  String _nextLineLabel() => 'L${++_lineLabelCounter}';
-  String _nextSegmentLabel() => 'S${++_segmentLabelCounter}';
-  String _nextCircleLabel() => 'C${++_circleLabelCounter}';
-  String _nextCircleThreeLabel() => 'C3-${++_circleThreeLabelCounter}';
-  String _nextArcThreeLabel() => 'Arc${++_arcThreeLabelCounter}';
-  String _nextMidpointLabel() => 'M${++_midpointLabelCounter}';
-  String _nextPerpendicularLabel() => 'Perp${++_perpendicularLabelCounter}';
-  String _nextParallelLabel() => 'Par${++_parallelLabelCounter}';
-  String _nextPerpBisectorLabel() => 'Bis${++_perpBisectorLabelCounter}';
-  String _nextTangentLabel() => 'Tan${++_tangentLabelCounter}';
-  String _nextAngleBisectorLabel() => 'AngBis${++_angleBisectorLabelCounter}';
-  String _nextIntersectionLabel() => 'Int${++_intersectionLabelCounter}';
-  String _nextInverseLabel() => 'Inv${++_inverseLabelCounter}';
-  String _nextRotateLabel() => 'Rot${++_rotateLabelCounter}';
-  String _nextDilateLabel() => 'Dil${++_dilateLabelCounter}';
-  String _nextUnionLabel() => 'U${++_unionLabelCounter}';
-  String _nextTextContent() => 'Text ${++_textLabelCounter}';
-  String _nextPolyArcLabel() => 'PolyArc${++_polyArcLabelCounter}';
-  String _nextPolygonLabel() => 'Polygon${++_polygonLabelCounter}';
-  String _nextPolyLineLabel() => 'PolyLine${++_polyLineLabelCounter}';
-  String _nextPolyArcGonLabel() => 'PolyArcGon${++_polyArcGonLabelCounter}';
 }

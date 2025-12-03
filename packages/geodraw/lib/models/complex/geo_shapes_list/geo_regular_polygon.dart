@@ -111,7 +111,7 @@ class GeoRegularPolygon2P extends GeoRegularPolygon {
   String get type => 'regularPolygonCenter';
 
   @override
-  GeometryObject? rebuildFromParents(List<GeometryObject> parents) {
+  GeometryObject? rebuildFromParents(List<GeometryObject> parents, dynamic dagManager) {
     if (dependencies.length < 2) {
       return null;
     }
@@ -226,7 +226,7 @@ class GeoRegularPolygonSegment extends GeoRegularPolygon {
   List<Object?> get props => [...super.props, baseSegmentId];
 
   @override
-  GeometryObject? rebuildFromParents(List<GeometryObject> parents) {
+  GeometryObject? rebuildFromParents(List<GeometryObject> parents, dynamic dagManager) {
     if (dependencies.length < 3) {
       return null;
     }

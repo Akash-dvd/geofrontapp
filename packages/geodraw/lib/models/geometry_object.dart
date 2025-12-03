@@ -89,7 +89,12 @@ abstract class GeometryObject extends CanvasObject with EquatableMixin {
   /// should override this and return a new instance constructed from [parents].
   /// The default implementation returns null to indicate the object
   /// cannot be reconstructed generically.
-  GeometryObject? rebuildFromParents(List<GeometryObject> parents) => null;
+  /// 
+  /// [dagManager] is provided for label management during rebuild.
+  GeometryObject? rebuildFromParents(
+    List<GeometryObject> parents,
+    dynamic dagManager,
+  ) => null;
 
   @override
   List<Object?> get props => [id, label, dependencies, styleOverrides, visible];

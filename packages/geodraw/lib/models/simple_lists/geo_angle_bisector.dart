@@ -6,6 +6,8 @@ import '../canvas_style_defaults.dart';
 import '../geometry_object.dart';
 import '../simple/geo_line.dart';
 import 'simple_list_utils.dart';
+import '../../core/dag/dag_manager.dart';
+import '../../core/label_manager.dart';
 
 /// List of angle bisector lines constructed from two lines (internal and external bisectors)
 class GeoAngleBisector2L extends GenSimpleGeometryObjectList<GeoLine> {
@@ -46,6 +48,7 @@ class GeoAngleBisector2L extends GenSimpleGeometryObjectList<GeoLine> {
     required String label,
     required GeoLine line1,
     required GeoLine line2,
+    required DAGManager dagManager,
     Color color = Colors.purple,
     bool visible = true,
     CanvasStyle? style,
@@ -54,8 +57,8 @@ class GeoAngleBisector2L extends GenSimpleGeometryObjectList<GeoLine> {
     // line1 and line2 are already required to be GeoLine, so no need to check
 
     final computation = _computeAngleBisectors(
-      idSeed: id,
-      label: label,
+      dagManager: dagManager,
+      containerId: id,
       line1: line1,
       line2: line2,
       visible: visible,
@@ -177,8 +180,16 @@ class GeoAngleBisector2L extends GenSimpleGeometryObjectList<GeoLine> {
   }
 
   @override
-  GeometryObject? rebuildFromParents(List<GeometryObject> parents) {
+  GeometryObject? rebuildFromParents(
+    List<GeometryObject> parents,
+    dynamic dagManager,
+  ) {
     if (parents.length != 2) {
+      return null;
+    }
+
+    // Cast dagManager to DAGManager
+    if (dagManager is! DAGManager) {
       return null;
     }
 
@@ -195,6 +206,7 @@ class GeoAngleBisector2L extends GenSimpleGeometryObjectList<GeoLine> {
         label: label,
         line1: line1,
         line2: line2,
+        dagManager: dagManager,
         visible: visible,
         styleOverrides: styleOverrides,
       );
@@ -222,8 +234,8 @@ GeoLine? _decodeLine(Map<String, dynamic> json) {
 }
 
 _AngleBisectorComputation _computeAngleBisectors({
-  required String idSeed,
-  required String label,
+  required DAGManager dagManager,
+  required String containerId,
   required GeoLine line1,
   required GeoLine line2,
   required bool visible,
@@ -238,27 +250,43 @@ _AngleBisectorComputation _computeAngleBisectors({
   final externalLines = <GeoLine>[];
 
   if (bisectors.isNotEmpty) {
-    internalLines.add(
-      GeoLine2P(
-        id: '${idSeed}_internal',
-        label: '${label}_internal',
-        dependencies: [line1.id, line2.id],
-        multivector: bisectors[0],
-        visible: visible,
-      ),
+    // Get unique lowercase label for internal bisector line
+    final internalLabel = LabelManager.getNextAvailableLabel(
+      dagManager,
+      GeometryObjectType.line,
     );
+    
+    final internalLine = GeoLine2P(
+      id: internalLabel,
+      label: internalLabel,
+      dependencies: [line1.id, line2.id],
+      multivector: bisectors[0],
+      visible: visible,
+    );
+    
+    // Register element in elementToContainer map
+    dagManager.registerElement(internalLabel, containerId);
+    internalLines.add(internalLine);
   }
 
   if (bisectors.length >= 2) {
-    externalLines.add(
-      GeoLine2P(
-        id: '${idSeed}_external',
-        label: '${label}_external',
-        dependencies: [line1.id, line2.id],
-        multivector: bisectors[1],
-        visible: visible,
-      ),
+    // Get unique lowercase label for external bisector line
+    final externalLabel = LabelManager.getNextAvailableLabel(
+      dagManager,
+      GeometryObjectType.line,
     );
+    
+    final externalLine = GeoLine2P(
+      id: externalLabel,
+      label: externalLabel,
+      dependencies: [line1.id, line2.id],
+      multivector: bisectors[1],
+      visible: visible,
+    );
+    
+    // Register element in elementToContainer map
+    dagManager.registerElement(externalLabel, containerId);
+    externalLines.add(externalLine);
   }
 
   return _AngleBisectorComputation(

@@ -6,7 +6,7 @@ import '../transforms/transformation_engine.dart';
 import 'geo_circle.dart';
 import 'geo_line.dart';
 import 'geo_point.dart';
-import 'geo_trans.dart';
+import '../transforms/geo_trans.dart';
 
 List<String> _normalizedDependencies(
   List<String>? dependencies,
@@ -118,7 +118,7 @@ class GeoTransPoint extends GeoPoint {
   }
 
   @override
-  GeometryObject? rebuildFromParents(List<GeometryObject> parents) {
+  GeometryObject? rebuildFromParents(List<GeometryObject> parents, dynamic dagManager) {
     final sourcePoint = _findPoint(parents, sourcePointId);
     final transform = _findTransform(parents, transformId);
     if (sourcePoint == null || transform == null) {
@@ -249,7 +249,7 @@ class GeoTransLine extends GeoLine {
   }
 
   @override
-  GeometryObject? rebuildFromParents(List<GeometryObject> parents) {
+  GeometryObject? rebuildFromParents(List<GeometryObject> parents, dynamic dagManager) {
     final source = _findSource(parents, sourceObjectId);
     final transform = _findTransform(parents, transformId);
     if (source == null || transform == null) {
@@ -385,7 +385,7 @@ class GeoTransCircle extends GeoCircle {
   }
 
   @override
-  GeometryObject? rebuildFromParents(List<GeometryObject> parents) {
+  GeometryObject? rebuildFromParents(List<GeometryObject> parents, dynamic dagManager) {
     final source = _findSource(parents, sourceObjectId);
     final transform = _findTransform(parents, transformId);
     if (source == null || transform == null) {

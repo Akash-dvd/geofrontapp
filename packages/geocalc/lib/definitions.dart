@@ -11,7 +11,12 @@ extension MultivectorUtils on Multivector {
         return Some(this);
       }
       final result = reversion() * object * this;
-      return Some(result.scalarDivide(absNormValue).sanitize());
+      // If object is a vector, use vectorize(); otherwise use sanitize()
+      if (object.isVector()) {
+        return Some(result.scalarDivide(absNormValue).vectorize(1e-8));
+      } else {
+        return Some(result.scalarDivide(absNormValue).sanitize(1e-8));
+      }
     });
   }
 }
@@ -36,7 +41,7 @@ double _cosh(double x) => (math.exp(x) + math.exp(-x)) / 2;
 /// Construct a free point at given coordinates
 /// Returns: Multivector representing the point
 Multivector constructFreePoint(double x, double y) {
-  // print("constructFreePoint called");
+  // debugPrint("constructFreePoint called");
   return Multivector(
     o: 1,
     e1: x,
@@ -79,10 +84,18 @@ Multivector infForm(Multivector circle) {
 /// Construct point from circle
 /// Returns: Multivector representing the point
 Multivector constructPointFromCircle(Multivector circle) {
-  final circleInf = infForm(circle);
+  // Some constructions (e.g., line-circle intersections) already yield
+  // normalized point multivectors. Guard against that so we don't try to
+  // treat a point as a circle.
+  if (circle.isPoint()) {
+    return infForm(circle);
+  }
 
-  return circleInf +
-      Multivector(O: (circleInf.norm().getOrElse(() => 0.0))).scalarDivide(2);
+  final circleInf = infForm(circle);
+  final squaredNorm = circleInf.e1 * circleInf.e1 + circleInf.e2 * circleInf.e2 - 2 * circleInf.O;
+  // final scaleFactor = circleInf.norm().getOrElse(() => 0.0);
+
+  return circleInf + Multivector(O:squaredNorm/2);
 }
 
 /// Construct midpoint between two points
@@ -91,13 +104,21 @@ Multivector constructMidpoint(Multivector point1, Multivector point2) {
   return constructPointFromCircle(point1 + point2);
 }
 
+// ----------------------------------------------------------------------------
+// INTERSECTION FUNCTIONS
+// ----------------------------------------------------------------------------
+
 /// Construct intersection point of two lines
 /// Returns: Multivector representing the intersection point
 Multivector constructLineLineIntersection(
   Multivector line1,
   Multivector line2,
 ) {
-  return constructPointFromCircle((Multivector(o: 1) ^ line1 ^ line2).dual());
+  
+  final mv1 = ((Multivector(o: 1) ^ line1 ^ line2).dual()).vectorize(1e-8);
+  final mv2 = constructPointFromCircle(mv1);
+  // print('constructLineLineIntersection called');
+  return mv2;
 }
 
 /// Construct intersection points of line and circle
@@ -110,16 +131,23 @@ List<Multivector> constructLineCircleIntersection(
   final discriminant = (B | B).s;
   if (discriminant < -1e-10) {
     return [];
-  } else if (discriminant.abs() < 1e-10) {
-    return [constructPointFromCircle(B)];
-  } else {
+  }
+  else if (discriminant.abs() < 1e-10) {
+    // Very small discriminant means tangent (one intersection) or no intersection
+    // Check if B represents a valid point
+    return [constructPointFromCircle(line<(B))];
+  }
+   else {
     final sqrtD = math.sqrt(discriminant);
-    final rO = Multivector(s: 1) + B.scalarDivide(sqrtD);
-    final x = Multivector(o: 1) < (B);
+    final bUnit = B.scalarDivide(sqrtD);
+    final x = Multivector(o: 1) < (bUnit);
+    final y = x < (bUnit);
 
-    final b1 = rO * x;
-    final b2 = x * rO;
-    return [constructPointFromCircle(b1), constructPointFromCircle(b2)];
+    final b1 = constructPointFromCircle((x + y).vectorize(1e-8)).sanitize(1e-5);
+    final b2 = constructPointFromCircle((x - y).vectorize(1e-8)).sanitize(1e-5);
+    // print('b1: $b1');
+    // print('b2: $b2');
+    return [b1, b2];
   }
 }
 
@@ -134,25 +162,33 @@ List<Multivector> constructCircleCircleIntersection(
   final discriminant = (B | B).s;
   if (discriminant < -1e-10) {
     return [];
-  } else if (discriminant.abs() < 1e-10) {
-    return [constructPointFromCircle(B)];
-  } else {
+  }
+  else if (discriminant.abs() < 1e-10) {
+    // Very small discriminant means tangent (one intersection) or no intersection
+    // Check if B represents a valid point
+    return [constructPointFromCircle(circle1<B)];
+  }
+   else {
     final sqrtD = math.sqrt(discriminant);
-    final rO = Multivector(s: 1) + B.scalarDivide(sqrtD);
-    final x = Multivector(o: 1) < (B);
+    final bUnit = B.scalarDivide(sqrtD);
+    final x = Multivector(o: 1) < (bUnit);
+    final y = x < (bUnit);
 
-    final b1 = rO * x;
-    final b2 = x * rO;
-    return [constructPointFromCircle(b1), constructPointFromCircle(b2)];
+    final b1 = constructPointFromCircle((x + y).vectorize(1e-8)).sanitize(1e-5);
+    final b2 = constructPointFromCircle((x - y).vectorize(1e-8)).sanitize(1e-5);
+    return [b1, b2];
   }
 }
+
+// ----------------------------------------------------------------------------
+// END INTERSECTION FUNCTIONS
+// ----------------------------------------------------------------------------
 
 /// Construct inverse point with respect to a circle
 /// Returns: Multivector representing the inverted point
 Multivector constructInversePoint(Multivector point, Multivector circle) {
-  return constructPointFromCircle(
-    circle.reflection(point).getOrElse(() => point),
-  );
+  final mv1 = circle.reflection(point).getOrElse(() => point).vectorize(1e-8);
+  return constructPointFromCircle(mv1);
 }
 
 // ----------------------------------------------------------------------------
@@ -162,7 +198,8 @@ Multivector constructInversePoint(Multivector point, Multivector circle) {
 /// Construct line through two points
 /// Returns: Multivector representing the line
 Multivector constructLineFrom2Points(Multivector point1, Multivector point2) {
-  return uniForm((point1 ^ point2 ^ Multivector(O: 1)).dual());
+
+  return uniForm(((point1 ^ point2 ^ Multivector(O: 1)).dual()).vectorize(1e-8));
 }
 
 /// Construct perpendicular bisector of two points
@@ -171,26 +208,26 @@ Multivector constructPerpendicularBisector(
   Multivector point1,
   Multivector point2,
 ) {
-  return uniForm(Multivector(O: 1) < (point1 ^ point2));
+  return uniForm((Multivector(O: 1) < (point1 ^ point2)).vectorize(1e-8));
 }
 
 /// Construct perpendicular line through a point
 /// Returns: Multivector representing the perpendicular line
 Multivector constructPerpendicularLine(Multivector line, Multivector point) {
-  return uniForm((point ^ line ^ Multivector(O: 1)).dual());
+  return uniForm(((point ^ line ^ Multivector(O: 1)).dual()).vectorize(1e-8));
 }
 
 /// Construct parallel line through a point
 /// Returns: Multivector representing the parallel line
 Multivector constructParallelLine(Multivector line, Multivector point) {
-  return uniForm(point < (line ^ Multivector(O: 1)));
+  return uniForm((point < (line ^ Multivector(O: 1))).vectorize(1e-8));
 }
 
 /// Construct polar line of a point with respect to a circle
 /// Returns: Multivector representing the polar line
 Multivector constructPolarLine(Multivector point, Multivector circle) {
   // The polar line is the dual of (point ^ circle)
-  return uniForm(Multivector(O: 1) < (point ^ circle));
+  return uniForm((Multivector(O: 1) < (point ^ circle)).vectorize(1e-8));
 }
 
 /// Construct angle bisector of three points (vertex at point2)
@@ -206,7 +243,7 @@ Multivector constructAngleBisector3Points(
   
   // The angle bisector passes through the vertex and bisects the angle
   // It can be found using the normalized sum of the two lines
-  final bisector = uniForm(line1 + line2);
+  final bisector = uniForm((line1 + line2).vectorize(1e-8));
   
   return bisector;
 }
@@ -237,7 +274,7 @@ Multivector constructCircleFromCenterAndPoint(
   Multivector center,
   Multivector pointOnCircle,
 ) {
-  return infForm(pointOnCircle < (center ^ Multivector(O: 1)));
+  return infForm((pointOnCircle < (center ^ Multivector(O: 1))).vectorize(1e-8));
 }
 
 /// Construct circle with center and radius
@@ -268,7 +305,7 @@ Multivector constructCircleThrough3Points(
   Multivector point2,
   Multivector point3,
 ) {
-  return infForm((point1 ^ point2 ^ point3).dual());
+  return infForm(((point1 ^ point2 ^ point3).dual()).vectorize(1e-8));
 }
 
 /// Construct circle through three points
@@ -278,7 +315,7 @@ Multivector constructCircleThrough3PointsSigned(
   Multivector point2,
   Multivector point3,
 ) {
-  return signedInfForm((point1 ^ point2 ^ point3).dual());
+  return signedInfForm(((point1 ^ point2 ^ point3).dual()).vectorize(1e-8));
 }
 
 /// Construct inverse circle with respect to a circle
@@ -288,7 +325,7 @@ Multivector constructInverseCircle(
   Multivector inversionCircle,
 ) {
   return infForm(
-    inversionCircle.reflection(circleToInvert).getOrElse(() => circleToInvert),
+    inversionCircle.reflection(circleToInvert).getOrElse(() => circleToInvert).vectorize(1e-8),
   );
 }
 
@@ -334,12 +371,21 @@ Multivector constructRotation(
   return rotor.reflection(object).getOrElse(() => object);
 }
 
+/// Generic operator application - works for rotation, dilation, and any reflection-based operator
+/// This is the common pattern: operator.reflection(object)
+Multivector applyOperator(
+  Multivector operator,
+  Multivector object,
+) {
+  return operator.reflection(object).getOrElse(() => object);
+}
+
 /// Apply a rotation rotor to an object multivector
 Multivector applyRotationOperator(
   Multivector rotor,
   Multivector object,
 ) {
-  return rotor.reflection(object).getOrElse(() => object);
+  return applyOperator(rotor, object);
 }
 
 /// Construct dilation operator from [center] with [scaleFactor]
@@ -368,7 +414,41 @@ Multivector applyDilationOperator(
   Multivector dilator,
   Multivector object,
 ) {
-  return dilator.reflection(object).getOrElse(() => object);
+  return applyOperator(dilator, object);
+}
+
+/// Construct translation operator for translation by vector (dx, dy)
+/// The multivector stores the translation vector as a point at (dx, dy)
+/// Returns: Multivector representing the translator
+Multivector constructTranslationOperator(double dx, double dy) {
+  // Store translation vector as a point multivector at (dx, dy)
+  // This multivector will be used to extract dx and dy for translation
+  return Multivector(
+    o: 1.0,
+    e1: dx,
+    e2: dy,
+    O: 0.5 * (dx * dx + dy * dy),
+  );
+}
+
+/// Apply a translation operator to an object multivector
+/// The translator multivector encodes the translation vector (dx, dy)
+Multivector applyTranslationOperator(
+  Multivector translator,
+  Multivector object,
+) {
+  // Extract translation vector (dx, dy) from the translator multivector
+  final dx = translator.e1;
+  final dy = translator.e2;
+  
+  // Apply translation to the multivector
+  return Multivector(
+    o: object.o,
+    e1: object.e1 + dx * object.o,
+    e2: object.e2 + dy * object.o,
+    O: object.O + (dx * object.e1 + dy * object.e2) +
+       0.5 * (dx * dx + dy * dy) * object.o,
+  );
 }
 
 /// Construct reflection operator across a normalized line.
@@ -390,16 +470,29 @@ Multivector constructPointReflectionOperator(Multivector point) {
 // REFLECTION HELPERS
 // ----------------------------------------------------------------------------
 
+/// Generic reflection constructor - consolidates all reflection patterns
+Multivector _constructReflection(
+  Multivector object,
+  Multivector operator,
+  bool signed,
+) {
+  return _finalizeReflection(
+    object: object,
+    operator: operator,
+    signed: signed,
+  );
+}
+
 /// Construct reflection of object across line
 /// Returns: Multivector representing the reflected object
 Multivector constructReflectionAcrossLine(
   Multivector object,
   Multivector line,
 ) {
-  return _finalizeReflection(
-    object: object,
-    operator: constructLineReflectionOperator(line),
-    signed: false,
+  return _constructReflection(
+    object,
+    constructLineReflectionOperator(line),
+    false,
   );
 }
 
@@ -409,13 +502,12 @@ Multivector constructReflectionAcrossPoint(
   Multivector object,
   Multivector point,
 ) {
-  return _finalizeReflection(
-    object: object,
-    operator: constructPointReflectionOperator(point),
-    signed: false,
+  return _constructReflection(
+    object,
+    constructPointReflectionOperator(point),
+    false,
   );
 }
-
 
 /// Construct reflection of object across circle
 /// Returns: Multivector representing the reflected object
@@ -423,50 +515,79 @@ Multivector constructReflectionAcrossCircle(
   Multivector object,
   Multivector circle,
 ) {
-  return _finalizeReflection(
-    object: object,
-    operator: constructCircleReflectionOperator(circle),
-    signed: false,
+  return _constructReflection(
+    object,
+    constructCircleReflectionOperator(circle),
+    false,
   );
 }
 
-/// Construct reflection of object across line
+/// Construct signed reflection of object across line
 /// Returns: Multivector representing the reflected object
 Multivector constructSignedReflectionAcrossLine(
   Multivector object,
   Multivector line,
 ) {
-  return _finalizeReflection(
-    object: object,
-    operator: constructLineReflectionOperator(line),
-    signed: true,
+  return _constructReflection(
+    object,
+    constructLineReflectionOperator(line),
+    true,
   );
 }
 
-/// Construct reflection of object across point
+/// Construct signed reflection of object across point
 /// Returns: Multivector representing the reflected object
 Multivector constructSignedReflectionAcrossPoint(
   Multivector object,
   Multivector point,
 ) {
-  return _finalizeReflection(
-    object: object,
-    operator: constructPointReflectionOperator(point),
-    signed: true,
+  return _constructReflection(
+    object,
+    constructPointReflectionOperator(point),
+    true,
   );
 }
 
-/// Construct reflection of object across circle
+/// Construct signed reflection of object across circle
 /// Returns: Multivector representing the reflected object
 Multivector constructSignedReflectionAcrossCircle(
   Multivector object,
   Multivector circle,
 ) {
-  return _finalizeReflection(
-    object: object,
-    operator: constructCircleReflectionOperator(circle),
-    signed: true,
+  return _constructReflection(
+    object,
+    constructCircleReflectionOperator(circle),
+    true,
   );
+}
+
+/// Helper to apply reflection based on subject type (line, circle, or point)
+/// Consolidates the repetitive type checking pattern
+Multivector applyReflectionByType(
+  Multivector object,
+  Multivector subject,
+  bool signed,
+) {
+  if (subject.isLine()) {
+    return signed
+        ? constructSignedReflectionAcrossLine(object, subject)
+        : constructReflectionAcrossLine(object, subject);
+  }
+  
+  if (subject.isCircle()) {
+    return signed
+        ? constructSignedReflectionAcrossCircle(object, subject)
+        : constructReflectionAcrossCircle(object, subject);
+  }
+  
+  if (subject.isPoint()) {
+    return signed
+        ? constructSignedReflectionAcrossPoint(object, subject)
+        : constructReflectionAcrossPoint(object, subject);
+  }
+  
+  // Fallback for unknown types
+  return subject.reflection(object).getOrElse(() => object);
 }
 
 Multivector _finalizeReflection({
@@ -693,13 +814,18 @@ bool isPointOnLine(
   Multivector line, {
   double tolerance = 1e-10,
 }) {
-  if (!point.isPoint()) {
+  // print('isPointOnLine: stage0');
+  if (!point.isPoint(customTolerance: tolerance)) {
+    // print((point|point).s);
     throw ArgumentError('isPointOnLine: Input is not a point');
   }
+  // print('isPointOnLine: stage1');
   if (!line.isLine()) {
+    // print((line|line).s);
     throw ArgumentError('isPointOnLine: Input is not a line');
   }
-  return (point | line).isZero();
+  // print('isPointOnLine: stage2');
+  return (point | line).isZero(customTolerance: tolerance);
 }
 
 /// Check if a point lies on a circle
@@ -709,13 +835,17 @@ bool isPointOnCircle(
   Multivector circle, {
   double tolerance = 1e-10,
 }) {
-  if (!point.isPoint()) {
+  // print('isPointOnCircle: stage0');
+  if (!point.isPoint(customTolerance: tolerance)) {
+    // print((point|point).s);
     throw ArgumentError('isPointOnCircle: Input is not a point');
   }
+  // print('isPointOnCircle: stage1');
   if (!circle.isCircle()) {
     throw ArgumentError('isPointOnCircle: Input is not a circle');
   }
-  return (point | circle).isZero();
+  // print('isPointOnCircle: stage2');
+  return (point | circle).isZero(customTolerance: tolerance);
 }
 
 /// Check if two lines are parallel
@@ -743,4 +873,329 @@ bool areLinesPerpendicular(
 /// Returns: Multivector representing the center point
 Multivector getCircleCenter(Multivector circle) {
   return infForm(circle);
+}
+
+// ----------------------------------------------------------------------------
+// COMPLEX BOUNDARY
+// ----------------------------------------------------------------------------
+
+/// Pure mathematical representation of a complex geometric boundary.
+/// Represents a curve (line or circle) bounded by two points.
+/// This is the mathematical foundation, independent of application-specific types.
+class ComplexBoundary extends Equatable {
+  const ComplexBoundary({
+    required this.startPoint,
+    required this.endPoint,
+    required this.curve,
+  });
+
+  /// Start point as a Multivector
+  final Multivector startPoint;
+  
+  /// End point as a Multivector
+  final Multivector endPoint;
+  
+  /// The underlying curve (line or circle) as a Multivector
+  final Multivector curve;
+
+  /// Check if this represents a segment (curve is a line)
+  bool get isSegment => curve.isLine();
+
+  /// Check if this represents an arc (curve is a circle)
+  bool get isArc => curve.isCircle();
+
+  ComplexBoundary copyWith({
+    Multivector? startPoint,
+    Multivector? endPoint,
+    Multivector? curve,
+  }) {
+    return ComplexBoundary(
+      startPoint: startPoint ?? this.startPoint,
+      endPoint: endPoint ?? this.endPoint,
+      curve: curve ?? this.curve,
+    );
+  }
+
+  @override
+  List<Object?> get props => [startPoint, endPoint, curve];
+}
+
+// ----------------------------------------------------------------------------
+// COMPLEX BOUNDARY QUERIES
+// ----------------------------------------------------------------------------
+
+/// Check if a point lies on a segment
+/// [point] - The point to check (as Multivector)
+/// [segment] - The segment boundary containing startPoint, endPoint, and curve multivector
+/// Returns: bool indicating if point is on the segment (within tolerance)
+bool isPointOnSegment(
+  Multivector point,
+  ComplexBoundary segment, {
+  double tolerance = 1e-8,
+}) {
+  // print('isPointOnSegment: stage0');
+  if (!point.isPoint(customTolerance: tolerance)) {
+    // print('isPointOnSegment: point is not a point');
+    throw ArgumentError('isPointOnSegment: point is not a point');
+  }
+  // print('isPointOnSegment: stage1');
+  if (!segment.isSegment) {
+    // print('isPointOnSegment: boundary is not a segment (curve is not a line)');
+    throw ArgumentError('isPointOnSegment: boundary is not a segment (curve is not a line)');
+  }
+  // print('isPointOnSegment: stage2');
+  // First check if point is on the line (using isPointOnLine)
+  if (!isPointOnLine(point, segment.curve, tolerance: tolerance)) {
+    // print('isPointOnSegment: point is not on the line');
+    return false; // Point is not on the line
+  }
+  // print('isPointOnSegment: point is on the line');
+  // Now we know point lies on the line, check if it's within the range [start, end]
+  final p = infForm(point);
+  final start = infForm(segment.startPoint);
+  final end = infForm(segment.endPoint);
+  
+  // Vector from start to end
+  final segmentVec = end - start;
+  final segmentLengthSq = (segmentVec | segmentVec).s;
+  
+  if (segmentLengthSq < tolerance * tolerance) {
+    // Degenerate segment - check if point equals start/end
+    final distToStart = distancePointToPoint(p, start);
+    final distToEnd = distancePointToPoint(p, end);
+    return distToStart < tolerance || distToEnd < tolerance;
+  }
+  
+  // Vector from start to point
+  final toPoint = p - start;
+  
+  // Project point onto segment line
+  final projection = (toPoint | segmentVec).s / segmentLengthSq;
+  
+  // Check if projection is within [0, 1] (point is between start and end)
+  return projection >= -tolerance && projection <= 1 + tolerance;
+}
+
+/// Check if a point lies on an arc
+/// [point] - The point to check (as Multivector)
+/// [arc] - The arc boundary containing startPoint, endPoint, and circle multivector
+/// Returns: bool indicating if point is on the arc (within tolerance)
+bool isPointOnArc(
+  Multivector point,
+  ComplexBoundary arc, {
+  double tolerance = 1e-8,
+}) {
+  // print('isPointOnArc: stage1');
+  if (!point.isPoint(customTolerance: tolerance)) {
+    // print('isPointOnArc: point is not a point');
+    throw ArgumentError('isPointOnArc: point is not a point');
+  }
+  // print('isPointOnArc: stage2');
+  if (!arc.isArc) {
+    // print('isPointOnArc: boundary is not an arc (curve is not a circle)');
+    throw ArgumentError('isPointOnArc: boundary is not an arc (curve is not a circle)');
+  }
+  // print('isPointOnArc: stage3');
+  // First check if point is on the circle
+  if (!isPointOnCircle(point, arc.curve, tolerance: tolerance)) {
+    // print('isPointOnArc: point is not on the circle');
+    return false;
+  }
+  
+  // print('isPointOnArc: stage4');
+  // Determine direction from circle orientation
+  // Inverted: if o >= 0 was giving wrong results, try the opposite
+  final counterClockwise = arc.curve.o < 0;
+  
+  final center = getCircleCenter(arc.curve);
+  final c = infForm(center);
+  final p = infForm(point);
+  final start = infForm(arc.startPoint);
+  final end = infForm(arc.endPoint);
+  
+  // Calculate angles
+  final startAngle = math.atan2(start.e2 - c.e2, start.e1 - c.e1);
+  final endAngle = math.atan2(end.e2 - c.e2, end.e1 - c.e1);
+  final pointAngle = math.atan2(p.e2 - c.e2, p.e1 - c.e1);
+  
+  // Normalize angles to [0, 2π]
+  double normalizeAngle(double angle) {
+    while (angle < 0) angle += 2 * math.pi;
+    while (angle >= 2 * math.pi) angle -= 2 * math.pi;
+    return angle;
+  }
+  
+  final startNorm = normalizeAngle(startAngle);
+  final endNorm = normalizeAngle(endAngle);
+  final pointNorm = normalizeAngle(pointAngle);
+  
+  // Invert the logic - check if point is NOT in the complementary arc
+  // Fixed: The original logic was checking the complementary (invisible) arc instead of the visible arc
+  // Now we correctly check the visible arc range
+  if (counterClockwise) {
+    if (startNorm < endNorm) {
+      // Visible arc: [start, end] counter-clockwise
+      // Accept points in this range
+      return pointNorm >= startNorm - tolerance && 
+             pointNorm <= endNorm + tolerance;
+    } else {
+      // Visible arc wraps: [start, 2π] ∪ [0, end] counter-clockwise
+      // Accept points in this range (point >= start OR point <= end)
+      return pointNorm >= startNorm - tolerance || 
+             pointNorm <= endNorm + tolerance;
+    }
+  } else {
+    // Clockwise: visible arc goes from end to start (opposite direction)
+    if (startNorm > endNorm) {
+      // Visible arc: [end, start] clockwise (decreasing angles)
+      // Accept points in this range
+      return pointNorm >= endNorm - tolerance && 
+             pointNorm <= startNorm + tolerance;
+    } else {
+      // Visible arc wraps: [0, end] ∪ [start, 2π] clockwise
+      // Accept points in this range (point <= end OR point >= start)
+      return pointNorm <= endNorm + tolerance || 
+             pointNorm >= startNorm - tolerance;
+    }
+  }
+}
+
+/// Check if a point lies on a complex boundary (segment or arc)
+/// Uses the boundary's curve type to determine if it's a segment or arc
+/// Returns: bool indicating if point is on the boundary
+bool isPointOnBoundary(
+  Multivector point,
+  ComplexBoundary boundary, {
+  double tolerance = 1e-10,
+}) {
+  if (boundary.isSegment) {
+    return isPointOnSegment(
+      point,
+      boundary,
+      tolerance: tolerance,
+    );
+  } else if (boundary.isArc) {
+    return isPointOnArc(
+      point,
+      boundary,
+      tolerance: tolerance,
+    );
+  }
+  return false;
+}
+
+// ----------------------------------------------------------------------------
+// POINT PROJECTION FUNCTIONS
+// ----------------------------------------------------------------------------
+
+/// Project a point onto a line
+/// Returns: Multivector representing the projected point
+Multivector projectPointToLine(Multivector point, Multivector line) {
+  return  constructPointFromCircle(infForm(line<(point^line)));
+}
+
+/// Project a point onto a segment (clamped to endpoints)
+/// [point] - The point to project (as Multivector)
+/// [segment] - The segment boundary containing startPoint, endPoint, and curve multivector
+/// Returns: Multivector representing the projected point
+Multivector projectPointToSegment(
+  Multivector point,
+  ComplexBoundary segment, {
+  double tolerance = 1e-8,
+}) {
+  if (!point.isPoint(customTolerance: tolerance)) {
+    throw ArgumentError('projectPointToSegment: point is not a point');
+  }
+  if (!segment.isSegment) {
+    throw ArgumentError('projectPointToSegment: boundary is not a segment (curve is not a line)');
+  }
+  
+  // First, project point onto the line using projectPointToLine
+  final lineProjection = projectPointToLine(point, segment.curve);
+  
+  // Check if the projected point lies on the segment
+  if (isPointOnSegment(lineProjection, segment, tolerance: tolerance)) {
+    // Projection is on the segment, return it
+    return lineProjection;
+  }
+  
+  // Projection is not on the segment, find nearest endpoint
+  final p = infForm(point);
+  final start = infForm(segment.startPoint);
+  final end = infForm(segment.endPoint);
+  
+  // Calculate distances to endpoints
+  final distToStart = distancePointToPoint(p, start);
+  final distToEnd = distancePointToPoint(p, end);
+  
+  // Return the nearest endpoint
+  return distToStart < distToEnd ? start : end;
+}
+
+/// Project a point onto a circle (nearest point on circumference)
+/// Returns: Multivector representing the projected point
+Multivector projectPointToCircle(Multivector point, Multivector circle) {
+  final p = infForm(point);
+  
+  // Get center and radius
+  final center = getCircleCenter(circle);
+  final centerInf = infForm(center);
+  final radius = measureCircleRadius(circle);
+  
+  if (radius <= 0) {
+    // Degenerate circle, return center
+    return center;
+  }
+  
+  // Vector from center to point
+  final toPoint = p - centerInf;
+  final distToCenter = math.sqrt((toPoint | toPoint).s * (-2));
+  
+  if (distToCenter < 1e-10) {
+    // Point is at center, project to arbitrary direction
+    return infForm(centerInf + Multivector(e1: radius, e2: 0));
+  }
+  
+  // Normalize and scale by radius
+  final direction = toPoint.scalarDivide(distToCenter);
+  final projected = centerInf + direction.scalarMultiply(radius);
+  
+  return infForm(projected);
+}
+
+
+
+/// Project a point onto an arc (nearest point on arc, considering boundaries)
+/// Returns: Multivector representing the projected point, or null if arc is invalid
+Multivector? projectPointToArc(
+  Multivector point,
+  Multivector circle,
+  Multivector startPoint,
+  Multivector endPoint,
+  bool counterClockwise,
+) {
+  // Create ComplexBoundary for the arc
+  final arcBoundary = ComplexBoundary(
+    startPoint: startPoint,
+    endPoint: endPoint,
+    curve: circle,
+  );
+  
+  // First project to circle
+  final circleProjection = projectPointToCircle(point, circle);
+  
+  // Check if projection is on the arc
+  if (isPointOnArc(circleProjection, arcBoundary)) {
+    return circleProjection;
+  }
+  
+  // Projection is not on arc, find nearest endpoint
+  final p = infForm(point);
+  final start = infForm(startPoint);
+  final end = infForm(endPoint);
+  
+  final distToStart = distancePointToPoint(p, start);
+  final distToEnd = distancePointToPoint(p, end);
+  
+  return distToStart < distToEnd ? start : end;
 }

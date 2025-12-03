@@ -416,6 +416,11 @@ const List<_ToolGroupDefinition> _level3GroupDefinitions = [
       ToolType.parallel,
       ToolType.perpBisector,
       ToolType.angleBisector,
+      // L3 Flexible commands
+      ToolType.lineFlex,
+      ToolType.perpendicularFlex,
+      ToolType.parallelFlex,
+      ToolType.perpbisectorFlex,
     ],
     placeholders: [_rayTool, _vectorTool],
   ),
@@ -425,6 +430,9 @@ const List<_ToolGroupDefinition> _level3GroupDefinitions = [
       ToolType.circle,
       ToolType.circleThreePoints,
       ToolType.arcThreePoints,
+      // L3 Flexible commands
+      ToolType.circleFlex,
+      ToolType.circle3Flex,
     ],
   ),
   _ToolGroupDefinition(

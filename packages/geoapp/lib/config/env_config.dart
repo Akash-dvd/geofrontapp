@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart';
+
 import 'build_flags.dart';
 
 /// Compile-time environment configuration.
@@ -48,11 +50,17 @@ class EnvConfig {
       const String.fromEnvironment('SUPABASE_ANON_KEY',
           defaultValue: _supabaseAnonKey);
 
-  static String? get supabaseServiceRoleKey => _optionalEnv(
-      'SUPABASE_SERVICE_ROLE_KEY', _supabaseServiceRoleKey);
+  static String? get supabaseServiceRoleKey {
+    const value = String.fromEnvironment('SUPABASE_SERVICE_ROLE_KEY', defaultValue: '');
+    if (value.isEmpty) return _supabaseServiceRoleKey;
+    return value;
+  }
 
-  static String? get supabaseJwtSecret =>
-      _optionalEnv('SUPABASE_JWT_SECRET', _supabaseJwtSecret);
+  static String? get supabaseJwtSecret {
+    const value = String.fromEnvironment('SUPABASE_JWT_SECRET', defaultValue: '');
+    if (value.isEmpty) return _supabaseJwtSecret;
+    return value;
+  }
 
   static String get supabaseOauthRedirectUri => const String.fromEnvironment(
     'SUPABASE_OAUTH_REDIRECT_URI',
@@ -110,8 +118,11 @@ class EnvConfig {
   static String get directusUrl =>
       const String.fromEnvironment('DIRECTUS_URL', defaultValue: _directusUrl);
 
-  static String? get directusToken =>
-      _optionalEnv('DIRECTUS_TOKEN', _directusToken);
+  static String? get directusToken {
+    const value = String.fromEnvironment('DIRECTUS_TOKEN', defaultValue: '');
+    if (value.isEmpty) return _directusToken;
+    return value;
+  }
 
   // ==================== App Mode ====================
 
@@ -141,27 +152,22 @@ class EnvConfig {
     }
   }
 
-  static String? _optionalEnv(String name, String? fallback) {
-    final value = String.fromEnvironment(name, defaultValue: fallback ?? '');
-    if (value.isEmpty) return null;
-    return value;
-  }
 
   // ==================== Debug Info ====================
 
   static void printConfig() {
-    print('═════════════════════════════════════════');
-    print('Environment Configuration');
-    print('═════════════════════════════════════════');
-    print('Mode: $appMode');
-    print('Supabase URL: $supabaseUrl');
+    debugPrint('═════════════════════════════════════════');
+    debugPrint('Environment Configuration');
+    debugPrint('═════════════════════════════════════════');
+    debugPrint('Mode: $appMode');
+    debugPrint('Supabase URL: $supabaseUrl');
     if (isLocal) {
-      print('Directus URL: $directusUrl');
-      print(
+      debugPrint('Directus URL: $directusUrl');
+      debugPrint(
           'Directus Token: ${directusToken != null ? '***set***' : 'not set'}');
     } else {
-      print('Edge GraphQL Endpoint: $edgeGraphqlEndpoint');
+      debugPrint('Edge GraphQL Endpoint: $edgeGraphqlEndpoint');
     }
-    print('═════════════════════════════════════════');
+    debugPrint('═════════════════════════════════════════');
   }
 }

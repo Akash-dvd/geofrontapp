@@ -8,11 +8,12 @@ import '../models/simple/geo_circle.dart';
 import '../models/simple/geo_line.dart';
 import '../models/simple/geo_point.dart';
 import '../models/geometry_object.dart';
-import '../models/simple/geo_trans.dart';
+import '../models/transforms/geo_trans.dart';
 import '../models/simple/geo_transformed_simple.dart';
 import '../models/complex/geo_transformed_complex.dart';
 import '../models/simple_lists/geo_intersection.dart';
 import '../models/simple_lists/geo_tangent.dart';
+import '../models/simple_lists/geo_angle_bisector.dart';
 import '../models/complex/geo_shapes.dart';
 import '../models/complex/geo_shapes_list.dart';
 
@@ -34,20 +35,29 @@ class GeoDrawDecoder {
 
     // Lines
     'GeoLine2P': (json, _) => GeoLine2P.fromJson(json),
+    'GeoLineFlex': (json, _) => GeoLineFlex.fromJson(json),
     'GeoPerpendicularBisector': (json, _) =>
         GeoPerpendicularBisector.fromJson(json),
+    'GeoPerpendicularBisectorFlex': (json, _) =>
+        GeoPerpendicularBisectorFlex.fromJson(json),
     'GeoPerpendicularLine': (json, _) => GeoPerpendicularLine.fromJson(json),
+    'GeoPerpendicularLineFlex': (json, _) =>
+        GeoPerpendicularLineFlex.fromJson(json),
     'GeoParallelLine': (json, _) => GeoParallelLine.fromJson(json),
+    'GeoParallelLineFlex': (json, _) => GeoParallelLineFlex.fromJson(json),
 
     // Circles
     'GeoCircle2P': (json, _) => GeoCircle2P.fromJson(json),
     'GeoCircle3P': (json, _) => GeoCircle3P.fromJson(json),
+    'GeoCircleFlex': (json, _) => GeoCircleFlex.fromJson(json),
+    'GeoCircle3Flex': (json, _) => GeoCircle3Flex.fromJson(json),
     'GeoInvCircle': (json, _) => GeoInvCircle.fromJson(json),
 
     // Transformations
     'GeoInverse': (json, _) => GeoInverse.fromJson(json),
     'GeoRotate': (json, _) => GeoRotate.fromJson(json),
     'GeoDilate': (json, _) => GeoDilate.fromJson(json),
+    'GeoTranslate': (json, _) => GeoTranslate.fromJson(json),
 
     // Transformed simple geometry
     'GeoTransPoint': (json, _) => GeoTransPoint.fromJson(json),
@@ -98,7 +108,10 @@ class GeoDrawDecoder {
         ),
 
     // Simple geometry lists
+    'GeoAngleBisector2L': (json, _) => GeoAngleBisector2L.fromJson(json),
     'GeoIntersection': (json, _) => GeoIntersection.fromJson(json),
+    // Backward compatibility: old type string
+    'intersection': (json, _) => GeoIntersection.fromJson(json),
     'GeoTangent': (json, dagManager) {
       final deps = (json['dependencies'] as List?)?.cast<String>() ?? const [];
       if (deps.length != 2) {
@@ -118,6 +131,35 @@ class GeoDrawDecoder {
           label: (json['label'] as String?) ?? '',
           first: first,
           second: second,
+          dagManager: dagManager,
+          styleOverrides: _extractStyleOverrides(json),
+          visible: json['visible'] as bool? ?? true,
+        );
+      } catch (_) {
+        return GeoTangent.fromJson(json);
+      }
+    },
+    // Backward compatibility: old type string
+    'tangent': (json, dagManager) {
+      final deps = (json['dependencies'] as List?)?.cast<String>() ?? const [];
+      if (deps.length != 2) {
+        return GeoTangent.fromJson(json);
+      }
+
+      final first = dagManager.getObject(deps[0]);
+      final second = dagManager.getObject(deps[1]);
+
+      if (first is! GeometryObject || second is! GeometryObject) {
+        return GeoTangent.fromJson(json);
+      }
+
+      try {
+        return GeoTangent.constructFromObjects(
+          id: json['id'] as String,
+          label: (json['label'] as String?) ?? '',
+          first: first,
+          second: second,
+          dagManager: dagManager,
           styleOverrides: _extractStyleOverrides(json),
           visible: json['visible'] as bool? ?? true,
         );
@@ -161,7 +203,7 @@ class GeoDrawDecoder {
         final dependencies = (objJson['dependencies'] as List).cast<String>();
         dagManager.addObject(object, dependencies);
       } catch (e) {
-        print('Warning: Failed to decode object ${objJson['id']}: $e');
+        debugPrint('Warning: Failed to decode object ${objJson['id']}: $e');
       }
     }
 

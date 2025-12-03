@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:geodraw/geodraw.dart';
+import 'package:geodraw/ui/parameter_input_dialog.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../bloc/problem_bloc.dart';
@@ -176,6 +177,9 @@ class _ProblemFormScreenState extends State<ProblemFormScreen> {
         });
       },
       onToolStateChanged: (_) => setState(() {}),
+      onParameterRequest: (title, parameters) async {
+        return await showParameterInputDialog(context, title, parameters);
+      },
     );
 
     _commandExecutor = UnifiedCLIExecutor(dagManager: _dagManager);

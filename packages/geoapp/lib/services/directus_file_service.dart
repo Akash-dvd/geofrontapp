@@ -1,4 +1,5 @@
 import 'dart:typed_data';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 import 'dart:convert';
@@ -47,27 +48,27 @@ class DirectusFileService {
       }
 
       // Send request
-      print('DEBUG: Sending upload request to $uri');
+      debugPrint('DEBUG: Sending upload request to $uri');
       final streamedResponse = await request.send();
       final response = await http.Response.fromStream(streamedResponse);
 
-      print('DEBUG: Upload response status: ${response.statusCode}');
-      print('DEBUG: Upload response body: ${response.body}');
+      debugPrint('DEBUG: Upload response status: ${response.statusCode}');
+      debugPrint('DEBUG: Upload response body: ${response.body}');
 
       if (response.statusCode == 200 || response.statusCode == 201) {
         final jsonResponse = json.decode(response.body);
         final fileId = jsonResponse['data']['id'] as String;
-        print('DEBUG: File uploaded successfully with ID: $fileId');
+        debugPrint('DEBUG: File uploaded successfully with ID: $fileId');
         return fileId;
       } else {
-        print(
+        debugPrint(
           'ERROR: Failed to upload image: ${response.statusCode} - ${response.body}',
         );
         return null;
       }
     } catch (e, stackTrace) {
-      print('ERROR: Exception uploading image: $e');
-      print('Stack trace: $stackTrace');
+      debugPrint('ERROR: Exception uploading image: $e');
+      debugPrint('Stack trace: $stackTrace');
       return null;
     }
   }
@@ -119,13 +120,13 @@ class DirectusFileService {
       if (response.statusCode == 200 || response.statusCode == 204) {
         return true;
       } else {
-        print(
+        debugPrint(
           'Failed to delete file: ${response.statusCode} - ${response.body}',
         );
         return false;
       }
     } catch (e) {
-      print('Error deleting file: $e');
+      debugPrint('Error deleting file: $e');
       return false;
     }
   }

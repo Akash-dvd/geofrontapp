@@ -53,6 +53,15 @@ class CanvasCapture {
       canvas.scale(viewport.zoom);
       canvas.translate(-viewport.center.dx, -viewport.center.dy);
 
+      // Set clip bounds in transformed coordinate space (required for GeoLine._getLinePoints())
+      // After transformation, objects are drawn in world coordinates
+      // Calculate the world coordinate bounds that correspond to the screen bounds
+      final worldLeft = viewport.center.dx - size.width / (2 * viewport.zoom);
+      final worldTop = viewport.center.dy - size.height / (2 * viewport.zoom);
+      final worldWidth = size.width / viewport.zoom;
+      final worldHeight = size.height / viewport.zoom;
+      canvas.clipRect(Rect.fromLTWH(worldLeft, worldTop, worldWidth, worldHeight));
+
       // Draw all objects in topological order
       final sortedNodes = dagManager.topologicalSort();
       for (final node in sortedNodes) {
@@ -72,27 +81,27 @@ class CanvasCapture {
       canvas.restore();
 
       // End recording and convert to image
-      print('DEBUG: Recording picture...');
+      debugPrint('DEBUG: Recording picture...');
       final picture = recorder.endRecording();
 
-      print('DEBUG: Converting to image...');
+      debugPrint('DEBUG: Converting to image...');
       final image = await picture.toImage(width, height);
 
       // Convert to PNG bytes
-      print('DEBUG: Encoding to PNG...');
+      debugPrint('DEBUG: Encoding to PNG...');
       final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
 
       if (byteData == null) {
-        print('ERROR: PNG encoding returned null');
+        debugPrint('ERROR: PNG encoding returned null');
         return null;
       }
 
       final bytes = byteData.buffer.asUint8List();
-      print('DEBUG: Canvas capture complete, ${bytes.length} bytes');
+      debugPrint('DEBUG: Canvas capture complete, ${bytes.length} bytes');
       return bytes;
     } catch (e, stackTrace) {
-      print('ERROR: Exception capturing canvas: $e');
-      print('Stack trace: $stackTrace');
+      debugPrint('ERROR: Exception capturing canvas: $e');
+      debugPrint('Stack trace: $stackTrace');
       return null;
     }
   }
@@ -108,7 +117,7 @@ class CanvasCapture {
           key.currentContext?.findRenderObject() as RenderRepaintBoundary?;
 
       if (boundary == null) {
-        print('Could not find RenderRepaintBoundary');
+        debugPrint('Could not find RenderRepaintBoundary');
         return null;
       }
 
@@ -122,7 +131,7 @@ class CanvasCapture {
 
       return byteData.buffer.asUint8List();
     } catch (e) {
-      print('Error capturing from key: $e');
+      debugPrint('Error capturing from key: $e');
       return null;
     }
   }

@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../canvas_style.dart';
 import '../geometry_object.dart';
 import '../simple/geo_point.dart';
-import '../simple/geo_trans.dart';
+import '../transforms/geo_trans.dart';
 import '../transforms/transformation_engine.dart';
 import 'complex_geometry_object.dart';
 import 'geo_shapes.dart';
@@ -141,7 +141,7 @@ class GeoTransSegment extends GeoSegment {
   }
 
   @override
-  GeometryObject? rebuildFromParents(List<GeometryObject> parents) {
+  GeometryObject? rebuildFromParents(List<GeometryObject> parents, dynamic dagManager) {
     final source = _findSource(parents);
     final transform = _findTransform(parents);
     if (source == null || transform == null) {
@@ -316,7 +316,7 @@ class GeoTransArc extends GeoArc {
   }
 
   @override
-  GeometryObject? rebuildFromParents(List<GeometryObject> parents) {
+  GeometryObject? rebuildFromParents(List<GeometryObject> parents, dynamic dagManager) {
     final source = _findSource(parents);
     final transform = _findTransform(parents);
     if (source == null || transform == null) {
@@ -522,7 +522,7 @@ class GeoTransUnionGeometryObjectList
   }
 
   @override
-  GeometryObject? rebuildFromParents(List<GeometryObject> parents) {
+  GeometryObject? rebuildFromParents(List<GeometryObject> parents, dynamic dagManager) {
     final source = _findSource(parents);
     final transform = _findTransform(parents);
     if (source == null || transform == null) {

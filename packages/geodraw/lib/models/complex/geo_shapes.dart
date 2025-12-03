@@ -340,9 +340,9 @@ class GeoArc3P extends GeoArc {
               );
 
     // Helpful when tweaking arc orientation; logs whenever the arc recomputes.
-    // Uses print instead of debugPrint so it still appears in release builds.
+    // Uses debugPrint instead of debugPrint so it still appears in release builds.
     // ignore: avoid_print
-    // print(
+    // debugPrint(
     //   'GeoArc3P mv -> id=$id label=$label o=${mv.o.toStringAsFixed(6)} e1=${mv.e1.toStringAsFixed(6)} e2=${mv.e2.toStringAsFixed(6)} O=${mv.O.toStringAsFixed(6)}',
     // );
 
@@ -447,7 +447,7 @@ class GeoArc3P extends GeoArc {
   }
 
   @override
-  GeometryObject? rebuildFromParents(List<GeometryObject> parents) {
+  GeometryObject? rebuildFromParents(List<GeometryObject> parents, dynamic dagManager) {
     final byId = <String, GeoPoint>{};
     for (final parent in parents.whereType<GeoPoint>()) {
       byId[parent.id] = parent;
@@ -458,7 +458,7 @@ class GeoArc3P extends GeoArc {
         .whereType<GeoPoint>()
         .toList(growable: false);
 
-    // print("##################");
+    // debugPrint("##################");
     if (ordered.length != 3) {
       return null;
     }
@@ -957,14 +957,14 @@ class GeoSegment2P extends GeoSegment {
 
     // Debug output to help track ordering while points are dragged.
     // ignore: avoid_print
-    print(
-      'GeoSegment2P order -> p1:${p1.label}(${p1.id}) '
-      'at (${p1Pos.dx.toStringAsFixed(3)}, ${p1Pos.dy.toStringAsFixed(3)}) '
-      'p2:${p2.label}(${p2.id}) '
-      'at (${p2Pos.dx.toStringAsFixed(3)}, ${p2Pos.dy.toStringAsFixed(3)}) '
-      'mv[o=${mv.o.toStringAsFixed(6)}, e1=${mv.e1.toStringAsFixed(6)}, '
-      'e2=${mv.e2.toStringAsFixed(6)}, O=${mv.O.toStringAsFixed(6)}]',
-    );
+    // debugPrint(
+    //   'GeoSegment2P order -> p1:${p1.label}(${p1.id}) '
+    //   'at (${p1Pos.dx.toStringAsFixed(3)}, ${p1Pos.dy.toStringAsFixed(3)}) '
+    //   'p2:${p2.label}(${p2.id}) '
+    //   'at (${p2Pos.dx.toStringAsFixed(3)}, ${p2Pos.dy.toStringAsFixed(3)}) '
+    //   'mv[o=${mv.o.toStringAsFixed(6)}, e1=${mv.e1.toStringAsFixed(6)}, '
+    //   'e2=${mv.e2.toStringAsFixed(6)}, O=${mv.O.toStringAsFixed(6)}]',
+    // );
 
     final overrides = _shapeStyleOverrides(
       type: GeoSegment2P,
@@ -1054,7 +1054,7 @@ class GeoSegment2P extends GeoSegment {
   }
 
   @override
-  GeometryObject? rebuildFromParents(List<GeometryObject> parents) {
+  GeometryObject? rebuildFromParents(List<GeometryObject> parents, dynamic dagManager) {
     final byId = <String, GeoPoint>{};
     for (final parent in parents.whereType<GeoPoint>()) {
       byId[parent.id] = parent;

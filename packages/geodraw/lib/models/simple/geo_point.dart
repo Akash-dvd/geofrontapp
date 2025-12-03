@@ -4,6 +4,10 @@ import 'package:geocalc/Multivector.dart';
 import '../canvas_style.dart';
 import '../canvas_style_defaults.dart';
 import '../geometry_object.dart';
+import 'geo_line.dart';
+import 'geo_circle.dart';
+import '../complex/geo_shapes.dart';
+import '../complex/complex_geometry_object.dart';
 
 /// Abstract base class for all point types
 abstract class GeoPoint extends SimpleGeometryObject {
@@ -341,7 +345,7 @@ class GeoMidpoint extends GeoPoint {
   }
 
   @override
-  GeometryObject? rebuildFromParents(List<GeometryObject> parents) {
+  GeometryObject? rebuildFromParents(List<GeometryObject> parents, dynamic dagManager) {
     final points = parents.whereType<GeoPoint>().toList(growable: false);
     if (points.length != 2) {
       return null;
@@ -354,6 +358,203 @@ class GeoMidpoint extends GeoPoint {
       visible: visible,
       styleOverrides: styleOverrides,
     );
+  }
+}
+
+/// Glider point that slides along a geometric object (line, circle, arc, segment, or union)
+class GeoGliderPoint extends GeoPoint {
+  GeoGliderPoint({
+    required super.id,
+    required super.label,
+    required this.objectId,
+    required double initialX,
+    required double initialY,
+    super.visible,
+    super.styleOverrides,
+  }) : _initialX = initialX,
+       _initialY = initialY,
+       super(
+         dependencies: [objectId],
+         multivector: constructFreePoint(initialX, initialY),
+       );
+
+  /// ID of the object this point glides on
+  final String objectId;
+  
+  /// Initial position when the point was created (used for projection)
+  final double _initialX;
+  final double _initialY;
+
+  @override
+  GeoGliderPoint copyWith({
+    String? id,
+    String? label,
+    List<String>? dependencies,
+    Multivector? multivector,
+    double? x,
+    double? y,
+    bool? visible,
+    CanvasStyle? style,
+    Map<String, dynamic>? styleOverrides,
+    String? objectId,
+    double? initialX,
+    double? initialY,
+  }) {
+    final overrides =
+        styleOverrides ??
+        (style == null ? this.styleOverrides : resolveStyleOverrides(style));
+    final newObjectId = objectId ?? this.objectId;
+    final newInitialX = initialX ?? _initialX;
+    final newInitialY = initialY ?? _initialY;
+    
+    return GeoGliderPoint(
+      id: id ?? this.id,
+      label: label ?? this.label,
+      objectId: newObjectId,
+      initialX: newInitialX,
+      initialY: newInitialY,
+      visible: visible ?? this.visible,
+      styleOverrides: overrides,
+    );
+  }
+
+  @override
+  String get type => 'GeoGliderPoint';
+
+  @override
+  Map<String, dynamic> toJson() {
+    final json = super.toJson();
+    json['properties'] = {
+      'x': x,
+      'y': y,
+      'objectId': objectId,
+      'initialX': _initialX,
+      'initialY': _initialY,
+    };
+    return json;
+  }
+
+  static GeoGliderPoint fromJson(Map<String, dynamic> json) {
+    final props = json['properties'] as Map<String, dynamic>? ?? const {};
+    final styleOverrides = _pointStyleOverridesFromJson(
+      json,
+      legacyProps: props,
+      fallbackColor: CanvasStyleDefaults.instance
+          .resolveForType(GeoGliderPoint)
+          .strokeColor,
+    );
+    final mv = SimpleGeometryObject.decodeMultivector(
+      json[SimpleGeometryObject.multivectorKey],
+    );
+    final deps = (json['dependencies'] as List?)?.cast<String>() ?? const [];
+    
+    final objectId = props['objectId'] as String? ?? 
+                    (deps.isNotEmpty ? deps.first : '');
+    final initialX = (props['initialX'] as num?)?.toDouble() ?? mv.e1;
+    final initialY = (props['initialY'] as num?)?.toDouble() ?? mv.e2;
+
+    return GeoGliderPoint(
+      id: json['id'] as String,
+      label: json['label'] as String,
+      objectId: objectId,
+      initialX: initialX,
+      initialY: initialY,
+      visible: json['visible'] as bool? ?? true,
+      styleOverrides: styleOverrides,
+    );
+  }
+
+  @override
+  GeometryObject? rebuildFromParents(List<GeometryObject> parents, dynamic dagManager) {
+    // Find the object this point glides on
+    final object = parents.firstWhere(
+      (obj) => obj.id == objectId,
+      orElse: () => throw StateError('Object $objectId not found in parents'),
+    );
+
+    // Create a point multivector from the initial position
+    final initialPoint = constructFreePoint(_initialX, _initialY);
+    Multivector? projectedPoint;
+
+    // Project point onto the object based on its type
+    if (object is GeoLine) {
+      projectedPoint = projectPointToLine(initialPoint, object.multivector);
+    } else if (object is GeoCircle) {
+      projectedPoint = projectPointToCircle(initialPoint, object.multivector);
+    } else if (object is GeoSegment) {
+      projectedPoint = projectPointToSegment(
+        initialPoint,
+        object.boundary.boundary,
+      );
+    } else if (object is GeoArc) {
+      // Determine direction from circle orientation
+      final counterClockwise = object.boundary.multivector.o >= 0;
+      final proj = projectPointToArc(
+        initialPoint,
+        object.boundary.multivector,
+        object.startPoint.multivector,
+        object.endPoint.multivector,
+        counterClockwise,
+      );
+      if (proj == null) {
+        return null;
+      }
+      projectedPoint = proj;
+    } else if (object is UnionGeometryObjectList) {
+      // For union objects, find the nearest point across all elements
+      projectedPoint = _projectPointToUnion(initialPoint, object);
+      if (projectedPoint == null) {
+        return null;
+      }
+    } else {
+      // Unsupported object type
+      return null;
+    }
+
+    return copyWith(multivector: projectedPoint);
+  }
+
+  /// Project a point onto a union object (finds nearest point across all elements)
+  Multivector? _projectPointToUnion(
+    Multivector point,
+    UnionGeometryObjectList union,
+  ) {
+    Multivector? bestProjection;
+    double bestDistance = double.infinity;
+
+    for (final element in union.elements) {
+      Multivector? projection;
+      
+      if (element is GeoLine) {
+        projection = projectPointToLine(point, element.multivector);
+      } else if (element is GeoCircle) {
+        projection = projectPointToCircle(point, element.multivector);
+      } else if (element is GeoSegment) {
+        projection = projectPointToSegment(
+          point,
+          element.boundary.boundary,
+        );
+      } else if (element is GeoArc) {
+        final counterClockwise = element.boundary.multivector.o >= 0;
+        projection = projectPointToArc(
+          point,
+          element.boundary.multivector,
+          element.startPoint.multivector,
+          element.endPoint.multivector,
+          counterClockwise,
+        );
+      }
+
+      if (projection != null) {
+        final dist = distancePointToPoint(point, projection);
+        if (dist < bestDistance) {
+          bestDistance = dist;
+          bestProjection = projection;
+        }
+      }
+    }
+
+    return bestProjection;
   }
 }
 

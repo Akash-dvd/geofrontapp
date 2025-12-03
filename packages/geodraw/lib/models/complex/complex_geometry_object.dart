@@ -6,16 +6,27 @@ import '../geometry_object.dart';
 import '../simple/geo_point.dart';
 
 /// Immutable tuple describing the geometric boundary for a complex object.
+/// Application-layer wrapper for ComplexBoundary that provides GeoPoint access.
 class ComplexGeometryBoundary extends Equatable {
-  const ComplexGeometryBoundary({
+  ComplexGeometryBoundary({
     required this.startPoint,
     required this.endPoint,
     required this.multivector,
-  });
+  }) : _boundary = ComplexBoundary(
+         startPoint: startPoint.multivector,
+         endPoint: endPoint.multivector,
+         curve: multivector,
+       );
 
   final GeoPoint startPoint;
   final GeoPoint endPoint;
   final Multivector multivector;
+  
+  /// Internal mathematical representation
+  final ComplexBoundary _boundary;
+  
+  /// Expose the pure mathematical representation
+  ComplexBoundary get boundary => _boundary;
 
   ComplexGeometryBoundary copyWith({
     GeoPoint? startPoint,
@@ -27,6 +38,14 @@ class ComplexGeometryBoundary extends Equatable {
       endPoint: endPoint ?? this.endPoint,
       multivector: multivector ?? this.multivector,
     );
+  }
+
+  /// Check if a point lies on this boundary (segment or arc)
+  /// Returns: bool indicating if point is on the boundary
+  bool containsPoint(GeoPoint point, {double tolerance = 1e-10}) {
+    final pointMv = constructFreePoint(point.x, point.y);
+    // Call the global function from definitions.dart
+    return isPointOnBoundary(pointMv, _boundary, tolerance: tolerance);
   }
 
   Map<String, dynamic> toJson() {

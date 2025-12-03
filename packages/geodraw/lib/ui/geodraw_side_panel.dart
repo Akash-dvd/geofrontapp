@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../ai/ai_adapter.dart';
@@ -54,7 +56,7 @@ class GeoDrawSidePanel extends StatefulWidget {
   State<GeoDrawSidePanel> createState() => _GeoDrawSidePanelState();
 }
 
-enum _GeoDrawPanelView { tools, objects }
+enum _GeoDrawPanelView { tools, objects, algebra }
 
 class _GeoDrawSidePanelState extends State<GeoDrawSidePanel> {
   bool _isExpanded = true;
@@ -142,10 +144,15 @@ class _GeoDrawSidePanelState extends State<GeoDrawSidePanel> {
                               key: const ValueKey('_tools_panel'),
                               child: _buildTools(),
                             )
-                          : KeyedSubtree(
-                              key: const ValueKey('_objects_panel'),
-                              child: _buildObjects(theme),
-                            ),
+                          : _view == _GeoDrawPanelView.objects
+                              ? KeyedSubtree(
+                                  key: const ValueKey('_objects_panel'),
+                                  child: _buildObjects(theme),
+                                )
+                              : KeyedSubtree(
+                                  key: const ValueKey('_algebra_panel'),
+                                  child: _buildAlgebra(theme),
+                                ),
                     ),
                   ),
                 ],
@@ -195,6 +202,16 @@ class _GeoDrawSidePanelState extends State<GeoDrawSidePanel> {
               _isExpanded = true;
             }),
           ),
+          const SizedBox(height: 12),
+          _PanelToggleButton(
+            icon: Icons.functions,
+            label: 'Algebra',
+            isActive: _view == _GeoDrawPanelView.algebra,
+            onTap: () => setState(() {
+              _view = _GeoDrawPanelView.algebra;
+              _isExpanded = true;
+            }),
+          ),
           const Spacer(),
         ],
       ),
@@ -202,10 +219,16 @@ class _GeoDrawSidePanelState extends State<GeoDrawSidePanel> {
   }
 
   Widget _buildHeader(ThemeData theme) {
-    final title = _view == _GeoDrawPanelView.tools ? 'Tools' : 'Objects';
+    final title = _view == _GeoDrawPanelView.tools
+        ? 'Tools'
+        : _view == _GeoDrawPanelView.objects
+            ? 'Objects'
+            : 'Algebra';
     final subtitle = _view == _GeoDrawPanelView.tools
         ? 'Choose a construction tool'
-        : '${widget.dagManager.nodeCount} elements';
+        : _view == _GeoDrawPanelView.objects
+            ? '${widget.dagManager.nodeCount} elements'
+            : 'Non-commutative computer algebraic system';
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -283,6 +306,22 @@ class _GeoDrawSidePanelState extends State<GeoDrawSidePanel> {
             ),
           ),
       ],
+    );
+  }
+
+  Widget _buildAlgebra(ThemeData theme) {
+    return Center(
+      child: Transform.rotate(
+        angle: -math.pi / 2, // -90 degrees counter-clockwise
+        child: Text(
+          'NON commutative computer algebraic system',
+          style: theme.textTheme.headlineSmall?.copyWith(
+            fontWeight: FontWeight.bold,
+            letterSpacing: 1.2,
+          ),
+          textAlign: TextAlign.center,
+        ),
+      ),
     );
   }
 

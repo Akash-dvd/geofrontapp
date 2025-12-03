@@ -1,4 +1,5 @@
 import 'dart:typed_data';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -36,7 +37,7 @@ class SupabaseFileService {
         '$supabaseUrl/storage/v1/object/$bucketName/$storagePath',
       );
 
-      print('DEBUG: Uploading to Supabase Storage: $storagePath');
+      debugPrint('DEBUG: Uploading to Supabase Storage: $storagePath');
 
       final sessionToken =
           Supabase.instance.client.auth.currentSession?.accessToken;
@@ -58,15 +59,15 @@ class SupabaseFileService {
       );
 
       if (response.statusCode == 200 || response.statusCode == 201) {
-        print('✅ Supabase upload successful: $storagePath');
+        debugPrint('✅ Supabase upload successful: $storagePath');
         return storagePath;
       } else {
-        print('ERROR: Supabase upload failed: ${response.statusCode}');
-        print('ERROR: Response body: ${response.body}');
+        debugPrint('ERROR: Supabase upload failed: ${response.statusCode}');
+        debugPrint('ERROR: Response body: ${response.body}');
         return null;
       }
     } catch (e) {
-      print('ERROR: Supabase upload exception: $e');
+      debugPrint('ERROR: Supabase upload exception: $e');
       return null;
     }
   }
@@ -92,7 +93,7 @@ class SupabaseFileService {
 
       return response.statusCode == 200;
     } catch (e) {
-      print('ERROR: Supabase delete exception: $e');
+      debugPrint('ERROR: Supabase delete exception: $e');
       return false;
     }
   }

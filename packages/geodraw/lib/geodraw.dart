@@ -13,7 +13,7 @@ export 'models/text/canvas_text.dart';
 export 'models/simple/geo_point.dart';
 export 'models/simple/geo_line.dart';
 export 'models/simple/geo_circle.dart';
-export 'models/simple/geo_trans.dart';
+export 'models/transforms/geo_trans.dart';
 export 'models/simple/geo_transformed_simple.dart';
 
 // Simple geometry object lists

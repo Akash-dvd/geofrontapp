@@ -104,61 +104,61 @@ abstract class StagedSelectionTool with ToolCallbacksMixin implements Tool {
       return;
     }
 
-    print('[${name}] handleInput: position=${event.position}, currentStage=$_currentStage, selectedCount=${_selectedObjects.length}');
+    debugPrint('[${name}] handleInput: position=${event.position}, currentStage=$_currentStage, selectedCount=${_selectedObjects.length}');
 
     final candidate = _resolveObjectAt(event.position);
 
     if (candidate == null) {
-      print('[${name}] No object found at position ${event.position}');
+      debugPrint('[${name}] No object found at position ${event.position}');
       notifyStateChanged('No object found at that location');
       return;
     }
 
-    print('[${name}] Found candidate: ${candidate.runtimeType} (id: ${candidate.id}, label: ${candidate.label})');
+    debugPrint('[${name}] Found candidate: ${candidate.runtimeType} (id: ${candidate.id}, label: ${candidate.label})');
 
     // Check if candidate matches current stage constraints
     final constraints = stageTypeConstraints[_currentStage];
-    print('[${name}] Stage $_currentStage constraints: ${constraints.map((t) => t.toString()).join(', ')}');
+    debugPrint('[${name}] Stage $_currentStage constraints: ${constraints.map((t) => t.toString()).join(', ')}');
     
     if (!_matchesConstraints(candidate, constraints)) {
       final expectedTypes = constraints.map((t) => t.toString()).join(' or ');
-      print('[${name}] ❌ Constraint mismatch: ${candidate.runtimeType} does not match $expectedTypes');
+      debugPrint('[${name}] ❌ Constraint mismatch: ${candidate.runtimeType} does not match $expectedTypes');
       notifyStateChanged('Please select $expectedTypes');
       return;
     }
 
-    print('[${name}] ✅ Constraint match! Adding ${candidate.runtimeType} to selection');
+    debugPrint('[${name}] ✅ Constraint match! Adding ${candidate.runtimeType} to selection');
     _selectedObjects.add(candidate);
     
     // Notify that object was selected (for highlighting)
     notifyObjectSelected(candidate.id);
-    print('[${name}] Notified object selected: ${candidate.id}');
+    debugPrint('[${name}] Notified object selected: ${candidate.id}');
     
     _currentStage++;
-    print('[${name}] Advanced to stage $_currentStage');
+    debugPrint('[${name}] Advanced to stage $_currentStage');
 
     if (_currentStage < totalStages) {
       // More stages needed
       final prompt = stagePrompt(_currentStage);
-      print('[${name}] More stages needed. Prompt: $prompt');
+      debugPrint('[${name}] More stages needed. Prompt: $prompt');
       notifyStateChanged(prompt);
     } else {
       // All stages complete, proceed to execution
-      print('[${name}] All stages complete! Executing transformation...');
+      debugPrint('[${name}] All stages complete! Executing transformation...');
       _executeTransformation();
     }
   }
 
   GeometryObject? _resolveObjectAt(Offset position) {
-    print('[${name}] Resolving object at position: $position (threshold: $selectionThreshold)');
+    debugPrint('[${name}] Resolving object at position: $position (threshold: $selectionThreshold)');
     final nearby = dagManager.proximitySearch(
       position,
       threshold: selectionThreshold,
     );
-    print('[${name}] Proximity search found ${nearby.length} objects nearby');
+    debugPrint('[${name}] Proximity search found ${nearby.length} objects nearby');
     if (nearby.isNotEmpty) {
       for (var i = 0; i < nearby.length; i++) {
-        print('[${name}]   [$i] ${nearby[i].runtimeType} (id: ${nearby[i].id}, label: ${nearby[i].label})');
+        debugPrint('[${name}]   [$i] ${nearby[i].runtimeType} (id: ${nearby[i].id}, label: ${nearby[i].label})');
       }
     }
     return nearby.isNotEmpty ? nearby.first : null;
@@ -166,70 +166,70 @@ abstract class StagedSelectionTool with ToolCallbacksMixin implements Tool {
 
   bool _matchesConstraints(GeometryObject object, Set<Type> constraints) {
     if (constraints.isEmpty) {
-      print('[${name}] Constraints empty, accepting any object');
+      debugPrint('[${name}] Constraints empty, accepting any object');
       return true;
     }
     // Use 'is' check to support subclasses (e.g., GeoCircle2P is GeoCircle)
     final matches = constraints.any((type) {
       // Direct type match
       if (object.runtimeType == type) {
-        print('[${name}]   Direct type match: ${object.runtimeType} == $type');
+        debugPrint('[${name}]   Direct type match: ${object.runtimeType} == $type');
         return true;
       }
       
       // Check if object is instance of constraint type (for subclasses)
       // We need to check against known base types
       if (type == GeoPoint && object is GeoPoint) {
-        print('[${name}]   Instance check: ${object.runtimeType} is GeoPoint');
+        debugPrint('[${name}]   Instance check: ${object.runtimeType} is GeoPoint');
         return true;
       }
       if (type == GeoLine && object is GeoLine) {
-        print('[${name}]   Instance check: ${object.runtimeType} is GeoLine');
+        debugPrint('[${name}]   Instance check: ${object.runtimeType} is GeoLine');
         return true;
       }
       if (type == GeoCircle && object is GeoCircle) {
-        print('[${name}]   Instance check: ${object.runtimeType} is GeoCircle');
+        debugPrint('[${name}]   Instance check: ${object.runtimeType} is GeoCircle');
         return true;
       }
       
       // For other types, check runtime type
       return false;
     });
-    print('[${name}] Constraint check: ${object.runtimeType} matches constraints=$matches');
+    debugPrint('[${name}] Constraint check: ${object.runtimeType} matches constraints=$matches');
     return matches;
   }
 
   Future<void> _executeTransformation() async {
-    print('[${name}] ========== EXECUTING TRANSFORMATION ==========');
-    print('[${name}] Selected objects (${_selectedObjects.length}):');
+    debugPrint('[${name}] ========== EXECUTING TRANSFORMATION ==========');
+    debugPrint('[${name}] Selected objects (${_selectedObjects.length}):');
     for (var i = 0; i < _selectedObjects.length; i++) {
-      print('[${name}]   [$i] ${_selectedObjects[i].runtimeType} (id: ${_selectedObjects[i].id}, label: ${_selectedObjects[i].label})');
+      debugPrint('[${name}]   [$i] ${_selectedObjects[i].runtimeType} (id: ${_selectedObjects[i].id}, label: ${_selectedObjects[i].label})');
     }
-    print('[${name}] Command: $commandName');
-    print('[${name}] Parameter specs: ${parameterSpecs.length}');
+    debugPrint('[${name}] Command: $commandName');
+    debugPrint('[${name}] Parameter specs: ${parameterSpecs.length}');
     
     Map<String, dynamic>? parameters;
 
     // Request parameters if needed
     if (parameterSpecs.isNotEmpty && onParameterRequest != null) {
-      print('[${name}] Requesting parameters...');
+      debugPrint('[${name}] Requesting parameters...');
       parameters = await onParameterRequest!(
         name,
         parameterSpecs,
       );
 
       if (parameters == null) {
-        print('[${name}] User cancelled parameter input');
+        debugPrint('[${name}] User cancelled parameter input');
         // User cancelled
         reset();
         notifyStateChanged('Transformation cancelled');
         return;
       }
-      print('[${name}] Parameters received: $parameters');
+      debugPrint('[${name}] Parameters received: $parameters');
     }
 
     notifyStateChanged('Applying transformation...');
-    print('[${name}] Building arguments...');
+    debugPrint('[${name}] Building arguments...');
 
     final args = buildArguments(_selectedObjects, parameters);
     try {
@@ -239,29 +239,29 @@ abstract class StagedSelectionTool with ToolCallbacksMixin implements Tool {
       reset();
       return;
     }
-    print('[${name}] Arguments built (${args.length}):');
+    debugPrint('[${name}] Arguments built (${args.length}):');
     for (var i = 0; i < args.length; i++) {
       final arg = args[i];
       if (arg is GeometryObject) {
-        print('[${name}]   [$i] ${arg.runtimeType} (id: ${arg.id}, label: ${arg.label})');
+        debugPrint('[${name}]   [$i] ${arg.runtimeType} (id: ${arg.id}, label: ${arg.label})');
       } else {
-        print('[${name}]   [$i] ${arg.runtimeType}: $arg');
+        debugPrint('[${name}]   [$i] ${arg.runtimeType}: $arg');
       }
     }
 
-    print('[${name}] Executing command: $commandName with ${args.length} arguments');
+    debugPrint('[${name}] Executing command: $commandName with ${args.length} arguments');
     final result = await executor.execute(
       commandName: commandName,
       arguments: args,
     );
 
-    print('[${name}] Execution result: success=${result.success}, message=${result.message}');
+    debugPrint('[${name}] Execution result: success=${result.success}, message=${result.message}');
     if (result.object != null) {
-      print('[${name}] Result object: ${result.object.runtimeType} (id: ${(result.object as GeometryObject?)?.id})');
+      debugPrint('[${name}] Result object: ${result.object.runtimeType} (id: ${(result.object as GeometryObject?)?.id})');
     }
 
     if (!result.success) {
-      print('[${name}] ❌ Execution failed: ${result.message}');
+      debugPrint('[${name}] ❌ Execution failed: ${result.message}');
       notifyStateChanged(failureMessage(result.message));
       
       // Clear selections and reset
@@ -276,43 +276,43 @@ abstract class StagedSelectionTool with ToolCallbacksMixin implements Tool {
 
     if (result.object is GeometryObject) {
       final createdObject = result.object as GeometryObject;
-      print('[${name}] ✅ Success! Created ${createdObject.runtimeType} (id: ${createdObject.id}, label: ${createdObject.label})');
-      print('[${name}] Dependencies: ${createdObject.dependencies}');
-      print('[${name}] Calling notifyObjectCreated callback...');
-      print('[${name}] onObjectCreated callback is ${onObjectCreated != null ? "set" : "null"}');
+      debugPrint('[${name}] ✅ Success! Created ${createdObject.runtimeType} (id: ${createdObject.id}, label: ${createdObject.label})');
+      debugPrint('[${name}] Dependencies: ${createdObject.dependencies}');
+      debugPrint('[${name}] Calling notifyObjectCreated callback...');
+      debugPrint('[${name}] onObjectCreated callback is ${onObjectCreated != null ? "set" : "null"}');
       notifyObjectCreated(
         createdObject,
         createdObject.dependencies,
       );
-      print('[${name}] notifyObjectCreated called');
+      debugPrint('[${name}] notifyObjectCreated called');
       notifyStateChanged(successMessage(createdObject));
     } else {
-      print('[${name}] ✅ Success! (no geometry object returned)');
+      debugPrint('[${name}] ✅ Success! (no geometry object returned)');
       notifyStateChanged('Transformation completed');
     }
 
     // Clear selections and reset
-    print('[${name}] Clearing selections and resetting...');
+    debugPrint('[${name}] Clearing selections and resetting...');
     for (var i = 0; i < _selectedObjects.length; i++) {
       onObjectSelected?.call(''); // Clear highlight
     }
     _selectedObjects.clear();
     _currentStage = 0;
     notifyStateChanged(stateDescription);
-    print('[${name}] ========== TRANSFORMATION COMPLETE ==========');
+    debugPrint('[${name}] ========== TRANSFORMATION COMPLETE ==========');
   }
 
   @override
   void reset() {
-    print('[${name}] ========== RESETTING TOOL ==========');
-    print('[${name}] Tool: $name');
-    print('[${name}] Total stages: $totalStages');
-    print('[${name}] Command: $commandName');
-    print('[${name}] Current stage before reset: $_currentStage');
-    print('[${name}] Selected objects before reset: ${_selectedObjects.length}');
+    debugPrint('[${name}] ========== RESETTING TOOL ==========');
+    debugPrint('[${name}] Tool: $name');
+    debugPrint('[${name}] Total stages: $totalStages');
+    debugPrint('[${name}] Command: $commandName');
+    debugPrint('[${name}] Current stage before reset: $_currentStage');
+    debugPrint('[${name}] Selected objects before reset: ${_selectedObjects.length}');
     for (var i = 0; i < totalStages; i++) {
       final constraints = stageTypeConstraints[i];
-      print('[${name}]   Stage $i: ${constraints.isEmpty ? "any object" : constraints.map((t) => t.toString()).join(", ")}');
+      debugPrint('[${name}]   Stage $i: ${constraints.isEmpty ? "any object" : constraints.map((t) => t.toString()).join(", ")}');
     }
     
     // Clear selection highlights
@@ -323,8 +323,8 @@ abstract class StagedSelectionTool with ToolCallbacksMixin implements Tool {
     _selectedObjects.clear();
     _currentStage = 0;
     notifyStateChanged(stateDescription);
-    print('[${name}] Tool reset complete. Current stage: $_currentStage, Prompt: ${stateDescription}');
-    print('[${name}] ======================================');
+    debugPrint('[${name}] Tool reset complete. Current stage: $_currentStage, Prompt: ${stateDescription}');
+    debugPrint('[${name}] ======================================');
   }
 
   @override

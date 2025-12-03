@@ -31,6 +31,22 @@
 
   <title>geofrontapp</title>
   <link rel="manifest" href="manifest.json">
+  <script>
+    // Handle unhandled promise rejections (e.g., Supabase OAuth errors)
+    window.addEventListener('unhandledrejection', function(event) {
+      const error = event.reason;
+      // Suppress known Supabase OAuth errors that don't affect app functionality
+      if (error && typeof error === 'object') {
+        const message = error.message || error.toString();
+        if (message && message.includes('Code verifier could not be found')) {
+          // Silently handle stale OAuth sessions - no console output needed
+          event.preventDefault(); // Prevent error from appearing in console
+          return;
+        }
+      }
+      // Let other errors propagate normally
+    });
+  </script>
 </head>
 <body>
   <script src="flutter_bootstrap.js" async></script>

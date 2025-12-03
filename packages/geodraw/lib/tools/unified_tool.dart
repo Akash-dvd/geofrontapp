@@ -66,6 +66,8 @@ abstract class UnifiedTool with ToolCallbacksMixin implements Tool {
     } else {
       _historyMarker = null;
     }
+    // Clear any selection highlights
+    notifyObjectSelected('');
     verifier.reset();
     notifyStateChanged(stateDescription);
   }
@@ -81,6 +83,7 @@ abstract class UnifiedTool with ToolCallbacksMixin implements Tool {
     final nearby = dagManager.proximitySearch(position, threshold: 15.0);
     GeometryObject? selectedObject;
 
+    // First, try to find a valid existing object that matches the constraint
     for (final obj in nearby) {
       if (nextConstraint.accepts(obj)) {
         selectedObject = obj;
@@ -88,10 +91,23 @@ abstract class UnifiedTool with ToolCallbacksMixin implements Tool {
       }
     }
 
-    selectedObject ??= createObjectAtPosition(position);
+    // If no valid object found, try to create one
+    if (selectedObject == null) {
+      final created = createObjectAtPosition(position);
+      // Validate created object against constraint before using it
+      if (created != null && nextConstraint.accepts(created)) {
+        selectedObject = created;
+      }
+    }
 
+    // Only highlight and add if we have a valid object that matches the constraint
     if (selectedObject != null) {
+      // Object is valid - highlight it and add to argument queue
+      notifyObjectSelected(selectedObject.id);
       _addArgument(selectedObject);
+    } else {
+      // Invalid object selected - don't highlight, don't add to queue
+      notifyStateChanged('Invalid selection: expected ${nextConstraint.description}');
     }
   }
 
@@ -140,9 +156,13 @@ abstract class UnifiedTool with ToolCallbacksMixin implements Tool {
         }
         notifyStateChanged(result.message);
         _recordHistory(entry, result);
+        // Clear selection highlights after successful execution
+        notifyObjectSelected('');
         _resetInternal(rollback: false);
       } else {
         _recordHistory(entry, result);
+        // Clear selection highlights on error
+        notifyObjectSelected('');
         _handleExecutionError(result.message);
       }
     } catch (e) {
@@ -154,6 +174,8 @@ abstract class UnifiedTool with ToolCallbacksMixin implements Tool {
         marker: marker,
       );
       _recordHistory(entry, failure);
+      // Clear selection highlights on exception
+      notifyObjectSelected('');
       _handleExecutionError(message);
     }
   }

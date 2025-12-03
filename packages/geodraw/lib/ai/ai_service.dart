@@ -2,6 +2,7 @@
 library;
 
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 /// Response from the AI service
@@ -119,7 +120,7 @@ class AIService {
       'prompt': _buildPrompt(description),
     });
 
-    print(
+    debugPrint(
       'AIService: POST ${config.apiEndpoint} (desc length=${description.length})',
     );
 
@@ -127,12 +128,12 @@ class AIService {
         .post(Uri.parse(config.apiEndpoint), headers: headers, body: body)
         .timeout(config.timeout);
 
-    print(
+    debugPrint(
       'AIService: Response ${response.statusCode} (${response.body.length} bytes)',
     );
 
     if (response.statusCode != 200) {
-      print('AIService: Non-200 response body => ${response.body}');
+      debugPrint('AIService: Non-200 response body => ${response.body}');
       throw http.ClientException(
         'Server returned ${response.statusCode}: ${response.body}',
       );
@@ -212,15 +213,15 @@ Return only the JSON array:
       }
 
       if (commands.isEmpty) {
-        print('AIService: Parsed empty command list');
+        debugPrint('AIService: Parsed empty command list');
         return AIResponse.error('No commands generated');
       }
 
-      print('AIService: Parsed ${commands.length} commands successfully');
+      debugPrint('AIService: Parsed ${commands.length} commands successfully');
 
       return AIResponse.success(commands);
     } catch (e) {
-      print('AIService: Failed to parse response => $e');
+      debugPrint('AIService: Failed to parse response => $e');
       return AIResponse.error('Failed to parse response: $e');
     }
   }

@@ -7,7 +7,7 @@ import 'package:geodraw/models/complex/geo_shapes.dart';
 import 'package:geodraw/models/simple/geo_circle.dart';
 import 'package:geodraw/models/simple/geo_line.dart';
 import 'package:geodraw/models/simple/geo_point.dart';
-import 'package:geodraw/models/simple/geo_trans.dart';
+import 'package:geodraw/models/transforms/geo_trans.dart';
 import 'package:geodraw/models/simple/geo_transformed_simple.dart';
 import 'package:geodraw/models/complex/geo_transformed_complex.dart';
 

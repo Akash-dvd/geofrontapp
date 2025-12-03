@@ -9,7 +9,7 @@ import 'simple/geo_circle.dart';
 import 'simple/geo_line.dart';
 import 'simple/geo_point.dart';
 import 'simple/geo_transformed_simple.dart';
-import 'simple/geo_trans.dart';
+import 'transforms/geo_trans.dart';
 import 'simple_lists/geo_intersection.dart';
 import 'simple_lists/geo_tangent.dart';
 import 'complex/geo_shapes.dart';
@@ -50,19 +50,26 @@ class TypeHierarchy {
     _registerType(GeoPoint, {SimpleGeometryObject});
     _registerType(GeoPointer, {GeoPoint});
     _registerType(GeoMidpoint, {GeoPoint});
+    _registerType(GeoGliderPoint, {GeoPoint});
     _registerType(GeoTransPoint, {GeoPoint});
 
     // Line family
     _registerType(GeoLine, {SimpleGeometryObject});
     _registerType(GeoLine2P, {GeoLine});
+    _registerType(GeoLineFlex, {GeoLine});
     _registerType(GeoPerpendicularBisector, {GeoLine});
+    _registerType(GeoPerpendicularBisectorFlex, {GeoLine});
     _registerType(GeoPerpendicularLine, {GeoLine});
+    _registerType(GeoPerpendicularLineFlex, {GeoLine});
     _registerType(GeoParallelLine, {GeoLine});
+    _registerType(GeoParallelLineFlex, {GeoLine});
 
     // Circle family
     _registerType(GeoCircle, {SimpleGeometryObject});
     _registerType(GeoCircle2P, {GeoCircle});
     _registerType(GeoCircle3P, {GeoCircle});
+    _registerType(GeoCircleFlex, {GeoCircle});
+    _registerType(GeoCircle3Flex, {GeoCircle});
     _registerType(GeoTransCircle, {GeoCircle});
 
     // Transformation family
@@ -70,6 +77,7 @@ class TypeHierarchy {
     _registerType(GeoInverse, {GeoTrans});
     _registerType(GeoRotate, {GeoTrans});
     _registerType(GeoDilate, {GeoTrans});
+    _registerType(GeoTranslate, {GeoTrans});
     _registerType(GeoTransLine, {GeoLine});
     _registerType(GeoTransSegment, {GeoSegment});
     _registerType(GeoTransArc, {GeoArc});

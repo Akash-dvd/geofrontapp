@@ -5,6 +5,7 @@ import '../canvas_style.dart';
 import '../canvas_style_defaults.dart';
 import '../geometry_object.dart';
 import 'geo_point.dart';
+import 'geo_circle.dart';
 
 /// Abstract base class for all line types
 abstract class GeoLine extends SimpleGeometryObject {
@@ -395,7 +396,7 @@ class GeoLine2P extends GeoLine {
   }
 
   @override
-  GeometryObject? rebuildFromParents(List<GeometryObject> parents) {
+  GeometryObject? rebuildFromParents(List<GeometryObject> parents, dynamic dagManager) {
     final points = parents.whereType<GeoPoint>().toList(growable: false);
     if (points.length != 2) {
       return null;
@@ -555,7 +556,7 @@ class GeoPerpendicularBisector extends GeoLine {
   }
 
   @override
-  GeometryObject? rebuildFromParents(List<GeometryObject> parents) {
+  GeometryObject? rebuildFromParents(List<GeometryObject> parents, dynamic dagManager) {
     final points = parents.whereType<GeoPoint>().toList(growable: false);
     if (points.length != 2) {
       return null;
@@ -720,15 +721,16 @@ class GeoPerpendicularLine extends GeoLine {
   }
 
   @override
-  GeometryObject? rebuildFromParents(List<GeometryObject> parents) {
+  GeometryObject? rebuildFromParents(List<GeometryObject> parents, dynamic dagManager) {
     if (parents.length != 2) {
       return null;
     }
 
-    final line = parents[0];
-    final point = parents[1];
+    // fromDependencies expects [point, line] order (see line 601 and 628-629)
+    final point = parents[0];
+    final line = parents[1];
 
-    if (line is! GeoLine || point is! GeoPoint) {
+    if (point is! GeoPoint || line is! GeoLine) {
       return null;
     }
 
@@ -891,7 +893,7 @@ class GeoParallelLine extends GeoLine {
   }
 
   @override
-  GeometryObject? rebuildFromParents(List<GeometryObject> parents) {
+  GeometryObject? rebuildFromParents(List<GeometryObject> parents, dynamic dagManager) {
     if (parents.length != 2) {
       return null;
     }
@@ -1147,7 +1149,7 @@ class GeoAngleBisector3P extends GeoLine {
   }
 
   @override
-  GeometryObject? rebuildFromParents(List<GeometryObject> parents) {
+  GeometryObject? rebuildFromParents(List<GeometryObject> parents, dynamic dagManager) {
     if (parents.length != 3) {
       return null;
     }
@@ -1167,5 +1169,615 @@ class GeoAngleBisector3P extends GeoLine {
       visible: visible,
       styleOverrides: styleOverrides,
     );
+  }
+}
+
+/// Line through two flexible objects (accepts any SimpleGeometryObject)
+class GeoLineFlex extends GeoLine {
+  GeoLineFlex({
+    required super.id,
+    required super.label,
+    required super.dependencies,
+    required super.multivector,
+    super.visible,
+    super.styleOverrides,
+  }) : assert(
+         dependencies.length == 2,
+         'GeoLineFlex requires exactly 2 dependencies',
+       );
+
+  /// Construct a line from flexible dependencies (SimpleGeometryObject)
+  static GeoLineFlex fromDependencies({
+    required String id,
+    required String label,
+    required List<SimpleGeometryObject> objects,
+    bool visible = true,
+    CanvasStyle? style,
+    Map<String, dynamic>? styleOverrides,
+    double fallbackStrokeWidth = 2.0,
+    LineStyle fallbackLineStyle = LineStyle.solid,
+    Color fallbackColor = Colors.blue,
+  }) {
+    if (objects.length != 2) {
+      throw ArgumentError('GeoLineFlex requires exactly 2 dependencies');
+    }
+
+    // Extract multivectors (point or circle center)
+    final mv1 = objects[0] is GeoCircle
+        ? getCircleCenter(objects[0].multivector)
+        : infForm(objects[0].multivector);
+    final mv2 = objects[1] is GeoCircle
+        ? getCircleCenter(objects[1].multivector)
+        : infForm(objects[1].multivector);
+
+    final mv = constructLineFrom2Points(mv1, mv2);
+
+    final normalizedOverrides = _lineStyleOverridesFromStyle(
+      type: GeoLineFlex,
+      style: style,
+      overrides: styleOverrides,
+      fallbackColor: fallbackColor,
+      fallbackStrokeWidth: fallbackStrokeWidth,
+      fallbackLineStyle: fallbackLineStyle,
+    );
+
+    return GeoLineFlex(
+      id: id,
+      label: label,
+      dependencies: objects.map((o) => o.id).toList(growable: false),
+      multivector: mv,
+      visible: visible,
+      styleOverrides: normalizedOverrides,
+    );
+  }
+
+  @override
+  GeoLineFlex copyWith({
+    String? id,
+    String? label,
+    List<String>? dependencies,
+    Multivector? multivector,
+    bool? visible,
+    CanvasStyle? style,
+    Map<String, dynamic>? styleOverrides,
+  }) {
+    final overrides =
+        styleOverrides ??
+        (style == null ? this.styleOverrides : resolveStyleOverrides(style));
+    return GeoLineFlex(
+      id: id ?? this.id,
+      label: label ?? this.label,
+      dependencies: dependencies ?? this.dependencies,
+      multivector: multivector ?? this.multivector,
+      visible: visible ?? this.visible,
+      styleOverrides: overrides,
+    );
+  }
+
+  @override
+  String get type => 'GeoLineFlex';
+
+  @override
+  Map<String, dynamic> toJson() {
+    final json = super.toJson();
+    final properties = <String, dynamic>{
+      'a': a,
+      'b': b,
+      'c': c,
+      'linePattern': style.linePattern,
+      'strokeWidth': style.strokeWidth,
+    };
+    properties.removeWhere((_, value) => value == null);
+    json['properties'] = properties;
+    return json;
+  }
+
+  static GeoLineFlex fromJson(Map<String, dynamic> json) {
+    final props = (json['properties'] as Map<String, dynamic>?) ?? const {};
+    final mv = SimpleGeometryObject.decodeMultivector(
+      json[SimpleGeometryObject.multivectorKey],
+    );
+    final deps = (json['dependencies'] as List).cast<String>();
+    final defaults = CanvasStyleDefaults.instance.resolveForType(GeoLineFlex);
+    final styleOverrides = _lineStyleOverridesFromJson(
+      json,
+      legacyProps: props,
+      fallbackColor: defaults.strokeColor,
+    );
+
+    return GeoLineFlex(
+      id: json['id'] as String,
+      label: json['label'] as String,
+      dependencies: deps,
+      multivector: mv,
+      visible: json['visible'] as bool? ?? true,
+      styleOverrides: styleOverrides,
+    );
+  }
+
+  @override
+  GeometryObject? rebuildFromParents(List<GeometryObject> parents, dynamic dagManager) {
+    final objects = parents.whereType<SimpleGeometryObject>().toList(growable: false);
+    if (objects.length != 2) {
+      return null;
+    }
+
+    return GeoLineFlex.fromDependencies(
+      id: id,
+      label: label,
+      objects: objects,
+      visible: visible,
+      styleOverrides: styleOverrides,
+    );
+  }
+}
+
+/// Perpendicular bisector with flexible arguments (point or circle, not line)
+class GeoPerpendicularBisectorFlex extends GeoLine {
+  GeoPerpendicularBisectorFlex({
+    required super.id,
+    required super.label,
+    required super.dependencies,
+    required super.multivector,
+    super.visible,
+    super.styleOverrides,
+  }) : assert(
+         dependencies.length == 2,
+         'GeoPerpendicularBisectorFlex requires exactly 2 dependencies',
+       );
+
+  /// Construct a perpendicular bisector from flexible dependencies
+  static GeoPerpendicularBisectorFlex fromDependencies({
+    required String id,
+    required String label,
+    required List<SimpleGeometryObject> objects,
+    bool visible = true,
+    CanvasStyle? style,
+    Map<String, dynamic>? styleOverrides,
+    double fallbackStrokeWidth = 2.0,
+    LineStyle fallbackLineStyle = LineStyle.solid,
+    Color fallbackColor = Colors.cyan,
+  }) {
+    if (objects.length != 2) {
+      throw ArgumentError(
+        'GeoPerpendicularBisectorFlex requires exactly 2 dependencies',
+      );
+    }
+
+    // Validate: neither can be line
+    if (objects[0] is GeoLine || objects[1] is GeoLine) {
+      throw ArgumentError(
+        'Perpendicular bisector requires points or circles, not lines.',
+      );
+    }
+
+    // Extract multivectors (point or circle center)
+    final mv1 = objects[0] is GeoCircle
+        ? getCircleCenter(objects[0].multivector)
+        : infForm(objects[0].multivector);
+    final mv2 = objects[1] is GeoCircle
+        ? getCircleCenter(objects[1].multivector)
+        : infForm(objects[1].multivector);
+
+    final mv = constructPerpendicularBisector(mv1, mv2);
+
+    final normalizedOverrides = _lineStyleOverridesFromStyle(
+      type: GeoPerpendicularBisectorFlex,
+      style: style,
+      overrides: styleOverrides,
+      fallbackColor: fallbackColor,
+      fallbackStrokeWidth: fallbackStrokeWidth,
+      fallbackLineStyle: fallbackLineStyle,
+    );
+
+    return GeoPerpendicularBisectorFlex(
+      id: id,
+      label: label,
+      dependencies: objects.map((o) => o.id).toList(growable: false),
+      multivector: mv,
+      visible: visible,
+      styleOverrides: normalizedOverrides,
+    );
+  }
+
+  @override
+  GeoPerpendicularBisectorFlex copyWith({
+    String? id,
+    String? label,
+    List<String>? dependencies,
+    Multivector? multivector,
+    bool? visible,
+    CanvasStyle? style,
+    Map<String, dynamic>? styleOverrides,
+  }) {
+    final overrides =
+        styleOverrides ??
+        (style == null ? this.styleOverrides : resolveStyleOverrides(style));
+    return GeoPerpendicularBisectorFlex(
+      id: id ?? this.id,
+      label: label ?? this.label,
+      dependencies: dependencies ?? this.dependencies,
+      multivector: multivector ?? this.multivector,
+      visible: visible ?? this.visible,
+      styleOverrides: overrides,
+    );
+  }
+
+  @override
+  String get type => 'GeoPerpendicularBisectorFlex';
+
+  @override
+  Map<String, dynamic> toJson() {
+    final json = super.toJson();
+    final properties = <String, dynamic>{
+      'a': a,
+      'b': b,
+      'c': c,
+      'linePattern': style.linePattern,
+      'strokeWidth': style.strokeWidth,
+    };
+    properties.removeWhere((_, value) => value == null);
+    json['properties'] = properties;
+    return json;
+  }
+
+  static GeoPerpendicularBisectorFlex fromJson(Map<String, dynamic> json) {
+    final props = (json['properties'] as Map<String, dynamic>?) ?? const {};
+    final mv = SimpleGeometryObject.decodeMultivector(
+      json[SimpleGeometryObject.multivectorKey],
+    );
+    final deps = (json['dependencies'] as List).cast<String>();
+    final defaults = CanvasStyleDefaults.instance
+        .resolveForType(GeoPerpendicularBisectorFlex);
+    final styleOverrides = _lineStyleOverridesFromJson(
+      json,
+      legacyProps: props,
+      fallbackColor: defaults.strokeColor,
+    );
+
+    return GeoPerpendicularBisectorFlex(
+      id: json['id'] as String,
+      label: json['label'] as String,
+      dependencies: deps,
+      multivector: mv,
+      visible: json['visible'] as bool? ?? true,
+      styleOverrides: styleOverrides,
+    );
+  }
+
+  @override
+  GeometryObject? rebuildFromParents(List<GeometryObject> parents, dynamic dagManager) {
+    final objects = parents.whereType<SimpleGeometryObject>().toList(growable: false);
+    if (objects.length != 2) {
+      return null;
+    }
+
+    try {
+      return GeoPerpendicularBisectorFlex.fromDependencies(
+        id: id,
+        label: label,
+        objects: objects,
+        visible: visible,
+        styleOverrides: styleOverrides,
+      );
+    } catch (e) {
+      return null;
+    }
+  }
+}
+
+/// Perpendicular line with flexible point (point or circle)
+class GeoPerpendicularLineFlex extends GeoLine {
+  GeoPerpendicularLineFlex({
+    required super.id,
+    required super.label,
+    required super.dependencies,
+    required super.multivector,
+    super.visible,
+    super.styleOverrides,
+  }) : assert(
+         dependencies.length == 2,
+         'GeoPerpendicularLineFlex requires exactly 2 dependencies',
+       );
+
+  /// Construct a perpendicular line from flexible dependencies
+  static GeoPerpendicularLineFlex fromDependencies({
+    required String id,
+    required String label,
+    required List<GeometryObject> dependencies,
+    bool visible = true,
+    CanvasStyle? style,
+    Map<String, dynamic>? styleOverrides,
+    double fallbackStrokeWidth = 2.0,
+    LineStyle fallbackLineStyle = LineStyle.solid,
+    Color fallbackColor = Colors.orange,
+  }) {
+    if (dependencies.length != 2) {
+      throw ArgumentError(
+        'GeoPerpendicularLineFlex requires exactly a point/circle and a line dependency',
+      );
+    }
+
+    final pointObj = dependencies[0];
+    final reference = dependencies[1];
+
+    if (reference is! GeoLine) {
+      throw ArgumentError(
+        'GeoPerpendicularLineFlex requires a line as the second dependency',
+      );
+    }
+
+    if (pointObj is! SimpleGeometryObject) {
+      throw ArgumentError(
+        'GeoPerpendicularLineFlex requires a point or circle as the first dependency',
+      );
+    }
+
+    // Extract point multivector (point or circle center)
+    final pointMv = pointObj is GeoCircle
+        ? getCircleCenter(pointObj.multivector)
+        : infForm(pointObj.multivector);
+
+    final mv = constructPerpendicularLine(reference.multivector, pointMv);
+
+    final normalizedOverrides = _lineStyleOverridesFromStyle(
+      type: GeoPerpendicularLineFlex,
+      style: style,
+      overrides: styleOverrides,
+      fallbackColor: fallbackColor,
+      fallbackStrokeWidth: fallbackStrokeWidth,
+      fallbackLineStyle: fallbackLineStyle,
+    );
+
+    return GeoPerpendicularLineFlex(
+      id: id,
+      label: label,
+      dependencies: dependencies.map((d) => d.id).toList(growable: false),
+      multivector: mv,
+      visible: visible,
+      styleOverrides: normalizedOverrides,
+    );
+  }
+
+  @override
+  GeoPerpendicularLineFlex copyWith({
+    String? id,
+    String? label,
+    List<String>? dependencies,
+    Multivector? multivector,
+    bool? visible,
+    CanvasStyle? style,
+    Map<String, dynamic>? styleOverrides,
+  }) {
+    final overrides =
+        styleOverrides ??
+        (style == null ? this.styleOverrides : resolveStyleOverrides(style));
+    return GeoPerpendicularLineFlex(
+      id: id ?? this.id,
+      label: label ?? this.label,
+      dependencies: dependencies ?? this.dependencies,
+      multivector: multivector ?? this.multivector,
+      visible: visible ?? this.visible,
+      styleOverrides: overrides,
+    );
+  }
+
+  @override
+  String get type => 'GeoPerpendicularLineFlex';
+
+  @override
+  Map<String, dynamic> toJson() {
+    final json = super.toJson();
+    final properties = <String, dynamic>{
+      'a': a,
+      'b': b,
+      'c': c,
+      'linePattern': style.linePattern,
+      'strokeWidth': style.strokeWidth,
+    };
+    properties.removeWhere((_, value) => value == null);
+    json['properties'] = properties;
+    return json;
+  }
+
+  static GeoPerpendicularLineFlex fromJson(Map<String, dynamic> json) {
+    final props = (json['properties'] as Map<String, dynamic>?) ?? const {};
+    final mv = SimpleGeometryObject.decodeMultivector(
+      json[SimpleGeometryObject.multivectorKey],
+    );
+    final deps = (json['dependencies'] as List).cast<String>();
+    final defaults =
+        CanvasStyleDefaults.instance.resolveForType(GeoPerpendicularLineFlex);
+    final styleOverrides = _lineStyleOverridesFromJson(
+      json,
+      legacyProps: props,
+      fallbackColor: defaults.strokeColor,
+    );
+
+    return GeoPerpendicularLineFlex(
+      id: json['id'] as String,
+      label: json['label'] as String,
+      dependencies: deps,
+      multivector: mv,
+      visible: json['visible'] as bool? ?? true,
+      styleOverrides: styleOverrides,
+    );
+  }
+
+  @override
+  GeometryObject? rebuildFromParents(List<GeometryObject> parents, dynamic dagManager) {
+    if (parents.length != 2) {
+      return null;
+    }
+
+    try {
+      return GeoPerpendicularLineFlex.fromDependencies(
+        id: id,
+        label: label,
+        dependencies: parents,
+        visible: visible,
+        styleOverrides: styleOverrides,
+      );
+    } catch (e) {
+      return null;
+    }
+  }
+}
+
+/// Parallel line with flexible point (point or circle)
+class GeoParallelLineFlex extends GeoLine {
+  GeoParallelLineFlex({
+    required super.id,
+    required super.label,
+    required super.dependencies,
+    required super.multivector,
+    super.visible,
+    super.styleOverrides,
+  }) : assert(
+         dependencies.length == 2,
+         'GeoParallelLineFlex requires exactly 2 dependencies',
+       );
+
+  /// Construct a parallel line from flexible dependencies
+  static GeoParallelLineFlex fromDependencies({
+    required String id,
+    required String label,
+    required List<GeometryObject> dependencies,
+    bool visible = true,
+    CanvasStyle? style,
+    Map<String, dynamic>? styleOverrides,
+    double fallbackStrokeWidth = 2.0,
+    LineStyle fallbackLineStyle = LineStyle.solid,
+    Color fallbackColor = Colors.teal,
+  }) {
+    if (dependencies.length != 2) {
+      throw ArgumentError(
+        'GeoParallelLineFlex requires exactly a line and a point/circle dependency',
+      );
+    }
+
+    final reference = dependencies[0];
+    final pointObj = dependencies[1];
+
+    if (reference is! GeoLine) {
+      throw ArgumentError(
+        'GeoParallelLineFlex requires a line as the first dependency',
+      );
+    }
+
+    if (pointObj is! SimpleGeometryObject) {
+      throw ArgumentError(
+        'GeoParallelLineFlex requires a point or circle as the second dependency',
+      );
+    }
+
+    // Extract point multivector (point or circle center)
+    final pointMv = pointObj is GeoCircle
+        ? getCircleCenter(pointObj.multivector)
+        : infForm(pointObj.multivector);
+
+    final mv = constructParallelLine(reference.multivector, pointMv);
+
+    final normalizedOverrides = _lineStyleOverridesFromStyle(
+      type: GeoParallelLineFlex,
+      style: style,
+      overrides: styleOverrides,
+      fallbackColor: fallbackColor,
+      fallbackStrokeWidth: fallbackStrokeWidth,
+      fallbackLineStyle: fallbackLineStyle,
+    );
+
+    return GeoParallelLineFlex(
+      id: id,
+      label: label,
+      dependencies: dependencies.map((d) => d.id).toList(growable: false),
+      multivector: mv,
+      visible: visible,
+      styleOverrides: normalizedOverrides,
+    );
+  }
+
+  @override
+  GeoParallelLineFlex copyWith({
+    String? id,
+    String? label,
+    List<String>? dependencies,
+    Multivector? multivector,
+    bool? visible,
+    CanvasStyle? style,
+    Map<String, dynamic>? styleOverrides,
+  }) {
+    final overrides =
+        styleOverrides ??
+        (style == null ? this.styleOverrides : resolveStyleOverrides(style));
+    return GeoParallelLineFlex(
+      id: id ?? this.id,
+      label: label ?? this.label,
+      dependencies: dependencies ?? this.dependencies,
+      multivector: multivector ?? this.multivector,
+      visible: visible ?? this.visible,
+      styleOverrides: overrides,
+    );
+  }
+
+  @override
+  String get type => 'GeoParallelLineFlex';
+
+  @override
+  Map<String, dynamic> toJson() {
+    final json = super.toJson();
+    final properties = <String, dynamic>{
+      'a': a,
+      'b': b,
+      'c': c,
+      'linePattern': style.linePattern,
+      'strokeWidth': style.strokeWidth,
+    };
+    properties.removeWhere((_, value) => value == null);
+    json['properties'] = properties;
+    return json;
+  }
+
+  static GeoParallelLineFlex fromJson(Map<String, dynamic> json) {
+    final props = (json['properties'] as Map<String, dynamic>?) ?? const {};
+    final mv = SimpleGeometryObject.decodeMultivector(
+      json[SimpleGeometryObject.multivectorKey],
+    );
+    final deps = (json['dependencies'] as List).cast<String>();
+    final defaults =
+        CanvasStyleDefaults.instance.resolveForType(GeoParallelLineFlex);
+    final styleOverrides = _lineStyleOverridesFromJson(
+      json,
+      legacyProps: props,
+      fallbackColor: defaults.strokeColor,
+    );
+
+    return GeoParallelLineFlex(
+      id: json['id'] as String,
+      label: json['label'] as String,
+      dependencies: deps,
+      multivector: mv,
+      visible: json['visible'] as bool? ?? true,
+      styleOverrides: styleOverrides,
+    );
+  }
+
+  @override
+  GeometryObject? rebuildFromParents(List<GeometryObject> parents, dynamic dagManager) {
+    if (parents.length != 2) {
+      return null;
+    }
+
+    try {
+      return GeoParallelLineFlex.fromDependencies(
+        id: id,
+        label: label,
+        dependencies: parents,
+        visible: visible,
+        styleOverrides: styleOverrides,
+      );
+    } catch (e) {
+      return null;
+    }
   }
 }

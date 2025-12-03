@@ -7,6 +7,8 @@ import '../simple/geo_point.dart';
 import '../simple/geo_line.dart';
 import '../simple/geo_circle.dart';
 import 'simple_list_utils.dart';
+import '../../core/dag/dag_manager.dart';
+// Note: LabelManager import will be needed when _computeTangents is implemented
 
 /// List of tangent lines constructed from point/circle inputs.
 class GeoTangent extends GenSimpleGeometryObjectList<GeoLine> {
@@ -47,6 +49,7 @@ class GeoTangent extends GenSimpleGeometryObjectList<GeoLine> {
     required String label,
     required GeometryObject first,
     required GeometryObject second,
+    required DAGManager dagManager,
     Color color = Colors.pink,
     bool visible = true,
     CanvasStyle? style,
@@ -61,8 +64,8 @@ class GeoTangent extends GenSimpleGeometryObjectList<GeoLine> {
     }
 
     final computation = _computeTangents(
-      idSeed: id,
-      label: label,
+      dagManager: dagManager,
+      containerId: id,
       first: first,
       second: second,
       visible: visible,
@@ -88,7 +91,7 @@ class GeoTangent extends GenSimpleGeometryObjectList<GeoLine> {
   bool get hasTangents => objects.isNotEmpty;
 
   @override
-  String get type => 'tangent';
+  String get type => 'GeoTangent';
 
   @override
   Map<String, dynamic> toJson() {
@@ -174,8 +177,16 @@ class GeoTangent extends GenSimpleGeometryObjectList<GeoLine> {
   }
 
   @override
-  GeometryObject? rebuildFromParents(List<GeometryObject> parents) {
+  GeometryObject? rebuildFromParents(
+    List<GeometryObject> parents,
+    dynamic dagManager,
+  ) {
     if (parents.length != 2) {
+      return null;
+    }
+
+    // Cast dagManager to DAGManager
+    if (dagManager is! DAGManager) {
       return null;
     }
 
@@ -192,6 +203,7 @@ class GeoTangent extends GenSimpleGeometryObjectList<GeoLine> {
         label: label,
         first: first,
         second: second,
+        dagManager: dagManager,
         visible: visible,
         styleOverrides: styleOverrides,
       );
@@ -221,13 +233,16 @@ bool _isValidTangentInput(GeometryObject object) {
 }
 
 _TangentComputation _computeTangents({
-  required String idSeed,
-  required String label,
+  required DAGManager dagManager,
+  required String containerId,
   required GeometryObject first,
   required GeometryObject second,
   required bool visible,
 }) {
   // Placeholder implementation. Actual tangent calculations will be supplied later.
+  // When implemented, tangent lines should be created with unique labels using:
+  // LabelManager.getNextAvailableLabel(dagManager, GeometryObjectType.line)
+  // And registered with: dagManager.registerElement(lineId, containerId)
   return const _TangentComputation.empty();
 }
 

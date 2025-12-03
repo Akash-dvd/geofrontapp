@@ -173,7 +173,7 @@ class GeoPolygon extends GeoPolyArcGon<GeoSegment> {
   }
 
   @override
-  GeometryObject? rebuildFromParents(List<GeometryObject> parents) {
+  GeometryObject? rebuildFromParents(List<GeometryObject> parents, dynamic dagManager) {
     if (dependencies.isEmpty) {
       return null;
     }

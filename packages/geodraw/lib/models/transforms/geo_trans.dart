@@ -117,7 +117,7 @@ class GeoInverse extends GeoTrans {
   }
 
   @override
-  GeometryObject? rebuildFromParents(List<GeometryObject> parents) {
+  GeometryObject? rebuildFromParents(List<GeometryObject> parents, dynamic dagManager) {
     final parentsById = {for (final parent in parents) parent.id: parent};
 
     Multivector? subjectMv;
@@ -252,7 +252,7 @@ class GeoRotate extends GeoTrans {
   }
 
   @override
-  GeometryObject? rebuildFromParents(List<GeometryObject> parents) {
+  GeometryObject? rebuildFromParents(List<GeometryObject> parents, dynamic dagManager) {
     final centerMv = _findPointMv(parents, centerPointId);
     if (centerMv == null) {
       return null;
@@ -355,7 +355,7 @@ class GeoDilate extends GeoTrans {
   }
 
   @override
-  GeometryObject? rebuildFromParents(List<GeometryObject> parents) {
+  GeometryObject? rebuildFromParents(List<GeometryObject> parents, dynamic dagManager) {
     final centerMv = _findPointMv(parents, centerPointId);
     if (centerMv == null) {
       return null;
@@ -363,6 +363,119 @@ class GeoDilate extends GeoTrans {
 
     final dilator = constructDilationOperator(centerMv, factor);
     return copyWith(multivector: dilator);
+  }
+
+  Multivector? _findPointMv(List<GeometryObject> parents, String targetId) {
+    for (final parent in parents) {
+      if (parent is SimpleGeometryObject && parent.id == targetId) {
+        final mv = parent.multivector;
+        if (mv.isPoint()) {
+          return mv;
+        }
+      }
+    }
+    return null;
+  }
+}
+
+/// Translation transformation
+class GeoTranslate extends GeoTrans {
+  /// Starting point of translation vector
+  final String fromPointId;
+
+  /// Ending point of translation vector
+  final String toPointId;
+
+  GeoTranslate({
+    required super.id,
+    required super.label,
+    required super.dependencies,
+    required super.multivector,
+    required this.fromPointId,
+    required this.toPointId,
+    super.visible,
+    super.styleOverrides,
+  });
+
+  @override
+  GeoTranslate copyWith({
+    String? id,
+    String? label,
+    List<String>? dependencies,
+    Multivector? multivector,
+    String? fromPointId,
+    String? toPointId,
+    bool? visible,
+    CanvasStyle? style,
+    Map<String, dynamic>? styleOverrides,
+  }) {
+    final overrides =
+        styleOverrides ??
+        (style == null ? this.styleOverrides : resolveStyleOverrides(style));
+    return GeoTranslate(
+      id: id ?? this.id,
+      label: label ?? this.label,
+      dependencies: dependencies ?? this.dependencies,
+      multivector: multivector ?? this.multivector,
+      fromPointId: fromPointId ?? this.fromPointId,
+      toPointId: toPointId ?? this.toPointId,
+      visible: visible ?? this.visible,
+      styleOverrides: overrides,
+    );
+  }
+
+  @override
+  List<Object?> get props => [...super.props, fromPointId, toPointId];
+
+  @override
+  String get type => 'GeoTranslate';
+
+  @override
+  Map<String, dynamic> toJson() {
+    final json = super.toJson();
+    json['properties'] = {
+      'fromPointId': fromPointId,
+      'toPointId': toPointId,
+    };
+    return json;
+  }
+
+  static GeoTranslate fromJson(Map<String, dynamic> json) {
+    final props = json['properties'] as Map<String, dynamic>;
+    final deps = (json['dependencies'] as List).cast<String>();
+    final styleOverrides = _transformStyleOverridesFromJson(json, GeoTranslate);
+    final mv = SimpleGeometryObject.decodeMultivector(
+      json[SimpleGeometryObject.multivectorKey],
+    );
+
+    return GeoTranslate(
+      id: json['id'] as String,
+      label: json['label'] as String,
+      dependencies: deps,
+      multivector: mv,
+      fromPointId: props['fromPointId'] as String,
+      toPointId: props['toPointId'] as String,
+      visible: json['visible'] as bool? ?? true,
+      styleOverrides: styleOverrides,
+    );
+  }
+
+  @override
+  GeometryObject? rebuildFromParents(List<GeometryObject> parents, dynamic dagManager) {
+    final fromMv = _findPointMv(parents, fromPointId);
+    final toMv = _findPointMv(parents, toPointId);
+    if (fromMv == null || toMv == null) {
+      return null;
+    }
+
+    // Calculate translation vector (dx, dy)
+    final dx = toMv.e1 - fromMv.e1;
+    final dy = toMv.e2 - fromMv.e2;
+
+    // Construct translation operator
+    final translator = constructTranslationOperator(dx, dy);
+
+    return copyWith(multivector: translator);
   }
 
   Multivector? _findPointMv(List<GeometryObject> parents, String targetId) {
@@ -400,3 +513,4 @@ Map<String, dynamic>? _transformStyleOverridesFromJson(
 
   return Map<String, dynamic>.unmodifiable(diff);
 }
+

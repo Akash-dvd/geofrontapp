@@ -6,6 +6,8 @@ import 'package:flutter/material.dart';
 import '../../models/canvas_object.dart';
 import '../../models/geometry_object.dart';
 import '../../models/simple/geo_point.dart';
+import '../../models/complex/complex_geometry_object.dart';
+import '../../models/simple_lists/geo_intersection.dart';
 import 'dag_node.dart';
 import '../command/command_registry.dart';
 
@@ -14,6 +16,10 @@ import '../command/command_registry.dart';
 class DAGManager {
   final Map<String, DAGNode> _nodes = {};
   int _idCounter = 0;
+
+  /// Maps element ID to container ID for efficient element lookup
+  /// Used to track which container owns each element (for GenSimpleGeometryObjectList)
+  final Map<String, String> elementToContainer = {};
 
   Viewport? viewport;
   List<dynamic> constraints = [];
@@ -32,41 +38,265 @@ class DAGManager {
 
   DAGNode? getNode(String id) => _nodes[id];
 
-  CanvasObject? getObject(String id) => _nodes[id]?.object;
+  /// Get object by ID, with element resolution via elementToContainer map
+  /// First checks direct node lookup, then checks elementToContainer map
+  CanvasObject? getObject(String id) {
+    // First, try direct lookup (normal objects)
+    final node = _nodes[id];
+    if (node != null) {
+      return node.object;
+    }
+
+    // Check elementToContainer map for element lookup
+    final containerId = elementToContainer[id];
+    if (containerId != null) {
+      final containerNode = _nodes[containerId];
+      if (containerNode?.object is GeometryObject) {
+        final container = containerNode!.object as GeometryObject;
+        
+        if (container is GenSimpleGeometryObjectList) {
+          for (final element in container.objects) {
+            if (element.id == id) {
+              return element;
+            }
+          }
+        } else if (container is UnionGeometryObjectList) {
+          // Union elements are DAG nodes, not elements, so check nodes
+          for (final element in container.elements) {
+            if (element.id == id) {
+              return element;
+            }
+          }
+        }
+      }
+    }
+
+    // Fallback: Direct search through all containers (for backward compatibility)
+    // This handles edge cases where elementToContainer might not be populated
+    for (final node in _nodes.values) {
+      final obj = node.object;
+      if (obj is! GeometryObject) continue;
+
+      if (obj is GenSimpleGeometryObjectList) {
+        for (final element in obj.objects) {
+          if (element.id == id) {
+            return element;
+          }
+        }
+      }
+
+      if (obj is UnionGeometryObjectList) {
+        for (final element in obj.elements) {
+          if (element.id == id) {
+            return element;
+          }
+        }
+      }
+    }
+
+    return null;
+  }
+
+  /// Get the container ID for a given element ID
+  String? getContainerForElement(String elementId) {
+    return elementToContainer[elementId];
+  }
+
+  /// Register an element in the elementToContainer map
+  void registerElement(String elementId, String containerId) {
+    elementToContainer[elementId] = containerId;
+  }
+
+  /// Unregister an element from the elementToContainer map
+  void unregisterElement(String elementId) {
+    elementToContainer.remove(elementId);
+  }
+
+  /// Update an element's ID and update all dependent objects' dependency lists
+  /// This is used when renaming an element (element ID = label)
+  /// 
+  /// **CRITICAL**: This method:
+  /// 1. Updates the element's ID in the container
+  /// 2. Updates elementToContainer map
+  /// 3. Finds all DAG nodes that depend on the old element ID
+  /// 4. Updates their dependency lists to use the new element ID
+  /// 5. Triggers rebuilds for dependent objects if needed
+  void updateElementId({
+    required String oldElementId,
+    required String newElementId,
+    required GeometryObject updatedElement,
+  }) {
+    history.record();
+
+    // Get the container that owns this element
+    final containerId = elementToContainer[oldElementId];
+    if (containerId == null) {
+      throw ArgumentError('Element $oldElementId is not registered in elementToContainer');
+    }
+
+    final containerNode = _nodes[containerId];
+    if (containerNode == null) {
+      throw ArgumentError('Container $containerId not found');
+    }
+
+    final container = containerNode.object;
+    if (container is! GenSimpleGeometryObjectList) {
+      throw ArgumentError('Container $containerId is not a GenSimpleGeometryObjectList');
+    }
+
+    // Update the element in the container's objects list
+    final updatedObjects = container.objects.map((element) {
+      if (element.id == oldElementId) {
+        return updatedElement;
+      }
+      return element;
+    }).toList();
+
+    // Create updated container
+    // Note: copyWith signature depends on the specific container type
+    // For GeoIntersection, use objects parameter
+    GenSimpleGeometryObjectList updatedContainer;
+    if (container is GeoIntersection) {
+      updatedContainer = container.copyWith(objects: updatedObjects.cast<GeoPoint>());
+    } else {
+      // For other container types, we need to recreate with updated objects
+      // This is a fallback - specific types should handle their own copyWith
+      throw ArgumentError('updateElementId not fully implemented for ${container.runtimeType}');
+    }
+
+    // Update elementToContainer map
+    unregisterElement(oldElementId);
+    registerElement(newElementId, containerId);
+
+    // Update container in DAG
+    updateObject(containerId, updatedContainer);
+
+    // Find all DAG nodes that depend on the old element ID
+    // We need to check both:
+    // 1. Direct dependencies (node.dependencies contains oldElementId)
+    // 2. Container dependencies (node depends on container, and container contains oldElementId)
+    final dependentNodes = <DAGNode>[];
+    for (final node in _nodes.values) {
+      final obj = node.object;
+      if (obj is! GeometryObject) continue;
+
+      // Check if this node directly depends on the old element ID
+      if (obj.dependencies.contains(oldElementId)) {
+        dependentNodes.add(node);
+        continue;
+      }
+
+      // Check if this node depends on the container and uses the old element ID
+      if (node.parentIds.contains(containerId) && obj.dependencies.contains(oldElementId)) {
+        dependentNodes.add(node);
+      }
+    }
+
+    // Update all dependent nodes' dependency lists
+    for (final dependentNode in dependentNodes) {
+      final dependentObj = dependentNode.object;
+      if (dependentObj is! GeometryObject) continue;
+
+      // Update dependencies list
+      final updatedDependencies = dependentObj.dependencies.map((depId) {
+        return depId == oldElementId ? newElementId : depId;
+      }).toList();
+
+      // Create updated object with new dependencies
+      final updatedDependentObj = dependentObj.copyWith(dependencies: updatedDependencies);
+
+      // Update the node
+      _nodes[dependentNode.id] = dependentNode.copyWith(
+        object: updatedDependentObj,
+        isDirty: true,
+        lastModified: DateTime.now(),
+      );
+
+      // Mark descendants as dirty to trigger rebuilds
+      _markDescendantsDirty(dependentNode.id);
+    }
+  }
 
   String addObject(CanvasObject object, List<String> dependencies) {
     history.record();
 
+    // Resolve pattern IDs to actual DAG node IDs
+    final resolvedDependencies = <String>[];
     for (final depId in dependencies) {
-      if (!_nodes.containsKey(depId)) {
+      // First check if it's a direct node
+      if (_nodes.containsKey(depId)) {
+        resolvedDependencies.add(depId);
+        continue;
+      }
+      
+      // Try to resolve as pattern ID (e.g., intersection_6_0)
+      final obj = getObject(depId);
+      if (obj == null) {
         throw ArgumentError('Dependency not found: $depId');
       }
+      
+      // Find the container that owns this element
+      String? containerId;
+      for (final node in _nodes.values) {
+        if (node.object is GenSimpleGeometryObjectList) {
+          final container = node.object as GenSimpleGeometryObjectList;
+          if (container.objects.any((element) => element.id == depId)) {
+            containerId = node.id;
+            break;
+          }
+        } else if (node.object is UnionGeometryObjectList) {
+          final container = node.object as UnionGeometryObjectList;
+          if (container.elements.any((element) => element.id == depId)) {
+            containerId = node.id;
+            break;
+          }
+        } else if (node.object.id == depId) {
+          // The object itself is a direct DAG node
+          containerId = depId;
+          break;
+        }
+      }
+      
+      if (containerId == null) {
+        throw ArgumentError('Dependency not found in DAG: $depId (resolved object: ${obj.runtimeType})');
+      }
+      
+      resolvedDependencies.add(containerId);
     }
 
-    if (_wouldCreateCycle(dependencies)) {
+    if (_wouldCreateCycle(resolvedDependencies)) {
       throw StateError('Adding object would create a cycle');
     }
 
-    final depth = dependencies.isEmpty
+    final depth = resolvedDependencies.isEmpty
         ? 0
-        : dependencies.map((id) => _nodes[id]!.depth).reduce(math.max) + 1;
+        : resolvedDependencies.map((id) => _nodes[id]!.depth).reduce(math.max) + 1;
 
     final node = DAGNode(
       id: object.id,
       object: object,
-      parentIds: List.from(dependencies),
+      parentIds: List.from(resolvedDependencies),
       depth: depth,
       isDirty: true,
     );
 
     _nodes[object.id] = node;
 
-    for (final parentId in dependencies) {
+    for (final parentId in resolvedDependencies) {
       final parent = _nodes[parentId]!;
       _nodes[parentId] = parent.copyWith(
         childIds: [...parent.childIds, object.id],
       );
     }
+
+    // Register elements in elementToContainer map if object is a container
+    if (object is GenSimpleGeometryObjectList) {
+      for (final element in object.objects) {
+        registerElement(element.id, object.id);
+      }
+    }
+    // Note: UnionGeometryObjectList elements are DAG nodes, not elements,
+    // so they don't need to be registered in elementToContainer
 
     return object.id;
   }
@@ -78,6 +308,26 @@ class DAGManager {
     }
 
     history.record();
+
+    // Update elementToContainer map if container's elements changed
+    final oldObject = node.object;
+    if (oldObject is GenSimpleGeometryObjectList && updatedObject is GenSimpleGeometryObjectList) {
+      // Compare old vs new elements
+      final oldElementIds = oldObject.objects.map((e) => e.id).toSet();
+      final newElementIds = updatedObject.objects.map((e) => e.id).toSet();
+      
+      // Unregister removed elements
+      for (final elementId in oldElementIds) {
+        if (!newElementIds.contains(elementId)) {
+          unregisterElement(elementId);
+        }
+      }
+      
+      // Register new elements
+      for (final element in updatedObject.objects) {
+        registerElement(element.id, id);
+      }
+    }
 
     _nodes[id] = node.copyWith(
       object: updatedObject,
@@ -191,6 +441,14 @@ class DAGManager {
     final node = _nodes[id];
     if (node == null) return;
 
+    // Unregister elements from elementToContainer if this is a container
+    final obj = node.object;
+    if (obj is GenSimpleGeometryObjectList) {
+      for (final element in obj.objects) {
+        unregisterElement(element.id);
+      }
+    }
+
     for (final parentId in node.parentIds) {
       final parent = _nodes[parentId];
       if (parent != null) {
@@ -255,10 +513,51 @@ class DAGManager {
         continue;
       }
 
-      final parents = node.parentIds
-          .map((id) => _nodes[id]?.object)
-          .whereType<GeometryObject>()
-          .toList();
+      // Resolve parents - if a parent is a container and we depend on an element within it,
+      // extract that element instead of using the container
+      // We need to match each parent position with the corresponding dependency
+      final parents = <GeometryObject>[];
+      final usedDependencyIndices = <int>{};
+      
+      for (var i = 0; i < node.parentIds.length; i++) {
+        final parentId = node.parentIds[i];
+        final parentNode = _nodes[parentId];
+        if (parentNode == null) continue;
+        
+        final parentObj = parentNode.object;
+        if (parentObj is! GeometryObject) continue;
+        
+        // Check if this parent is a container and we depend on an element within it
+        // Match by position: parent at index i should match dependency at index i
+        GeometryObject? resolvedParent;
+        if (i < obj.dependencies.length) {
+          final depId = obj.dependencies[i];
+          resolvedParent = _resolveElementFromContainer(
+            container: parentObj,
+            elementId: depId,
+          );
+        }
+        
+        // If not found by position, try finding any unused matching element
+        if (resolvedParent == null) {
+          resolvedParent = _resolveParentFromContainer(
+            container: parentObj,
+            originalDependencies: obj.dependencies,
+            usedIndices: usedDependencyIndices,
+          );
+          if (resolvedParent != null) {
+            // Mark which dependency index was used
+            final depIndex = obj.dependencies.indexWhere(
+              (id) => id == resolvedParent!.id,
+            );
+            if (depIndex >= 0) {
+              usedDependencyIndices.add(depIndex);
+            }
+          }
+        }
+        
+        parents.add(resolvedParent ?? parentObj);
+      }
 
       if (parents.length != node.parentIds.length) {
         continue;
@@ -278,11 +577,68 @@ class DAGManager {
     }
   }
 
+  /// Resolve a specific element from a container by element ID
+  /// Returns the element if found, otherwise returns null
+  GeometryObject? _resolveElementFromContainer({
+    required GeometryObject container,
+    required String elementId,
+  }) {
+    if (container is GenSimpleGeometryObjectList) {
+      for (final element in container.objects) {
+        if (element.id == elementId) {
+          return element;
+        }
+      }
+    } else if (container is UnionGeometryObjectList) {
+      for (final element in container.elements) {
+        if (element.id == elementId) {
+          return element;
+        }
+      }
+    }
+    
+    return null;
+  }
+
+  /// Resolve a parent object from a container if we depend on an element within it
+  /// Returns an unused element if found, otherwise returns null (use container)
+  GeometryObject? _resolveParentFromContainer({
+    required GeometryObject container,
+    required List<String> originalDependencies,
+    Set<int>? usedIndices,
+  }) {
+    final used = usedIndices ?? <int>{};
+    
+    // Check if container has elements that match our original dependencies
+    // (but not ones we've already used)
+    if (container is GenSimpleGeometryObjectList) {
+      for (var i = 0; i < container.objects.length; i++) {
+        final element = container.objects[i];
+        final depIndex = originalDependencies.indexWhere((id) => id == element.id);
+        if (depIndex >= 0 && !used.contains(depIndex)) {
+          return element;
+        }
+      }
+    } else if (container is UnionGeometryObjectList) {
+      for (var i = 0; i < container.elements.length; i++) {
+        final element = container.elements[i];
+        final depIndex = originalDependencies.indexWhere((id) => id == element.id);
+        if (depIndex >= 0 && !used.contains(depIndex)) {
+          return element;
+        }
+      }
+    }
+    
+    // No matching element found, return null to use container
+    return null;
+  }
+
   GeometryObject? _reconstructObject(
     GeometryObject obj,
     List<GeometryObject> parents,
   ) {
-    return obj.rebuildFromParents(List<GeometryObject>.from(parents));
+    // Pass DAGManager to rebuildFromParents for label management
+    return obj.rebuildFromParents(List<GeometryObject>.from(parents), this);
   }
 
   List<DAGNode> topologicalSort([List<DAGNode>? nodesToSort]) {
@@ -297,6 +653,8 @@ class DAGManager {
     return false;
   }
 
+  /// Search for elements near a position, returning only actual elements (not containers)
+  /// Prioritizes points if present
   List<GeometryObject> proximitySearch(
     Offset position, {
     double threshold = 10.0,
@@ -309,12 +667,40 @@ class DAGManager {
       if (obj is! GeometryObject) continue;
       if (!obj.visible) continue;
 
-      final distance = obj.distanceTo(position);
-      if (distance < threshold) {
-        if (obj is GeoPoint) {
-          pointCandidates.add((obj, distance));
-        } else {
-          otherCandidates.add((obj, distance));
+      // For list-type objects, search within elements
+      if (obj is GenSimpleGeometryObjectList) {
+        for (final element in obj.objects) {
+          if (!element.visible) continue;
+          final distance = element.distanceTo(position);
+          if (distance < threshold) {
+            if (element is GeoPoint) {
+              pointCandidates.add((element, distance));
+            } else {
+              otherCandidates.add((element, distance));
+            }
+          }
+        }
+      } else if (obj is UnionGeometryObjectList) {
+        for (final element in obj.elements) {
+          if (!element.visible) continue;
+          final distance = element.distanceTo(position);
+          if (distance < threshold) {
+            if (element is GeoPoint) {
+              pointCandidates.add((element, distance));
+            } else {
+              otherCandidates.add((element, distance));
+            }
+          }
+        }
+      } else {
+        // Regular object (not a container) - add directly
+        final distance = obj.distanceTo(position);
+        if (distance < threshold) {
+          if (obj is GeoPoint) {
+            pointCandidates.add((obj, distance));
+          } else {
+            otherCandidates.add((obj, distance));
+          }
         }
       }
     }
@@ -333,6 +719,58 @@ class DAGManager {
       ...pointCandidates.map((c) => c.$1),
       ...otherCandidates.map((c) => c.$1),
     ];
+  }
+
+  /// Find all containers (groups) that contain the given element
+  /// Returns list from innermost to outermost container
+  List<GeometryObject> findContainers(GeometryObject element) {
+    final containers = <GeometryObject>[];
+
+    // Search all DAG nodes for containers
+    for (final node in _nodes.values) {
+      final obj = node.object;
+      if (obj is! GeometryObject) continue;
+
+      // Check GenSimpleGeometryObjectList
+      if (obj is GenSimpleGeometryObjectList) {
+        if (obj.objects.contains(element)) {
+          containers.add(obj);
+        }
+      }
+
+      // Check UnionGeometryObjectList
+      if (obj is UnionGeometryObjectList) {
+        if (obj.elements.contains(element)) {
+          containers.add(obj);
+        }
+      }
+    }
+
+    // Sort by depth (innermost first) - containers with fewer children are more specific
+    // Also consider containment depth (how many levels deep)
+    containers.sort((a, b) {
+      final aNode = _nodes[a.id];
+      final bNode = _nodes[b.id];
+      final aDepth = aNode?.depth ?? 0;
+      final bDepth = bNode?.depth ?? 0;
+      
+      // Prefer containers that are closer in the DAG (higher depth = more specific)
+      if (aDepth != bDepth) {
+        return bDepth.compareTo(aDepth); // Higher depth first (innermost)
+      }
+      
+      // If same depth, prefer smaller containers (more specific)
+      final aSize = a is GenSimpleGeometryObjectList 
+          ? a.objects.length 
+          : (a is UnionGeometryObjectList ? a.elements.length : 0);
+      final bSize = b is GenSimpleGeometryObjectList 
+          ? b.objects.length 
+          : (b is UnionGeometryObjectList ? b.elements.length : 0);
+      
+      return aSize.compareTo(bSize); // Smaller first (more specific)
+    });
+
+    return containers;
   }
 
   void clear() {
@@ -395,9 +833,16 @@ class DAGManager {
         center: viewport!.center,
         zoom: viewport!.zoom,
         gridVisible: viewport!.gridVisible,
+        axesVisible: viewport!.axesVisible,
         canvasSize: viewport!.canvasSize,
       );
     }
+
+    // Copy elementToContainer map
+    final elementToContainerCopy = <String, String>{};
+    elementToContainer.forEach((key, value) {
+      elementToContainerCopy[key] = value;
+    });
 
     return _DagState(
       nodes: nodeCopies,
@@ -405,6 +850,7 @@ class DAGManager {
       metadata: metadataCopy,
       constraints: constraintsCopy,
       viewport: viewportCopy,
+      elementToContainer: elementToContainerCopy,
     );
   }
 
@@ -416,6 +862,11 @@ class DAGManager {
     metadata = Map<String, dynamic>.from(state.metadata);
     constraints = List<dynamic>.from(state.constraints);
     viewport = state.viewport;
+    
+    // Restore elementToContainer map
+    elementToContainer
+      ..clear()
+      ..addAll(state.elementToContainer);
   }
 }
 
@@ -423,12 +874,14 @@ class Viewport {
   Offset center;
   double zoom;
   bool gridVisible;
+  bool axesVisible;
   Size canvasSize;
 
   Viewport({
     this.center = Offset.zero,
     this.zoom = 1.0,
     this.gridVisible = true,
+    this.axesVisible = true,
     this.canvasSize = const Size(800, 600),
   });
 
@@ -458,6 +911,19 @@ class Viewport {
         (screenPoint - Offset(canvasSize.width / 2, canvasSize.height / 2)) /
             zoom;
   }
+
+  void resetView() {
+    center = Offset.zero;
+    zoom = 1.0;
+  }
+
+  void zoomIn([Offset? screenPoint]) {
+    zoomAt(screenPoint ?? Offset(canvasSize.width / 2, canvasSize.height / 2), 1.2);
+  }
+
+  void zoomOut([Offset? screenPoint]) {
+    zoomAt(screenPoint ?? Offset(canvasSize.width / 2, canvasSize.height / 2), 1 / 1.2);
+  }
 }
 
 /// Internal snapshot of DAG state used for undo/redo
@@ -467,6 +933,7 @@ class _DagState {
   final Map<String, dynamic> metadata;
   final List<dynamic> constraints;
   final Viewport? viewport;
+  final Map<String, String> elementToContainer;
 
   _DagState({
     required this.nodes,
@@ -474,7 +941,8 @@ class _DagState {
     required this.metadata,
     required this.constraints,
     required this.viewport,
-  });
+    Map<String, String>? elementToContainer,
+  }) : elementToContainer = elementToContainer ?? {};
 }
 
 /// Marker used to roll back multiple operations (e.g. tool transactions)
