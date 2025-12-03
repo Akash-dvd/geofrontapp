@@ -648,14 +648,24 @@ This document tracks the implementation of Option B where:
   - [x] Suggests next variant for points, lines, containers - tested
 - [x] Test case sensitivity (A ≠ a) - tested
 - [x] Test edge cases (empty DAG, large sequences) - tested
-- [ ] Test `DAGManager.elementToContainer` map:
-  - [ ] Registration works correctly
-  - [ ] Unregistration works correctly
-  - [ ] Lookup works correctly
-- [ ] Test `DAGManager.getObject()`:
-  - [ ] Direct node lookup works
-  - [ ] Element lookup via `elementToContainer` works
-  - [ ] Returns null for non-existent IDs
+- [x] Test `DAGManager.elementToContainer` map:
+  - [x] Registration works correctly - tested in `dag_manager_element_to_container_test.dart`
+  - [x] Unregistration works correctly - tested
+  - [x] Lookup works correctly - tested via `getContainerForElement()`
+- [x] Test `DAGManager.getObject()`:
+  - [x] Direct node lookup works - tested
+  - [x] Element lookup via `elementToContainer` works - tested
+  - [x] Returns null for non-existent IDs - tested
+- [x] Test `DAGManager.updateElementId()`:
+  - [x] Updates elementToContainer map correctly - tested
+  - [x] Updates container's element list - tested
+  - [x] Throws error for unregistered elements - tested
+- [x] Test container updates:
+  - [x] Removed elements are unregistered - tested
+  - [x] New elements are registered - tested
+- [x] Test undo/redo integration:
+  - [x] elementToContainer map is restored on undo - tested
+  - [x] Container deletion and undo restores map - tested
 
 ### 9.2 Integration Tests
 

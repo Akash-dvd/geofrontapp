@@ -86,7 +86,7 @@ class CommandRegistry {
                 ? (arguments[2] as String).trim()
                 : '';
             final label = providedLabel.isNotEmpty
-                ? providedLabel
+                  ? providedLabel
                 : LabelManager.getNextAvailableLabel(
                     context.dagManager,
                     GeometryObjectType.point,
@@ -181,7 +181,7 @@ class CommandRegistry {
             }
             
             final label = providedLabel.isNotEmpty
-                ? providedLabel
+                  ? providedLabel
                 : LabelManager.getNextAvailableLabel(
                     context.dagManager,
                     GeometryObjectType.point,
@@ -284,7 +284,7 @@ class CommandRegistry {
               ? (arguments[2] as String).trim()
               : '';
           final label = providedLabel.isNotEmpty
-              ? providedLabel
+                ? providedLabel
               : LabelManager.getNextAvailableLabel(
                   context.dagManager,
                   GeometryObjectType.line,
@@ -338,7 +338,7 @@ class CommandRegistry {
               : '';
 
           final label = providedLabel.isNotEmpty
-              ? providedLabel
+                ? providedLabel
               : LabelManager.getNextAvailableLabel(
                   context.dagManager,
                   GeometryObjectType.line,
@@ -390,7 +390,7 @@ class CommandRegistry {
               ? (arguments[2] as String).trim()
               : '';
           final label = providedLabel.isNotEmpty
-              ? providedLabel
+                ? providedLabel
               : LabelManager.getNextAvailableLabel(
                   context.dagManager,
                   GeometryObjectType.circle,
@@ -449,7 +449,7 @@ class CommandRegistry {
               ? (arguments[3] as String).trim()
               : '';
           final label = providedLabel.isNotEmpty
-              ? providedLabel
+                ? providedLabel
               : LabelManager.getNextAvailableLabel(
                   context.dagManager,
                   GeometryObjectType.circle,
@@ -515,7 +515,7 @@ class CommandRegistry {
               : '';
 
           final label = providedLabel.isNotEmpty
-              ? providedLabel
+                ? providedLabel
               : LabelManager.getNextAvailableLabel(
                   context.dagManager,
                   GeometryObjectType.arc,
@@ -590,7 +590,7 @@ class CommandRegistry {
           GeoPolyArc polyArc;
           try {
             final label = providedLabel.isNotEmpty
-                ? providedLabel
+                  ? providedLabel
                 : LabelManager.getNextAvailableLabel(
                     context.dagManager,
                     GeometryObjectType.polyArc,
@@ -730,7 +730,7 @@ class CommandRegistry {
           GeoPolygon polygon;
           try {
             final label = providedLabel.isNotEmpty
-                ? providedLabel
+                  ? providedLabel
                 : LabelManager.getNextAvailableLabel(
                     context.dagManager,
                     GeometryObjectType.polygon,
@@ -864,7 +864,7 @@ class CommandRegistry {
           GeoPolyLine polyLine;
           try {
             final label = providedLabel.isNotEmpty
-                ? providedLabel
+                  ? providedLabel
                 : LabelManager.getNextAvailableLabel(
                     context.dagManager,
                     GeometryObjectType.polyLine,
@@ -1006,7 +1006,7 @@ class CommandRegistry {
           GeoPolyArcGon<GeoArc> polyArcGon;
           try {
             final label = providedLabel.isNotEmpty
-                ? providedLabel
+                  ? providedLabel
                 : LabelManager.getNextAvailableLabel(
                     context.dagManager,
                     GeometryObjectType.polyArcGon,
@@ -1163,7 +1163,7 @@ class CommandRegistry {
             }
 
             final label = providedLabel.isNotEmpty
-                ? providedLabel
+                  ? providedLabel
                 : LabelManager.getNextAvailableLabel(
                     context.dagManager,
                     GeometryObjectType.point,
@@ -1212,7 +1212,7 @@ class CommandRegistry {
             }
 
             final label = providedLabel.isNotEmpty
-                ? providedLabel
+                  ? providedLabel
                 : LabelManager.getNextAvailableLabel(
                     context.dagManager,
                     GeometryObjectType.point,
@@ -1266,7 +1266,7 @@ class CommandRegistry {
               ? (arguments[2] as String).trim()
               : '';
           final label = providedLabel.isNotEmpty
-              ? providedLabel
+                ? providedLabel
               : LabelManager.getNextAvailableLabel(
                   context.dagManager,
                   GeometryObjectType.line,
@@ -1319,7 +1319,7 @@ class CommandRegistry {
               ? (arguments[2] as String).trim()
               : '';
           final label = providedLabel.isNotEmpty
-              ? providedLabel
+                ? providedLabel
               : LabelManager.getNextAvailableLabel(
                   context.dagManager,
                   GeometryObjectType.line,
@@ -1372,7 +1372,7 @@ class CommandRegistry {
               ? (arguments[2] as String).trim()
               : '';
           final label = providedLabel.isNotEmpty
-              ? providedLabel
+                ? providedLabel
               : LabelManager.getNextAvailableLabel(
                   context.dagManager,
                   GeometryObjectType.line,
@@ -2368,7 +2368,7 @@ class CommandRegistry {
 
           try {
             final label = providedLabel.isNotEmpty
-                ? providedLabel
+                  ? providedLabel
                 : LabelManager.getNextAvailableLabel(
                     context.dagManager,
                     GeometryObjectType.circle,
@@ -2432,7 +2432,7 @@ class CommandRegistry {
               : '';
 
           final label = providedLabel.isNotEmpty
-              ? providedLabel
+                ? providedLabel
               : LabelManager.getNextAvailableLabel(
                   context.dagManager,
                   GeometryObjectType.circle,
@@ -2493,7 +2493,7 @@ class CommandRegistry {
               : '';
 
           final label = providedLabel.isNotEmpty
-              ? providedLabel
+                ? providedLabel
               : LabelManager.getNextAvailableLabel(
                   context.dagManager,
                   GeometryObjectType.line,
@@ -2549,7 +2549,7 @@ class CommandRegistry {
 
           try {
             final label = providedLabel.isNotEmpty
-                ? providedLabel
+                  ? providedLabel
                 : LabelManager.getNextAvailableLabel(
                     context.dagManager,
                     GeometryObjectType.line,
@@ -2608,7 +2608,7 @@ class CommandRegistry {
 
           try {
             final label = providedLabel.isNotEmpty
-                ? providedLabel
+                  ? providedLabel
                 : LabelManager.getNextAvailableLabel(
                     context.dagManager,
                     GeometryObjectType.line,
@@ -2667,7 +2667,7 @@ class CommandRegistry {
 
           try {
             final label = providedLabel.isNotEmpty
-                ? providedLabel
+                  ? providedLabel
                 : LabelManager.getNextAvailableLabel(
                     context.dagManager,
                     GeometryObjectType.line,
@@ -3034,7 +3034,7 @@ class CommandRegistry {
           : LabelManager.getNextAvailableLabelForTransformation(
               context.dagManager,
               subject.label.isNotEmpty ? subject.label : subject.id,
-            );
+      );
       final result = TransformationEngine.transformComplex(
         source: subject,
         transform: transform,
@@ -3054,7 +3054,7 @@ class CommandRegistry {
             : LabelManager.getNextAvailableLabelForTransformation(
                 context.dagManager,
                 subject.label.isNotEmpty ? subject.label : subject.id,
-              );
+        );
         return GeoTransArc(
           id: arcLabel, // In new system: ID = label
           label: arcLabel,
@@ -3076,7 +3076,7 @@ class CommandRegistry {
           : LabelManager.getNextAvailableLabelForTransformation(
               context.dagManager,
               subject.label.isNotEmpty ? subject.label : subject.id,
-            );
+      );
       final result = TransformationEngine.transformComplex(
         source: subject,
         transform: transform,
@@ -3096,7 +3096,7 @@ class CommandRegistry {
             : LabelManager.getNextAvailableLabelForTransformation(
                 context.dagManager,
                 subject.label.isNotEmpty ? subject.label : subject.id,
-              );
+        );
         return GeoTransSegment(
           id: segmentLabel, // In new system: ID = label
           label: segmentLabel,
