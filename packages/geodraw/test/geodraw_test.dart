@@ -343,6 +343,7 @@ void main() {
 
   group('Intersection Tests', () {
     test('Line-Line intersection calculates correctly', () {
+      final dag = DAGManager();
       // Horizontal and vertical lines intersecting at (5, 5)
       final line1 = GeoLine2P.fromPoints(
         id: 'l1',
@@ -362,6 +363,7 @@ void main() {
         label: 'I',
         line1: line1,
         line2: line2,
+        dagManager: dag,
       );
 
       expect(intersection, isNotNull);
@@ -371,30 +373,35 @@ void main() {
     });
 
     test('Parallel lines have no intersection', () {
+      final dag = DAGManager();
+      // Create two parallel horizontal lines (same slope, different y-intercepts)
       final line1 = GeoLine2P.fromPoints(
         id: 'l1',
         label: 'L1',
         p1: GeoPointer(id: 'p1', label: 'A', x: 0, y: 0),
-        p2: GeoPointer(id: 'p2', label: 'B', x: 5, y: 5),
+        p2: GeoPointer(id: 'p2', label: 'B', x: 5, y: 0),
       );
       final line2 = GeoLine2P.fromPoints(
         id: 'l2',
         label: 'L2',
-        p1: GeoPointer(id: 'p3', label: 'C', x: 0, y: -5),
-        p2: GeoPointer(id: 'p4', label: 'D', x: 5, y: 0),
+        p1: GeoPointer(id: 'p3', label: 'C', x: 0, y: 5),
+        p2: GeoPointer(id: 'p4', label: 'D', x: 5, y: 5),
       );
 
       final intersection = GeoIntersection.lineLine(
         id: 'i1',
-        label: 'I',
+        label: '',
         line1: line1,
         line2: line2,
+        dagManager: dag,
       );
 
+      // Parallel lines should return null
       expect(intersection, isNull);
     });
 
     test('Circle-Circle intersection calculates correctly', () {
+      final dag = DAGManager();
       final circle1 = GeoCircle2P.fromPoints(
         id: 'c1',
         label: 'C1',
@@ -413,6 +420,7 @@ void main() {
         label: 'I',
         circle1: circle1,
         circle2: circle2,
+        dagManager: dag,
       );
 
       expect(intersection.objects.length, 2);

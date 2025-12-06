@@ -372,7 +372,7 @@ class _StyleSection extends StatelessWidget {
   }
 }
 
-/// Label section
+/// Label section - compact icon buttons
 class _LabelSection extends StatefulWidget {
   final List<GeometryObject> objects;
   final DAGManager dagManager;
@@ -415,32 +415,36 @@ class _LabelSectionState extends State<_LabelSection> {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        // Show/Hide label toggle
-        IconButton(
-          icon: Icon(
-            hasLabel ? Icons.label : Icons.label_outline,
-            size: 18,
-            color: hasLabel
-                ? colorScheme.primary
-                : colorScheme.onSurfaceVariant,
-          ),
-          tooltip: hasLabel ? 'Hide Label' : 'Show Label',
-          padding: EdgeInsets.zero,
-          constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-          onPressed: () {
-            final newLabel = hasLabel ? '' : firstObject.id;
-            _updateLabel(firstObject, newLabel);
-          },
-        ),
-        
-        // Edit label button
-        if (widget.objects.length == 1)
-          IconButton(
-            icon: const Icon(Icons.edit, size: 18),
-            tooltip: 'Edit Label',
+        // Show/Hide label toggle - icon button
+        Tooltip(
+          message: hasLabel ? 'Hide Label' : 'Show Label',
+          child: IconButton(
+            icon: Icon(
+              hasLabel ? Icons.label : Icons.label_outline,
+              size: 18,
+              color: hasLabel
+                  ? colorScheme.primary
+                  : colorScheme.onSurfaceVariant,
+            ),
             padding: EdgeInsets.zero,
             constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-            onPressed: () => _showLabelEditDialog(context, firstObject),
+            onPressed: () {
+              final newLabel = hasLabel ? '' : firstObject.id;
+              _updateLabel(firstObject, newLabel);
+            },
+          ),
+        ),
+        
+        // Edit label button - icon button (only for single selection)
+        if (widget.objects.length == 1)
+          Tooltip(
+            message: 'Edit Label',
+            child: IconButton(
+              icon: const Icon(Icons.edit, size: 18),
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+              onPressed: () => _showLabelEditDialog(context, firstObject),
+            ),
           ),
       ],
     );

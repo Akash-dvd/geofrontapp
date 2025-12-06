@@ -25,10 +25,12 @@ class GeoPolyArc extends GeoPolyArcBase<GeoArc> {
     required String id,
     required String label,
     required List<GeoPoint> points,
+    required DAGManager dagManager,
     bool visible = true,
     CanvasStyle? style,
     Map<String, dynamic>? styleOverrides,
     Color color = Colors.teal,
+    List<String>? existingElementLabels,
   }) {
     if (points.length < 3) {
       throw ArgumentError('GeoPolyArc requires at least three points');
@@ -46,11 +48,68 @@ class GeoPolyArc extends GeoPolyArcBase<GeoArc> {
     }
 
     final arcs = <GeoArc>[];
+    int arcIndex = 0;
+    // Track labels used in this construction for sequential naming
+    final usedLabelsInConstruction = <String>{};
+    String? lastExistingLabel;
+    if (existingElementLabels != null && existingElementLabels.isNotEmpty) {
+      lastExistingLabel = existingElementLabels.last;
+      usedLabelsInConstruction.addAll(existingElementLabels);
+    }
+    
     for (var i = 0; i <= points.length - 3; i += 2) {
       final triple = <GeoPoint>[points[i], points[i + 1], points[i + 2]];
+      
+      // Use existing label if provided, otherwise generate sequential label
+      final String arcLabel;
+      if (existingElementLabels != null && arcIndex < existingElementLabels.length) {
+        arcLabel = existingElementLabels[arcIndex];
+      } else {
+        // Generate next sequential label after the last existing label
+        String startLabel;
+        if (lastExistingLabel != null) {
+          startLabel = _generateNextSequentialLowercase(lastExistingLabel);
+        } else {
+          startLabel = 'a';
+        }
+        
+        // Find the first available label starting from startLabel
+        String candidate = startLabel;
+        int attempts = 0;
+        String foundLabel = startLabel;
+        
+        while (attempts < 1000) {
+          if (!usedLabelsInConstruction.contains(candidate) &&
+              LabelManager.isLabelUnique(
+                dagManager,
+                candidate,
+                excludeContainerId: id,
+              )) {
+            foundLabel = candidate;
+            lastExistingLabel = candidate;
+            break;
+          }
+          candidate = _generateNextSequentialLowercase(candidate);
+          attempts++;
+        }
+        
+        if (attempts >= 1000) {
+          foundLabel = LabelManager.getNextAvailableLabel(
+            dagManager,
+            GeometryObjectType.arc,
+            excludeContainerId: id,
+          );
+          lastExistingLabel = foundLabel;
+        }
+        
+        arcLabel = foundLabel;
+      }
+      
+      usedLabelsInConstruction.add(arcLabel);
+      
       final arc = GeoArc3P.fromDependencies(
-        id: '${id}_arc_${arcs.length}',
-        label: '${label}_arc_${arcs.length + 1}',
+        id: arcLabel, // In new system: ID = label
+        label: arcLabel,
         points: triple,
         style: style,
         styleOverrides: styleOverrides,
@@ -64,7 +123,11 @@ class GeoPolyArc extends GeoPolyArcBase<GeoArc> {
         );
       }
 
+      // Register element in elementToContainer map
+      dagManager.registerElement(arcLabel, id);
+
       arcs.add(arc);
+      arcIndex++;
     }
 
     final dependencyIds = points
@@ -89,11 +152,39 @@ class GeoPolyArc extends GeoPolyArcBase<GeoArc> {
     String? label,
     List<String>? dependencies,
     List<GeoArc>? elements,
+    List<GeometryObject>? elementsAny,
     bool? visible,
     CanvasStyle? style,
     Map<String, dynamic>? styleOverrides,
     Color? color,
   }) {
+    // Support both List<GeoArc> and List<GeometryObject> for flexibility
+    final elementsToUse = elements ?? (elementsAny?.cast<GeoArc>());
+
+    // Validate element updates if provided
+    // Allow element updates if:
+    // 1. Same number of elements
+    // 2. Same element IDs (only properties like visibility changed)
+    // 3. No structural changes
+    if (elementsToUse != null) {
+      if (elementsToUse.length != this.elements.length) {
+        throw UnimplementedError(
+          'GeoPolyArc.copyWith cannot change element count without DAGManager. Use fromDependencies instead.',
+        );
+      }
+
+      // Verify all element IDs match (only properties changed)
+      final elementIdsMatch = elementsToUse.every((newElement) {
+        return this.elements.any((oldElement) => oldElement.id == newElement.id);
+      });
+
+      if (!elementIdsMatch) {
+        throw UnimplementedError(
+          'GeoPolyArc.copyWith cannot change element IDs without DAGManager. Use fromDependencies instead.',
+        );
+      }
+    }
+
     final candidateOverrides =
         styleOverrides ??
         (style != null
@@ -107,7 +198,7 @@ class GeoPolyArc extends GeoPolyArcBase<GeoArc> {
       id: id ?? this.id,
       label: label ?? this.label,
       dependencies: dependencies ?? this.dependencies,
-      elements: elements ?? this.elements,
+      elements: elementsToUse ?? this.elements,
       visible: visible ?? this.visible,
       style: style,
       styleOverrides: resolvedOverrides,
@@ -117,36 +208,33 @@ class GeoPolyArc extends GeoPolyArcBase<GeoArc> {
 
   @override
   GeometryObject? rebuildFromParents(List<GeometryObject> parents, dynamic dagManager) {
-    if (dependencies.isEmpty) {
+    if (dagManager is! DAGManager || dependencies.isEmpty) {
       return null;
     }
 
-    final pointMap = <String, GeoPoint>{};
-    for (final parent in parents.whereType<GeoPoint>()) {
-      pointMap[parent.id] = parent;
-    }
-
+    // Use dagManager.getObject() - handles both regular objects and objects in containers
     final orderedPoints = <GeoPoint>[];
-    for (final dependencyId in dependencies) {
-      final point = pointMap[dependencyId];
-      if (point == null) {
+    for (final depId in dependencies) {
+      final obj = dagManager.getObject(depId);
+      if (obj is! GeoPoint) {
         return null;
       }
-      orderedPoints.add(point);
+      orderedPoints.add(obj);
     }
 
-    if (orderedPoints.length != dependencies.length) {
-      return null;
-    }
+    // Preserve existing element labels when rebuilding
+    final existingElementLabels = elements.map((e) => e.id).toList();
 
     return GeoPolyArc.fromDependencies(
       id: id,
       label: label,
       points: orderedPoints,
+      dagManager: dagManager,
       visible: visible,
       style: style,
       styleOverrides: styleOverrides,
       color: style.strokeColor,
+      existingElementLabels: existingElementLabels,
     );
   }
 
@@ -164,6 +252,7 @@ class GeoPolyArc extends GeoPolyArcBase<GeoArc> {
   static GeoPolyArc fromJson(
     Map<String, dynamic> json,
     GeoPoint Function(String id) resolvePoint,
+    DAGManager dagManager,
   ) {
     final props = (json['properties'] as Map<String, dynamic>? ?? const {});
     final orderedIds =
@@ -180,11 +269,11 @@ class GeoPolyArc extends GeoPolyArcBase<GeoArc> {
 
     return GeoPolyArc.fromDependencies(
       id: json['id'] as String,
-      label: json['label'] as String? ?? '',
+      label: json['label'] as String,
       points: points,
+      dagManager: dagManager,
       visible: json['visible'] as bool? ?? true,
       styleOverrides: overrides,
-      color: Colors.teal,
     );
   }
 }

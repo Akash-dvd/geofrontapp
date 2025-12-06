@@ -21,11 +21,13 @@ class GeoPolygon extends GeoPolyArcGon<GeoSegment> {
     required String id,
     required String label,
     required List<GeoPoint> points,
+    required DAGManager dagManager,
     bool visible = true,
     CanvasStyle? style,
     Map<String, dynamic>? styleOverrides,
     Color color = Colors.brown,
     List<String>? dependencyIds,
+    List<String>? existingElementLabels,
   }) {
     if (points.length < 3) {
       throw ArgumentError('GeoPolygon requires at least three unique points');
@@ -47,18 +49,6 @@ class GeoPolygon extends GeoPolyArcGon<GeoSegment> {
       }
     }
 
-    final segments = <GeoSegment>[];
-    for (var i = 0; i < normalized.length - 1; i++) {
-      segments.add(
-        GeoSegment2P.fromDependencies(
-          id: '${id}_edge_$i',
-          label: '${label}_edge_${i + 1}',
-          points: [normalized[i], normalized[i + 1]],
-          color: color,
-        ),
-      );
-    }
-
     final dependenciesList =
         dependencyIds ??
         normalized
@@ -66,10 +56,14 @@ class GeoPolygon extends GeoPolyArcGon<GeoSegment> {
             .map((point) => point.id)
             .toList(growable: false);
 
-    final chain = _PolyChainData<GeoSegment>(
-      points: List<GeoPoint>.unmodifiable(normalized),
-      elements: List<GeoSegment>.unmodifiable(segments),
-      dependencies: List<String>.unmodifiable(dependenciesList),
+    // Use helper function which now uses LabelManager
+    final chain = _prepareClosedChain(
+      id, 
+      label, 
+      normalized, 
+      color, 
+      dagManager,
+      existingElementLabels: existingElementLabels,
     );
 
     return GeoPolygon._fromChain(
@@ -88,6 +82,7 @@ class GeoPolygon extends GeoPolyArcGon<GeoSegment> {
     required String id,
     required String label,
     required List<GeoPoint> points,
+    required DAGManager dagManager,
     bool visible = true,
     CanvasStyle? style,
     Map<String, dynamic>? styleOverrides,
@@ -97,6 +92,7 @@ class GeoPolygon extends GeoPolyArcGon<GeoSegment> {
     id: id,
     label: label,
     points: points,
+    dagManager: dagManager,
     visible: visible,
     style: style,
     styleOverrides: styleOverrides,
@@ -136,12 +132,56 @@ class GeoPolygon extends GeoPolyArcGon<GeoSegment> {
     String? label,
     List<GeoPoint>? points,
     List<GeoSegment>? elements,
+    List<GeometryObject>? elementsAny,
     bool? visible,
     CanvasStyle? style,
     Map<String, dynamic>? styleOverrides,
     Color? color,
     List<String>? dependencies,
   }) {
+    // If points are being changed, we need dagManager to regenerate labels
+    if (points != null) {
+      throw UnimplementedError(
+        'GeoPolygon.copyWith cannot change points without DAGManager. Use fromDependencies instead.',
+      );
+    }
+
+    // Support both List<GeoSegment> and List<GeometryObject> for flexibility
+    // Cast List<GeometryObject> to List<GeoSegment> since elements are already the correct type
+    final elementsToUse = elements ?? (elementsAny?.cast<GeoSegment>());
+
+    // Allow element updates if:
+    // 1. Same number of elements
+    // 2. Same element IDs (only properties like visibility changed)
+    // 3. No label regeneration needed
+    _PolyChainData<GeoSegment> updatedChain = _chain;
+    if (elementsToUse != null) {
+      if (elementsToUse.length != this.elements.length) {
+        throw UnimplementedError(
+          'GeoPolygon.copyWith cannot change element count without DAGManager. Use fromDependencies instead.',
+        );
+      }
+
+      // Verify all element IDs match (only properties changed)
+      final elementIdsMatch = elementsToUse.every((newElement) {
+        return this.elements.any((oldElement) => oldElement.id == newElement.id);
+      });
+
+      if (!elementIdsMatch) {
+        throw UnimplementedError(
+          'GeoPolygon.copyWith cannot change element IDs without DAGManager. Use fromDependencies instead.',
+        );
+      }
+
+      // Safe to update: create new chain with updated elements
+      // Elements are already GeoSegment type, just ensure type safety
+      updatedChain = _PolyChainData<GeoSegment>(
+        points: _chain.points,
+        elements: List<GeoSegment>.unmodifiable(elementsToUse),
+        dependencies: _chain.dependencies,
+      );
+    }
+
     final candidateOverrides =
         styleOverrides ??
         (style != null
@@ -151,62 +191,51 @@ class GeoPolygon extends GeoPolyArcGon<GeoSegment> {
             : null);
     final resolvedOverrides = candidateOverrides ?? this.styleOverrides;
 
-    final nextId = id ?? this.id;
-    final nextLabel = label ?? this.label;
-    final nextColor = color ?? Colors.brown;
-    final nextPoints =
-        points ??
-        (elements != null ? _segmentsToVertices(elements) : uniqueVertices);
-
-    final deps = dependencies ?? this.dependencies;
-
-    return GeoPolygon.fromDependencies(
-      id: nextId,
-      label: nextLabel,
+    // Use updated chain if elements were changed, otherwise preserve existing chain
+    return GeoPolygon._fromChain(
+      id: id ?? this.id,
+      label: label ?? this.label,
+      chain: updatedChain,
       visible: visible ?? this.visible,
       style: style,
       styleOverrides: resolvedOverrides,
-      color: nextColor,
-      points: nextPoints,
-      dependencyIds: deps,
+      color: color ?? Colors.brown,
+      dependencyIds: dependencies ?? this.dependencies,
     );
   }
 
   @override
   GeometryObject? rebuildFromParents(List<GeometryObject> parents, dynamic dagManager) {
-    if (dependencies.isEmpty) {
+    if (dagManager is! DAGManager || dependencies.isEmpty) {
       return null;
     }
 
-    final pointMap = <String, GeoPoint>{};
-    for (final parent in parents.whereType<GeoPoint>()) {
-      pointMap[parent.id] = parent;
-    }
-
+    // Use dagManager.getObject() - handles both regular objects and objects in containers
     final orderedPoints = <GeoPoint>[];
     for (final depId in dependencies) {
-      final point = pointMap[depId];
-      if (point == null) {
+      final obj = dagManager.getObject(depId);
+      if (obj is! GeoPoint) {
         return null;
       }
-      orderedPoints.add(point);
-    }
-
-    if (orderedPoints.length != dependencies.length) {
-      return null;
+      orderedPoints.add(obj);
     }
 
     orderedPoints.add(orderedPoints.first);
+
+    // Preserve existing element labels when rebuilding
+    final existingElementLabels = elements.map((e) => e.id).toList();
 
     return GeoPolygon.fromDependencies(
       id: id,
       label: label,
       points: orderedPoints,
+      dagManager: dagManager,
       visible: visible,
       style: style,
       styleOverrides: styleOverrides.isEmpty ? null : styleOverrides,
       color: style.strokeColor,
       dependencyIds: dependencies,
+      existingElementLabels: existingElementLabels,
     );
   }
 
@@ -226,6 +255,7 @@ class GeoPolygon extends GeoPolyArcGon<GeoSegment> {
   static GeoPolygon fromJson(
     Map<String, dynamic> json,
     GeoPoint Function(String id) resolvePoint,
+    DAGManager dagManager,
   ) {
     final props = (json['properties'] as Map<String, dynamic>? ?? const {});
     final orderedIds =
@@ -245,11 +275,11 @@ class GeoPolygon extends GeoPolyArcGon<GeoSegment> {
 
     return GeoPolygon.fromDependencies(
       id: json['id'] as String,
-      label: json['label'] as String? ?? '',
+      label: json['label'] as String,
       points: points,
+      dagManager: dagManager,
       visible: json['visible'] as bool? ?? true,
       styleOverrides: overrides,
-      color: Colors.brown,
       dependencyIds: dependencyIds,
     );
   }

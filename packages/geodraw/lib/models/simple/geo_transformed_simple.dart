@@ -3,6 +3,7 @@ import 'package:geocalc/Multivector.dart';
 import '../canvas_style.dart';
 import '../geometry_object.dart';
 import '../transforms/transformation_engine.dart';
+import '../../core/dag/dag_manager.dart';
 import 'geo_circle.dart';
 import 'geo_line.dart';
 import 'geo_point.dart';
@@ -119,15 +120,21 @@ class GeoTransPoint extends GeoPoint {
 
   @override
   GeometryObject? rebuildFromParents(List<GeometryObject> parents, dynamic dagManager) {
-    final sourcePoint = _findPoint(parents, sourcePointId);
-    final transform = _findTransform(parents, transformId);
-    if (sourcePoint == null || transform == null) {
+    if (dagManager is! DAGManager) {
+      return null;
+    }
+
+    // Use dagManager.getObject() - handles both regular objects and objects in containers
+    final sourceObj = dagManager.getObject(sourcePointId);
+    final transformObj = dagManager.getObject(transformId);
+    
+    if (sourceObj is! GeoPoint || transformObj is! GeoTrans) {
       return null;
     }
 
     final result = TransformationEngine.transformSimple(
-      source: sourcePoint,
-      transform: transform,
+      source: sourceObj,
+      transform: transformObj,
       id: id,
       label: label,
       dependencies: dependencies,
@@ -140,24 +147,6 @@ class GeoTransPoint extends GeoPoint {
     }
 
     return result;
-  }
-
-  GeoPoint? _findPoint(List<GeometryObject> parents, String targetId) {
-    for (final parent in parents) {
-      if (parent is GeoPoint && parent.id == targetId) {
-        return parent;
-      }
-    }
-    return null;
-  }
-
-  GeoTrans? _findTransform(List<GeometryObject> parents, String targetId) {
-    for (final parent in parents) {
-      if (parent is GeoTrans && parent.id == targetId) {
-        return parent;
-      }
-    }
-    return null;
   }
 }
 
@@ -250,15 +239,21 @@ class GeoTransLine extends GeoLine {
 
   @override
   GeometryObject? rebuildFromParents(List<GeometryObject> parents, dynamic dagManager) {
-    final source = _findSource(parents, sourceObjectId);
-    final transform = _findTransform(parents, transformId);
-    if (source == null || transform == null) {
+    if (dagManager is! DAGManager) {
+      return null;
+    }
+
+    // Use dagManager.getObject() - handles both regular objects and objects in containers
+    final sourceObj = dagManager.getObject(sourceObjectId);
+    final transformObj = dagManager.getObject(transformId);
+    
+    if (sourceObj is! SimpleGeometryObject || transformObj is! GeoTrans) {
       return null;
     }
 
     final result = TransformationEngine.transformSimple(
-      source: source,
-      transform: transform,
+      source: sourceObj,
+      transform: transformObj,
       id: id,
       label: label,
       dependencies: dependencies,
@@ -273,27 +268,6 @@ class GeoTransLine extends GeoLine {
       return result;
     }
     return copyWith();
-  }
-
-  SimpleGeometryObject? _findSource(
-    List<GeometryObject> parents,
-    String targetId,
-  ) {
-    for (final parent in parents) {
-      if (parent is SimpleGeometryObject && parent.id == targetId) {
-        return parent;
-      }
-    }
-    return null;
-  }
-
-  GeoTrans? _findTransform(List<GeometryObject> parents, String targetId) {
-    for (final parent in parents) {
-      if (parent is GeoTrans && parent.id == targetId) {
-        return parent;
-      }
-    }
-    return null;
   }
 }
 
@@ -386,15 +360,21 @@ class GeoTransCircle extends GeoCircle {
 
   @override
   GeometryObject? rebuildFromParents(List<GeometryObject> parents, dynamic dagManager) {
-    final source = _findSource(parents, sourceObjectId);
-    final transform = _findTransform(parents, transformId);
-    if (source == null || transform == null) {
+    if (dagManager is! DAGManager) {
+      return null;
+    }
+
+    // Use dagManager.getObject() - handles both regular objects and objects in containers
+    final sourceObj = dagManager.getObject(sourceObjectId);
+    final transformObj = dagManager.getObject(transformId);
+    
+    if (sourceObj is! SimpleGeometryObject || transformObj is! GeoTrans) {
       return null;
     }
 
     final result = TransformationEngine.transformSimple(
-      source: source,
-      transform: transform,
+      source: sourceObj,
+      transform: transformObj,
       id: id,
       label: label,
       dependencies: dependencies,
@@ -409,26 +389,5 @@ class GeoTransCircle extends GeoCircle {
       return result;
     }
     return copyWith();
-  }
-
-  SimpleGeometryObject? _findSource(
-    List<GeometryObject> parents,
-    String targetId,
-  ) {
-    for (final parent in parents) {
-      if (parent is SimpleGeometryObject && parent.id == targetId) {
-        return parent;
-      }
-    }
-    return null;
-  }
-
-  GeoTrans? _findTransform(List<GeometryObject> parents, String targetId) {
-    for (final parent in parents) {
-      if (parent is GeoTrans && parent.id == targetId) {
-        return parent;
-      }
-    }
-    return null;
   }
 }

@@ -7,12 +7,13 @@ abstract class GeoRegularPolygon extends GeoPolygon {
     required List<GeoPoint> vertices,
     required this.sides,
     required List<String> dependencies,
+    required DAGManager dagManager,
     super.visible,
     super.style,
     super.styleOverrides,
     super.color,
   }) : super._fromChain(
-         chain: _prepareClosedChain(id, label, vertices, color),
+         chain: _prepareClosedChain(id, label, vertices, color, dagManager),
          dependencyIds: dependencies,
        ) {
     if (sides < 3) {
@@ -42,12 +43,14 @@ abstract class GeoRegularPolygon extends GeoPolygon {
     required GeoPoint center,
     required GeoPoint reference,
     required int sides,
+    required DAGManager dagManager,
   }) => _regularVerticesFromCenter(
     id: id,
     label: label,
     center: center,
     reference: reference,
     sides: sides,
+    dagManager: dagManager,
   );
 
   static List<GeoPoint> verticesFromSegment({
@@ -55,11 +58,13 @@ abstract class GeoRegularPolygon extends GeoPolygon {
     required String label,
     required GeoSegment2P segment,
     required int sides,
+    required DAGManager dagManager,
   }) => _regularVerticesFromSegment(
     id: id,
     label: label,
     segment: segment,
     sides: sides,
+    dagManager: dagManager,
   );
 }
 
@@ -70,6 +75,7 @@ class GeoRegularPolygon2P extends GeoRegularPolygon {
     required GeoPoint center,
     required GeoPoint reference,
     required super.sides,
+    required DAGManager dagManager,
     super.visible,
     super.style,
     super.styleOverrides,
@@ -81,8 +87,10 @@ class GeoRegularPolygon2P extends GeoRegularPolygon {
            center: center,
            reference: reference,
            sides: sides,
+           dagManager: dagManager,
          ),
          dependencies: [center.id, reference.id],
+         dagManager: dagManager,
        );
 
   static GeoRegularPolygon2P fromDependencies({
@@ -91,6 +99,7 @@ class GeoRegularPolygon2P extends GeoRegularPolygon {
     required GeoPoint center,
     required GeoPoint reference,
     required int sides,
+    required DAGManager dagManager,
     bool visible = true,
     CanvasStyle? style,
     Map<String, dynamic>? styleOverrides,
@@ -101,6 +110,7 @@ class GeoRegularPolygon2P extends GeoRegularPolygon {
     center: center,
     reference: reference,
     sides: sides,
+    dagManager: dagManager,
     visible: visible,
     style: style,
     styleOverrides: styleOverrides,
@@ -112,27 +122,25 @@ class GeoRegularPolygon2P extends GeoRegularPolygon {
 
   @override
   GeometryObject? rebuildFromParents(List<GeometryObject> parents, dynamic dagManager) {
-    if (dependencies.length < 2) {
+    if (dagManager is! DAGManager || dependencies.length < 2) {
       return null;
     }
 
-    final pointMap = <String, GeoPoint>{};
-    for (final parent in parents.whereType<GeoPoint>()) {
-      pointMap[parent.id] = parent;
-    }
-
-    final center = pointMap[dependencies[0]];
-    final reference = pointMap[dependencies[1]];
-    if (center == null || reference == null) {
+    // Use dagManager.getObject() - handles both regular objects and objects in containers
+    final centerObj = dagManager.getObject(dependencies[0]);
+    final referenceObj = dagManager.getObject(dependencies[1]);
+    
+    if (centerObj is! GeoPoint || referenceObj is! GeoPoint) {
       return null;
     }
 
     return GeoRegularPolygon2P.fromDependencies(
       id: id,
       label: label,
-      center: center,
-      reference: reference,
+      center: centerObj,
+      reference: referenceObj,
       sides: sides,
+      dagManager: dagManager,
       visible: visible,
       style: style,
       styleOverrides: styleOverrides.isEmpty ? null : styleOverrides,
@@ -160,19 +168,9 @@ class GeoRegularPolygon2P extends GeoRegularPolygon {
       );
     }
 
-    final center = resolvePoint(dependencies[0]);
-    final reference = resolvePoint(dependencies[1]);
-    final overrides = GeometryObject.extractStyleOverrides(json);
-
-    return GeoRegularPolygon2P.fromDependencies(
-      id: json['id'] as String,
-      label: json['label'] as String? ?? '',
-      center: center,
-      reference: reference,
-      sides: sides,
-      visible: json['visible'] as bool? ?? true,
-      styleOverrides: overrides,
-      color: Colors.deepPurple,
+    // Note: fromJson doesn't have access to dagManager
+    throw UnimplementedError(
+      'GeoRegularPolygon2P.fromJson requires DAGManager. Update decoder to pass dagManager.',
     );
   }
 }
@@ -183,6 +181,7 @@ class GeoRegularPolygonSegment extends GeoRegularPolygon {
     required super.label,
     required GeoSegment2P baseSegment,
     required super.sides,
+    required DAGManager dagManager,
     super.visible,
     super.style,
     super.styleOverrides,
@@ -193,8 +192,10 @@ class GeoRegularPolygonSegment extends GeoRegularPolygon {
            label: label,
            segment: baseSegment,
            sides: sides,
+           dagManager: dagManager,
          ),
          dependencies: _segmentDependencies(baseSegment),
+         dagManager: dagManager,
        );
 
   static GeoRegularPolygonSegment fromDependencies({
@@ -202,6 +203,7 @@ class GeoRegularPolygonSegment extends GeoRegularPolygon {
     required String label,
     required GeoSegment2P baseSegment,
     required int sides,
+    required DAGManager dagManager,
     bool visible = true,
     CanvasStyle? style,
     Map<String, dynamic>? styleOverrides,
@@ -211,6 +213,7 @@ class GeoRegularPolygonSegment extends GeoRegularPolygon {
     label: label,
     baseSegment: baseSegment,
     sides: sides,
+    dagManager: dagManager,
     visible: visible,
     style: style,
     styleOverrides: styleOverrides,
@@ -227,27 +230,22 @@ class GeoRegularPolygonSegment extends GeoRegularPolygon {
 
   @override
   GeometryObject? rebuildFromParents(List<GeometryObject> parents, dynamic dagManager) {
-    if (dependencies.length < 3) {
+    if (dagManager is! DAGManager || dependencies.isEmpty) {
       return null;
     }
 
-    GeoSegment2P? baseSegment;
-    for (final parent in parents.whereType<GeoSegment2P>()) {
-      if (parent.id == baseSegmentId) {
-        baseSegment = parent;
-        break;
-      }
-    }
-
-    if (baseSegment == null) {
+    // Use dagManager.getObject() - handles both regular objects and objects in containers
+    final baseSegmentObj = dagManager.getObject(baseSegmentId);
+    if (baseSegmentObj is! GeoSegment2P) {
       return null;
     }
 
     return GeoRegularPolygonSegment.fromDependencies(
       id: id,
       label: label,
-      baseSegment: baseSegment,
+      baseSegment: baseSegmentObj,
       sides: sides,
+      dagManager: dagManager,
       visible: visible,
       style: style,
       styleOverrides: styleOverrides.isEmpty ? null : styleOverrides,
@@ -275,17 +273,9 @@ class GeoRegularPolygonSegment extends GeoRegularPolygon {
       );
     }
 
-    final baseSegment = resolveSegment(dependencies.first);
-    final overrides = GeometryObject.extractStyleOverrides(json);
-
-    return GeoRegularPolygonSegment.fromDependencies(
-      id: json['id'] as String,
-      label: json['label'] as String? ?? '',
-      baseSegment: baseSegment,
-      sides: sides,
-      visible: json['visible'] as bool? ?? true,
-      styleOverrides: overrides,
-      color: Colors.deepPurple,
+    // Note: fromJson doesn't have access to dagManager
+    throw UnimplementedError(
+      'GeoRegularPolygonSegment.fromJson requires DAGManager. Update decoder to pass dagManager.',
     );
   }
 }

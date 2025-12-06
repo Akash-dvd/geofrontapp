@@ -5,6 +5,7 @@ class GeoTriangle extends GeoPolygon {
     required super.id,
     required super.label,
     required List<GeoPoint> points,
+    required DAGManager dagManager,
     super.visible,
     super.style,
     super.styleOverrides,
@@ -16,6 +17,7 @@ class GeoTriangle extends GeoPolygon {
            label,
            _validateTriangle(points),
            color,
+           dagManager,
          ),
          dependencyIds: dependencies,
        );
@@ -44,12 +46,74 @@ class GeoTriangle extends GeoPolygon {
     String? label,
     List<GeoPoint>? points,
     List<GeoSegment>? elements,
+    List<GeometryObject>? elementsAny,
     bool? visible,
     CanvasStyle? style,
     Map<String, dynamic>? styleOverrides,
     Color? color,
     List<String>? dependencies,
   }) {
+    // Support both List<GeoSegment> and List<GeometryObject> for flexibility
+    final elementsToUse = elements ?? (elementsAny?.cast<GeoSegment>());
+    // If points are being changed, we need dagManager to regenerate labels
+    if (points != null) {
+      throw UnimplementedError(
+        'GeoTriangle.copyWith cannot change points without DAGManager. Use fromDependencies instead.',
+      );
+    }
+
+    // Allow element updates if:
+    // 1. Same number of elements
+    // 2. Same element IDs (only properties like visibility changed)
+    // 3. No label regeneration needed
+    _PolyChainData<GeoSegment> updatedChain;
+    if (elementsToUse != null) {
+      if (elementsToUse.length != this.elements.length) {
+        throw UnimplementedError(
+          'GeoTriangle.copyWith cannot change element count without DAGManager. Use fromDependencies instead.',
+        );
+      }
+
+      // Verify all element IDs match (only properties changed)
+      final elementIdsMatch = elementsToUse.every((newElement) {
+        return this.elements.any((oldElement) => oldElement.id == newElement.id);
+      });
+
+      if (!elementIdsMatch) {
+        throw UnimplementedError(
+          'GeoTriangle.copyWith cannot change element IDs without DAGManager. Use fromDependencies instead.',
+        );
+      }
+
+      // Get vertices from parent (GeoPolygon has uniqueVertices getter)
+      final existingVertices = uniqueVertices;
+      // Reconstruct normalized points (add first point at end for closed chain)
+      final normalizedVertices = List<GeoPoint>.from(existingVertices);
+      if (normalizedVertices.isNotEmpty && normalizedVertices.first.id != normalizedVertices.last.id) {
+        normalizedVertices.add(normalizedVertices.first);
+      }
+
+      // Create new chain with updated elements
+      updatedChain = _PolyChainData<GeoSegment>(
+        points: List<GeoPoint>.unmodifiable(normalizedVertices),
+        elements: List<GeoSegment>.unmodifiable(elementsToUse),
+        dependencies: List<String>.unmodifiable(dependencies ?? this.dependencies),
+      );
+    } else {
+      // No element changes - preserve existing elements
+      final existingVertices = uniqueVertices;
+      final normalizedVertices = List<GeoPoint>.from(existingVertices);
+      if (normalizedVertices.isNotEmpty && normalizedVertices.first.id != normalizedVertices.last.id) {
+        normalizedVertices.add(normalizedVertices.first);
+      }
+
+      updatedChain = _PolyChainData<GeoSegment>(
+        points: List<GeoPoint>.unmodifiable(normalizedVertices),
+        elements: List<GeoSegment>.unmodifiable(this.elements),
+        dependencies: List<String>.unmodifiable(dependencies ?? this.dependencies),
+      );
+    }
+
     final candidateOverrides =
         styleOverrides ??
         (style != null
@@ -59,21 +123,32 @@ class GeoTriangle extends GeoPolygon {
             : null);
     final resolvedOverrides = candidateOverrides ?? this.styleOverrides;
 
-    final nextPoints =
-        points ??
-        (elements != null ? _segmentsToVertices(elements) : uniqueVertices);
-
-    return GeoTriangle(
+    // Use updated chain
+    return GeoTriangle._fromChain(
       id: id ?? this.id,
       label: label ?? this.label,
-      points: nextPoints,
+      chain: updatedChain,
       visible: visible ?? this.visible,
       style: style,
       styleOverrides: resolvedOverrides,
       color: color ?? Colors.purple,
-      dependencies: dependencies ?? this.dependencies,
+      dependencyIds: dependencies ?? this.dependencies,
     );
   }
+
+  // Private constructor that doesn't require dagManager (for copyWith)
+  GeoTriangle._fromChain({
+    required super.id,
+    required super.label,
+    required _PolyChainData<GeoSegment> chain,
+    super.visible,
+    super.style,
+    super.styleOverrides,
+    super.color = Colors.purple,
+    super.dependencyIds,
+  }) : super._fromChain(
+         chain: chain,
+       );
 
   static GeoTriangle fromJson(
     Map<String, dynamic> json,
@@ -89,17 +164,9 @@ class GeoTriangle extends GeoPolygon {
       throw FormatException('GeoTriangle requires three point references');
     }
 
-    final points = orderedIds.map(resolvePoint).toList(growable: false);
-    final overrides = GeometryObject.extractStyleOverrides(json);
-
-    return GeoTriangle(
-      id: json['id'] as String,
-      label: json['label'] as String? ?? '',
-      points: points,
-      visible: json['visible'] as bool? ?? true,
-      styleOverrides: overrides,
-      color: Colors.purple,
-      dependencies: (json['dependencies'] as List?)?.cast<String>(),
+    // Note: fromJson doesn't have access to dagManager
+    throw UnimplementedError(
+      'GeoTriangle.fromJson requires DAGManager. Update decoder to pass dagManager.',
     );
   }
 }

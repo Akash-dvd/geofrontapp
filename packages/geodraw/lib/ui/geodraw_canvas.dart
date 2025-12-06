@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
@@ -11,6 +12,9 @@ import '../models/geometry_object.dart';
 import '../models/simple/geo_point.dart';
 import '../models/simple/geo_line.dart';
 import '../models/simple/geo_circle.dart';
+import '../models/simple/geo_Inf.dart';
+import '../models/complex/complex_geometry_object.dart';
+import '../models/complex/geo_shapes.dart' show GeoArc3P;
 import '../tools/tool_manager.dart';
 import '../tools/tool.dart';
 import 'object_toolbar.dart';
@@ -159,6 +163,7 @@ class _GeoDrawCanvasState extends State<GeoDrawCanvas> {
           child: ClipRect(
             child: CustomPaint(
               painter: GeoDrawCanvasPainter(
+                toolManager: widget.toolManager,
                 dagManager: widget.dagManager,
                 viewport: _viewport!,
                 selectedIds: widget.selectedIds,
@@ -268,6 +273,10 @@ class _GeoDrawCanvasState extends State<GeoDrawCanvas> {
     // Select innermost element (first in list, which is prioritized)
     final selectedObject = nearby.first;
 
+    // Check if this element is part of a container
+    final containers = widget.dagManager.findContainers(selectedObject);
+    final isPartOfContainer = containers.isNotEmpty;
+
     if (widget.toolManager.activeToolType == ToolType.select) {
       // Direct selection mode
       final newSelection = {selectedObject.id};
@@ -279,12 +288,19 @@ class _GeoDrawCanvasState extends State<GeoDrawCanvas> {
       widget.onSelectionChanged?.call(newSelection);
       setState(() {});
     } else {
-      // Forward event to active tool with world coordinates
-      // The tool will manage selection highlighting via onObjectSelected callback
-      final pointerEvent = PointerDownEvent(
-        position: worldPos, // Use world coordinates for tool
-      );
-      widget.toolManager.handleInput(pointerEvent);
+      // Tool is active - need to pass object as argument
+      if (isPartOfContainer) {
+        // Left click on container child: select the child directly
+        // The tool will receive the child element
+        widget.toolManager.selectObject(selectedObject);
+      } else {
+        // Element is not part of container: forward event normally
+        // The tool will handle proximity search internally
+        final pointerEvent = PointerDownEvent(
+          position: worldPos, // Use world coordinates for tool
+        );
+        widget.toolManager.handleInput(pointerEvent);
+      }
       setState(() {});
     }
   }
@@ -297,9 +313,24 @@ class _GeoDrawCanvasState extends State<GeoDrawCanvas> {
       return;
     }
 
-    // Right-click: show hierarchy menu
-    final selectedElement = nearby.first;
-    _showHierarchyMenu(details.globalPosition, selectedElement);
+    final selectedObject = nearby.first;
+
+    // Right-click: show hierarchy menu if element is part of container
+    final containers = widget.dagManager.findContainers(selectedObject);
+    final isPartOfContainer = containers.isNotEmpty;
+
+    if (isPartOfContainer) {
+      // Show hierarchy menu with child and container(s)
+      // This shows the clicked element (arc) first, then the container(s)
+      _showHierarchyMenu(details.globalPosition, selectedObject);
+    } else {
+      // Element is not part of container: right click does nothing for tools
+      // (or could show menu with just the element for selection tool)
+      if (widget.toolManager.activeToolType == ToolType.select) {
+        widget.onSelectionChanged?.call({selectedObject.id});
+        setState(() {});
+      }
+    }
   }
 
   void _handleLongPress() {
@@ -330,11 +361,8 @@ class _GeoDrawCanvasState extends State<GeoDrawCanvas> {
         if (widget.toolManager.activeToolType == ToolType.select) {
           widget.onSelectionChanged?.call({selected.id});
         } else {
-          // Forward to tool
-          final pointerEvent = PointerDownEvent(
-            position: _viewport!.screenToWorld(position),
-          );
-          widget.toolManager.handleInput(pointerEvent);
+          // Forward selected object directly to tool
+          widget.toolManager.selectObject(selected);
         }
         setState(() {});
       }
@@ -358,7 +386,14 @@ class _GeoDrawCanvasState extends State<GeoDrawCanvas> {
       ),
       items: hierarchy.map((obj) {
         final label = obj.label.isNotEmpty ? obj.label : obj.id;
-        final type = obj.runtimeType.toString().replaceAll('Geo', '');
+        // Clean up type name: remove 'Geo' prefix and handle generic types
+        String typeName = obj.runtimeType.toString();
+        typeName = typeName.replaceAll('Geo', '');
+        // Remove generic type parameters (e.g., "PolyArcGon<Arc3P>" -> "PolyArcGon")
+        final genericIndex = typeName.indexOf('<');
+        if (genericIndex > 0) {
+          typeName = typeName.substring(0, genericIndex);
+        }
         final isElement = obj == element;
         return PopupMenuItem<GeometryObject>(
           value: obj,
@@ -367,24 +402,29 @@ class _GeoDrawCanvasState extends State<GeoDrawCanvas> {
               if (isElement) const Icon(Icons.circle, size: 8),
               if (!isElement) const Icon(Icons.folder, size: 16),
               const SizedBox(width: 8),
-              Text('$type: $label'),
+              Text('$typeName: $label'),
             ],
           ),
         );
       }).toList(),
     ).then((selected) {
       if (selected != null) {
+        debugPrint('[GeoDrawCanvas] _showHierarchyMenu: Selected ${selected.runtimeType} (${selected.id}, label: ${selected.label})');
         if (widget.toolManager.activeToolType == ToolType.select) {
           widget.onSelectionChanged?.call({selected.id});
         } else {
-          // For tools, we need to pass the selected object
-          // This might require tool API changes
-          widget.onSelectionChanged?.call({selected.id});
+          // For tools: pass the selected object directly to the tool
+          // This allows selecting either the child or the container
+          debugPrint('[GeoDrawCanvas] _showHierarchyMenu: Calling selectObject on tool manager');
+          widget.toolManager.selectObject(selected);
         }
         setState(() {});
+      } else {
+        debugPrint('[GeoDrawCanvas] _showHierarchyMenu: No selection made (null)');
       }
     });
   }
+
 
   void _handlePanStart(DragStartDetails details) {
     final worldPos = _viewport!.screenToWorld(details.localPosition);
@@ -673,6 +713,7 @@ class _GeoDrawCanvasState extends State<GeoDrawCanvas> {
 /// Custom painter for rendering the geometric construction
 class GeoDrawCanvasPainter extends CustomPainter {
   final DAGManager dagManager;
+  final ToolManager? toolManager;
   final dag.Viewport viewport;
   final Set<String> selectedIds;
   final bool showGrid;
@@ -682,6 +723,7 @@ class GeoDrawCanvasPainter extends CustomPainter {
 
   GeoDrawCanvasPainter({
     required this.dagManager,
+    this.toolManager,
     required this.viewport,
     required this.selectedIds,
     required this.showGrid,
@@ -717,10 +759,13 @@ class GeoDrawCanvasPainter extends CustomPainter {
     final sortedNodes = dagManager.topologicalSort();
     final nonPointNodes = <DAGNode>[];
     final pointNodes = <DAGNode>[];
+    final infinityNodes = <DAGNode>[]; // GeoInf objects drawn in screen space
 
     for (final node in sortedNodes) {
       if (!node.object.visible) continue;
-      if (node.object is GeoPoint) {
+      if (node.object is GeoInf) {
+        infinityNodes.add(node);
+      } else if (node.object is GeoPoint) {
         pointNodes.add(node);
       } else {
         nonPointNodes.add(node);
@@ -741,25 +786,117 @@ class GeoDrawCanvasPainter extends CustomPainter {
         final geomObj = node.object as GeometryObject;
         final originalLabel = geomObj.label;
         
-        // Create a temporary copy with empty label to prevent label drawing
-        final objWithoutLabel = geomObj.copyWith(label: '');
-        objWithoutLabel.draw(canvas, paint);
+        // Check if this is a container - if so, skip calling draw() to avoid duplicate drawing
+        // Containers will be handled by explicitly iterating through their elements below
+        final isContainer = geomObj is GenSimpleGeometryObjectList || geomObj is UnionGeometryObjectList;
         
-        // Collect label for redrawing in screen space (zoom-invariant)
-        // For elements: object.id == object.label (display label)
-        // For containers: object.label is the container label (e.g., SL1, SL2)
-        if (originalLabel.isNotEmpty) {
+        // Only draw non-container objects directly
+        // Containers are handled by explicitly drawing their elements below
+        if (!isContainer) {
+          // Create a temporary copy with empty label to prevent label drawing
+          final objWithoutLabel = geomObj.copyWith(label: '');
+          objWithoutLabel.draw(canvas, paint);
+          
+          // Collect label for non-container object (zoom-invariant)
+          if (originalLabel.isNotEmpty) {
+            final worldPos = _getLabelPosition(geomObj, size);
+            if (worldPos != null) {
+              labelsToDraw.add(_LabelInfo(
+                text: originalLabel,
+                worldPosition: worldPos,
+                style: geomObj.style,
+                isHighlighted: isSelected,
+                isPoint: geomObj is GeoPoint,
+                isCircle: geomObj is GeoCircle,
+                object: geomObj,
+              ));
+            }
+          }
+        }
+        
+        // Collect label for container (if it has one) for redrawing in screen space (zoom-invariant)
+        // For containers: object.label is the container label (e.g., SL1, SL2, UN1, UN2)
+        if (isContainer && originalLabel.isNotEmpty) {
           final worldPos = _getLabelPosition(geomObj, size);
           if (worldPos != null) {
             labelsToDraw.add(_LabelInfo(
-              text: originalLabel, // Display label (same as ID for elements)
+              text: originalLabel, // Container label (e.g., SL1, UN1)
               worldPosition: worldPos,
               style: geomObj.style,
               isHighlighted: isSelected,
-              isPoint: geomObj is GeoPoint,
-              isCircle: geomObj is GeoCircle,
+              isPoint: false, // Containers are not points
+              isCircle: false, // Containers are not circles
               object: geomObj,
             ));
+          }
+        }
+        
+        // Collect labels for elements within containers
+        // Elements use display labels as IDs (e.g., "A", "B", "a", "b")
+        // Note: Point elements will be drawn separately in screen space later (via _drawPointZoomInvariant which collects labels)
+        if (geomObj is GenSimpleGeometryObjectList) {
+          for (final element in geomObj.objects) {
+            if (!element.visible) continue;
+            
+            // Skip point elements - they'll be drawn in screen space separately via _drawPointZoomInvariant
+            // which will collect their labels automatically
+            if (element is GeoPoint) {
+              continue;
+            }
+            
+            // Draw non-point element without label (create copy with empty label)
+            final elementWithoutLabel = element.copyWith(label: '');
+            final elementPaint = _getPaintForObject(element, selectedIds.contains(element.id));
+            elementWithoutLabel.draw(canvas, elementPaint);
+            
+            // Collect element label for zoom-invariant rendering
+            // Element ID is the display label (e.g., "a", "b" for lines)
+            if (element.label.isNotEmpty) {
+              final elementWorldPos = _getLabelPosition(element, size);
+              if (elementWorldPos != null) {
+                labelsToDraw.add(_LabelInfo(
+                  text: element.label, // Element ID (which is the display label)
+                  worldPosition: elementWorldPos,
+                  style: element.style,
+                  isHighlighted: selectedIds.contains(element.id),
+                  isPoint: false,
+                  isCircle: element is GeoCircle,
+                  object: element,
+                ));
+              }
+            }
+          }
+        } else if (geomObj is UnionGeometryObjectList) {
+          for (final element in geomObj.elements) {
+            if (!element.visible) continue;
+            
+            // Skip point elements - they'll be drawn in screen space separately via _drawPointZoomInvariant
+            // which will collect their labels automatically
+            if (element is GeoPoint) {
+              continue;
+            }
+            
+            // Draw non-point element without label (create copy with empty label)
+            final elementWithoutLabel = element.copyWith(label: '');
+            final elementPaint = _getPaintForObject(element, selectedIds.contains(element.id));
+            elementWithoutLabel.draw(canvas, elementPaint);
+            
+            // Collect element label for zoom-invariant rendering
+            // Element ID is the display label (e.g., "a", "b" for lines)
+            if (element.label.isNotEmpty) {
+              final elementWorldPos = _getLabelPosition(element, size);
+              if (elementWorldPos != null) {
+                labelsToDraw.add(_LabelInfo(
+                  text: element.label, // Element ID (which is the display label)
+                  worldPosition: elementWorldPos,
+                  style: element.style,
+                  isHighlighted: selectedIds.contains(element.id),
+                  isPoint: false,
+                  isCircle: element is GeoCircle,
+                  object: element,
+                ));
+              }
+            }
           }
         }
       } else {
@@ -768,13 +905,215 @@ class GeoDrawCanvasPainter extends CustomPainter {
       }
     }
 
+    // Draw temporary polygon preview if polygon tool is active
+    if (toolManager != null) {
+      final tempData = toolManager!.getTemporaryPolygonData();
+      if (tempData != null && tempData.points.length >= 2) {
+        final previewColor = Colors.brown;
+        final fillColor = previewColor.withOpacity(0.3);
+        
+        // Draw filled polygon interior if we have 3+ points
+        if (tempData.points.length >= 3) {
+          final path = Path();
+          path.moveTo(
+            tempData.points[0].position.dx,
+            tempData.points[0].position.dy,
+          );
+          for (var i = 1; i < tempData.points.length; i++) {
+            path.lineTo(
+              tempData.points[i].position.dx,
+              tempData.points[i].position.dy,
+            );
+          }
+          // Close the path
+          path.close();
+          
+          // Fill the polygon
+          final fillPaint = Paint()
+            ..color = fillColor
+            ..style = PaintingStyle.fill;
+          canvas.drawPath(path, fillPaint);
+        }
+        
+        // Draw segments
+        for (var i = 0; i < tempData.points.length - 1; i++) {
+          final isLight = i == tempData.lightSegmentIndex;
+          final segmentPaint = Paint()
+            ..color = previewColor
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = isLight ? 0.5 : 1.0; // Light segment is thinner
+          
+          canvas.drawLine(
+            tempData.points[i].position,
+            tempData.points[i + 1].position,
+            segmentPaint,
+          );
+        }
+        
+        // Draw closing segment (from last point to first) if we have 3+ points
+        if (tempData.points.length >= 3) {
+          final isLight = tempData.lightSegmentIndex == tempData.points.length;
+          final closingPaint = Paint()
+            ..color = previewColor
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = isLight ? 0.5 : 1.0; // Light segment is thinner
+          
+          canvas.drawLine(
+            tempData.points.last.position,
+            tempData.points.first.position,
+            closingPaint,
+          );
+        }
+      }
+      
+      // Draw temporary polyarcgon preview if polyarcgon tool is active
+      final tempArcGonData = toolManager!.getTemporaryPolyArcGonData();
+      if (tempArcGonData != null && tempArcGonData.points.length >= 3) {
+        final previewColor = Colors.indigo;
+        final fillColor = previewColor.withOpacity(0.3);
+        
+        // Get arc triples
+        final arcTriples = tempArcGonData.arcTriples;
+        
+        // Draw filled interior if we have at least 3 points
+        // The fill shows the current construction state
+        if (tempArcGonData.points.length >= 3) {
+          // Create a path from all arcs using GeoArc's correct angle calculations
+          final path = Path();
+          bool firstArc = true;
+          
+          for (final triple in arcTriples) {
+            if (triple.length == 3) {
+              // Create temporary arc - GeoArc3P correctly sets startPoint=p1, endPoint=p3
+              final tempArc = GeoArc3P.fromDependencies(
+                id: '_temp_arc',
+                label: '',
+                points: triple,
+              );
+              
+              if (tempArc != null) {
+                // Use GeoArc's center calculation
+                final orientation = tempArc.multivector.o;
+                final center = orientation.abs() > 1e-9
+                    ? Offset(
+                        tempArc.multivector.e1 / orientation,
+                        tempArc.multivector.e2 / orientation,
+                      )
+                    : Offset(tempArc.multivector.e1, tempArc.multivector.e2);
+                final radius = (tempArc.startPoint.position - center).distance;
+                
+                if (radius > 0) {
+                  // Use GeoArc's angle calculation method (same as _angleFor)
+                  // _angleFor uses: atan2(-dy, dx) where dy = point.y - center.y
+                  final startVector = tempArc.startPoint.position - center;
+                  final endVector = tempArc.endPoint.position - center;
+                  final startAngle = math.atan2(-startVector.dy, startVector.dx);
+                  final endAngle = math.atan2(-endVector.dy, endVector.dx);
+                  
+                  // Calculate sweep angle based on orientation
+                  // Same logic as GeoArc._sweepAngle
+                  double sweepAngle;
+                  if (orientation >= 0) {
+                    // Counter-clockwise
+                    double sweep = endAngle - startAngle;
+                    // Normalize to [0, 2π]
+                    while (sweep < 0) sweep += 2 * math.pi;
+                    if (sweep <= 1e-6) sweep = 2 * math.pi;
+                    sweepAngle = sweep;
+                  } else {
+                    // Clockwise
+                    double sweep = startAngle - endAngle;
+                    while (sweep < 0) sweep += 2 * math.pi;
+                    if (sweep <= 1e-6) sweep = 2 * math.pi;
+                    sweepAngle = -sweep;
+                  }
+                  
+                  if (firstArc) {
+                    path.moveTo(tempArc.startPoint.position.dx, tempArc.startPoint.position.dy);
+                    firstArc = false;
+                  }
+                  
+                  // Add arc to path (Flutter uses -angle, -sweep)
+                  final rect = Rect.fromCircle(center: center, radius: radius);
+                  path.addArc(rect, -startAngle, -sweepAngle);
+                }
+              }
+            }
+          }
+          
+          // Close the path
+          path.close();
+          
+          // Fill the polyarcgon
+          final fillPaint = Paint()
+            ..color = fillColor
+            ..style = PaintingStyle.fill;
+          canvas.drawPath(path, fillPaint);
+        }
+        
+        // Draw arcs using GeoArc's built-in drawing logic
+        for (var i = 0; i < arcTriples.length; i++) {
+          final triple = arcTriples[i];
+          if (triple.length == 3) {
+            final isLight = i == tempArcGonData.lightArcIndex;
+            final tempArc = GeoArc3P.fromDependencies(
+              id: '_temp_arc',
+              label: '',
+              points: triple,
+              color: previewColor,
+            );
+            
+            if (tempArc != null) {
+              // Use GeoArc's draw method with custom paint
+              // The arc correctly handles start (p1), through (p2), end (p3)
+              final arcPaint = Paint()
+                ..color = previewColor
+                ..style = PaintingStyle.stroke
+                ..strokeWidth = isLight ? 0.5 : 1.0 // Light arc is thinner
+                ..strokeCap = StrokeCap.round;
+              
+              // Use the arc's own draw method which correctly calculates
+              // start angle, end angle, and sweep based on the multivector
+              tempArc.draw(canvas, arcPaint);
+            }
+          }
+        }
+      }
+    }
+
     // Draw points on top with zoom-invariant radius
     // We need to draw them in screen space, so temporarily restore transform
     canvas.restore(); // Restore to screen space
     
+    // Draw regular point nodes
     for (final node in pointNodes) {
       final isSelected = _isNodeOrElementSelected(node);
       _drawPointZoomInvariant(canvas, size, node.object as GeoPoint, isSelected, labelsToDraw);
+    }
+    
+    // Draw point elements from containers (they're already in labelsToDraw, but need to draw the points themselves)
+    // Iterate through all nodes to find containers with point elements
+    for (final node in sortedNodes) {
+      if (!node.object.visible) continue;
+      if (node.object is! GeometryObject) continue;
+      
+      final geomObj = node.object as GeometryObject;
+      
+      if (geomObj is GenSimpleGeometryObjectList) {
+        for (final element in geomObj.objects) {
+          if (element is GeoPoint && element.visible) {
+            final isSelected = selectedIds.contains(element.id);
+            _drawPointZoomInvariant(canvas, size, element, isSelected, labelsToDraw);
+          }
+        }
+      } else if (geomObj is UnionGeometryObjectList) {
+        for (final element in geomObj.elements) {
+          if (element is GeoPoint && element.visible) {
+            final isSelected = selectedIds.contains(element.id);
+            _drawPointZoomInvariant(canvas, size, element, isSelected, labelsToDraw);
+          }
+        }
+      }
     }
     
     // Re-apply transform for selected elements drawing
@@ -821,16 +1160,81 @@ class GeoDrawCanvasPainter extends CustomPainter {
 
     canvas.restore();
 
-    // Cover zoom-dependent labels with background rectangles, then draw zoom-invariant labels
+    // Draw GeoInf objects in screen space (at viewport edge)
+    for (final node in infinityNodes) {
+      if (node.object is GeoInf) {
+        final geoInf = node.object as GeoInf;
+        final isSelected = selectedIds.contains(geoInf.id);
+        _drawInfinityPoint(canvas, size, geoInf, isSelected);
+      }
+    }
+
+    // Draw zoom-invariant labels
     for (final labelInfo in labelsToDraw) {
-      // First, cover the zoom-dependent label area with background color
-      _coverZoomDependentLabel(canvas, size, labelInfo);
-      // Then draw the zoom-invariant label
       _drawLabelInScreenSpace(canvas, size, labelInfo);
     }
 
     // Draw selection indicators
     _drawSelectionIndicators(canvas, size);
+  }
+
+  /// Draw a GeoInf point at the edge of the viewport in screen space
+  void _drawInfinityPoint(Canvas canvas, Size size, GeoInf geoInf, bool isSelected) {
+    // Draw at top-right corner of viewport
+    const margin = 40.0;
+    final position = Offset(size.width - margin, margin);
+    
+    final effectiveStyle = geoInf.style;
+    const iconSize = 18.0;
+    
+    // Draw flame icon using TextPainter with Material Icons font
+    final textPainter = TextPainter(
+      text: TextSpan(
+        text: String.fromCharCode(Icons.local_fire_department.codePoint),
+        style: TextStyle(
+          fontSize: iconSize,
+          fontFamily: Icons.local_fire_department.fontFamily,
+          color: const Color(0xFFFF6B35),
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+    );
+    textPainter.layout();
+    textPainter.paint(
+      canvas,
+      Offset(position.dx - textPainter.width / 2, position.dy - textPainter.height / 2),
+    );
+    
+    // Draw selection ring if selected
+    if (isSelected) {
+      final selectionPaint = Paint()
+        ..color = const Color(0xFF2196F3) // Blue selection color
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2.0;
+      canvas.drawCircle(position, iconSize / 2 + 4, selectionPaint);
+    }
+    
+    // Draw label if present
+    if (geoInf.label.isNotEmpty) {
+      final labelColor = effectiveStyle.labelColor;
+      final labelFontSize = effectiveStyle.labelFontSize;
+      final labelPainter = TextPainter(
+        text: TextSpan(
+          text: geoInf.label,
+          style: TextStyle(
+            color: labelColor,
+            fontSize: labelFontSize,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        textDirection: TextDirection.ltr,
+      );
+      labelPainter.layout();
+      labelPainter.paint(
+        canvas,
+        Offset(position.dx + iconSize / 2 + 4, position.dy - labelPainter.height / 2),
+      );
+    }
   }
 
 
@@ -1024,79 +1428,6 @@ class GeoDrawCanvasPainter extends CustomPainter {
     }
   }
 
-  /// Cover the zoom-dependent label area with background color
-  /// This covers both the text and the white background that objects draw
-  void _coverZoomDependentLabel(Canvas canvas, Size size, _LabelInfo labelInfo) {
-    // The zoom-dependent label was drawn in transformed space
-    // Its font size was labelFontSize (in world space), which appears as labelFontSize * zoom in screen space
-    final zoomDependentFontSize = labelInfo.style.labelFontSize * viewport.zoom;
-    
-    // Create a TextPainter with the exact same settings as objects use to get accurate dimensions
-    final labelColor = labelInfo.style.labelColor;
-    final hasBackground = !labelInfo.isPoint; // Lines and circles have white backgrounds
-    
-    final tempTextPainter = TextPainter(
-      text: TextSpan(
-        text: labelInfo.text,
-        style: TextStyle(
-          color: labelColor,
-          fontSize: zoomDependentFontSize, // Use zoom-dependent size for accurate measurement
-          fontWeight: labelInfo.isPoint ? FontWeight.bold : FontWeight.normal,
-          backgroundColor: hasBackground ? Colors.white.withOpacity(0.7) : null,
-        ),
-      ),
-      textDirection: TextDirection.ltr,
-    );
-    tempTextPainter.layout();
-    
-    // Get exact label dimensions
-    final labelWidth = tempTextPainter.width;
-    final labelHeight = tempTextPainter.height;
-    
-    // Convert world position to screen position (base position)
-    final baseScreenPos = viewport.worldToScreen(labelInfo.worldPosition);
-    
-    // Calculate the offset used by objects (in world space, so it scales with zoom)
-    // These offsets match exactly what the objects use in their draw() methods
-    double worldOffsetX;
-    double worldOffsetY;
-    
-    if (labelInfo.isPoint) {
-      // GeoPoint: Offset(x + radius + 2, y - textPainter.height / 2)
-      final pointRadius = labelInfo.style.pointRadius;
-      worldOffsetX = pointRadius + 2;
-      // Use actual textPainter height in world space
-      worldOffsetY = -(labelInfo.style.labelFontSize * 1.2) / 2;
-    } else if (labelInfo.isCircle && labelInfo.object is GeoCircle) {
-      // GeoCircle: label position is already on circumference at (centerX + radius, centerY)
-      // So offset is just Offset(5, -textPainter.height / 2) from the circumference point
-      worldOffsetX = 5.0;
-      worldOffsetY = -(labelInfo.style.labelFontSize * 1.2) / 2;
-    } else {
-      // GeoLine: mid + Offset(5, -textPainter.height - 5)
-      worldOffsetX = 5.0;
-      worldOffsetY = -(labelInfo.style.labelFontSize * 1.2) - 5.0;
-    }
-    
-    // Convert world space offset to screen space (it scales with zoom)
-    final screenOffsetX = worldOffsetX * viewport.zoom;
-    final screenOffsetY = worldOffsetY * viewport.zoom;
-    
-    // Draw a background rectangle to cover the zoom-dependent label
-    // Use exact dimensions from TextPainter plus padding for the white background
-    final padding = hasBackground ? 4.0 : 2.0; // Extra padding for white background
-    final coverRect = Rect.fromLTWH(
-      baseScreenPos.dx + screenOffsetX - padding,
-      baseScreenPos.dy + screenOffsetY - padding,
-      labelWidth + padding * 2,
-      labelHeight + padding * 2,
-    );
-    
-    final coverPaint = Paint()
-      ..color = backgroundColor
-      ..style = PaintingStyle.fill;
-    canvas.drawRect(coverRect, coverPaint);
-  }
 
   /// Draw a label in screen space with constant font size
   void _drawLabelInScreenSpace(Canvas canvas, Size size, _LabelInfo labelInfo) {
@@ -1392,6 +1723,7 @@ class GeoDrawCanvasPainter extends CustomPainter {
   @override
   bool shouldRepaint(GeoDrawCanvasPainter oldDelegate) {
     return oldDelegate.dagManager != dagManager ||
+        oldDelegate.toolManager != toolManager ||
         oldDelegate.viewport != viewport ||
         oldDelegate.selectedIds != selectedIds ||
         oldDelegate.showGrid != showGrid ||

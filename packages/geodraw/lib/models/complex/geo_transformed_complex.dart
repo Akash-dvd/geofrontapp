@@ -5,6 +5,7 @@ import '../geometry_object.dart';
 import '../simple/geo_point.dart';
 import '../transforms/geo_trans.dart';
 import '../transforms/transformation_engine.dart';
+import '../../core/dag/dag_manager.dart';
 import 'complex_geometry_object.dart';
 import 'geo_shapes.dart';
 
@@ -142,15 +143,21 @@ class GeoTransSegment extends GeoSegment {
 
   @override
   GeometryObject? rebuildFromParents(List<GeometryObject> parents, dynamic dagManager) {
-    final source = _findSource(parents);
-    final transform = _findTransform(parents);
-    if (source == null || transform == null) {
+    if (dagManager is! DAGManager) {
+      return null;
+    }
+
+    // Use dagManager.getObject() - handles both regular objects and objects in containers
+    final sourceObj = dagManager.getObject(sourceObjectId);
+    final transformObj = dagManager.getObject(transformId);
+    
+    if (sourceObj is! GeoSegment || transformObj is! GeoTrans) {
       return null;
     }
 
     final result = TransformationEngine.transformComplex(
-      source: source,
-      transform: transform,
+      source: sourceObj,
+      transform: transformObj,
       id: id,
       label: label,
       dependencies: dependencies,
@@ -179,24 +186,6 @@ class GeoTransSegment extends GeoSegment {
       );
     }
     return copyWith();
-  }
-
-  GeoSegment? _findSource(List<GeometryObject> parents) {
-    for (final parent in parents) {
-      if (parent is GeoSegment && parent.id == sourceObjectId) {
-        return parent;
-      }
-    }
-    return null;
-  }
-
-  GeoTrans? _findTransform(List<GeometryObject> parents) {
-    for (final parent in parents) {
-      if (parent is GeoTrans && parent.id == transformId) {
-        return parent;
-      }
-    }
-    return null;
   }
 }
 
@@ -317,19 +306,25 @@ class GeoTransArc extends GeoArc {
 
   @override
   GeometryObject? rebuildFromParents(List<GeometryObject> parents, dynamic dagManager) {
-    final source = _findSource(parents);
-    final transform = _findTransform(parents);
-    if (source == null || transform == null) {
+    if (dagManager is! DAGManager) {
       return null;
     }
 
-    if (source is! GeoSegment && source is! GeoArc) {
+    // Use dagManager.getObject() - handles both regular objects and objects in containers
+    final sourceObj = dagManager.getObject(sourceObjectId);
+    final transformObj = dagManager.getObject(transformId);
+    
+    if (sourceObj == null || transformObj is! GeoTrans) {
+      return null;
+    }
+
+    if (sourceObj is! GeoSegment && sourceObj is! GeoArc) {
       return copyWith();
     }
 
     final result = TransformationEngine.transformComplex(
-      source: source as ComplexGeometryObject,
-      transform: transform,
+      source: sourceObj as ComplexGeometryObject,
+      transform: transformObj,
       id: id,
       label: label,
       dependencies: dependencies,
@@ -360,24 +355,6 @@ class GeoTransArc extends GeoArc {
       );
     }
     return copyWith();
-  }
-
-  GeometryObject? _findSource(List<GeometryObject> parents) {
-    for (final parent in parents) {
-      if (parent.id == sourceObjectId) {
-        return parent;
-      }
-    }
-    return null;
-  }
-
-  GeoTrans? _findTransform(List<GeometryObject> parents) {
-    for (final parent in parents) {
-      if (parent is GeoTrans && parent.id == transformId) {
-        return parent;
-      }
-    }
-    return null;
   }
 }
 
@@ -523,20 +500,26 @@ class GeoTransUnionGeometryObjectList
 
   @override
   GeometryObject? rebuildFromParents(List<GeometryObject> parents, dynamic dagManager) {
-    final source = _findSource(parents);
-    final transform = _findTransform(parents);
-    if (source == null || transform == null) {
+    if (dagManager is! DAGManager) {
+      return null;
+    }
+
+    // Use dagManager.getObject() - handles both regular objects and objects in containers
+    final sourceObj = dagManager.getObject(sourceObjectId);
+    final transformObj = dagManager.getObject(transformId);
+    
+    if (sourceObj is! UnionGeometryObjectList || transformObj is! GeoTrans) {
       return null;
     }
 
     final transformedElements = <GeometryObject>[];
 
-    for (final element in source.elements.cast<GeometryObject>()) {
+    for (final element in sourceObj.elements.cast<GeometryObject>()) {
       if (element is SimpleGeometryObject) {
         final simpleResult = TransformationEngine.transformSimple(
           source: element,
-          transform: transform,
-          id: '${element.id}_${transform.id}_point',
+          transform: transformObj,
+          id: '${element.id}_${transformObj.id}_point',
           label: element.label,
           dependencies: element.dependencies,
           visible: element.visible,
@@ -553,8 +536,8 @@ class GeoTransUnionGeometryObjectList
       if (element is GeoSegment || element is GeoArc) {
         final complexResult = TransformationEngine.transformComplex(
           source: element as ComplexGeometryObject,
-          transform: transform,
-          id: '${element.id}_${transform.id}_trans',
+          transform: transformObj,
+          id: '${element.id}_${transformObj.id}_trans',
           label: element.label,
           dependencies: element.dependencies,
           visible: element.visible,
@@ -573,31 +556,13 @@ class GeoTransUnionGeometryObjectList
 
     return copyWith(
       elements: transformedElements,
-      vertexCountValue: source.vertexCount,
-      areaValue: source.area(),
-      perimeterValue: source.perimeter(),
+      vertexCountValue: sourceObj.vertexCount,
+      areaValue: sourceObj.area(),
+      perimeterValue: sourceObj.perimeter(),
     );
   }
 
   // TODO: Derive transformed area/perimeter instead of mirroring the source metrics.
 
   // TODO: Extend union handling to support polygons/poly-arcs and unify transformed IDs/dependencies.
-
-  UnionGeometryObjectList? _findSource(List<GeometryObject> parents) {
-    for (final parent in parents) {
-      if (parent is UnionGeometryObjectList && parent.id == sourceObjectId) {
-        return parent;
-      }
-    }
-    return null;
-  }
-
-  GeoTrans? _findTransform(List<GeometryObject> parents) {
-    for (final parent in parents) {
-      if (parent is GeoTrans && parent.id == transformId) {
-        return parent;
-      }
-    }
-    return null;
-  }
 }

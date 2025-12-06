@@ -21,10 +21,12 @@ class GeoPolyLine extends GeoPolyArcBase<GeoSegment> {
     required String id,
     required String label,
     required List<GeoPoint> points,
+    required DAGManager dagManager,
     bool visible = true,
     CanvasStyle? style,
     Map<String, dynamic>? styleOverrides,
     Color color = Colors.orange,
+    List<String>? existingElementLabels,
   }) {
     if (points.length < 2) {
       throw ArgumentError('GeoPolyLine requires at least two points');
@@ -36,7 +38,14 @@ class GeoPolyLine extends GeoPolyArcBase<GeoSegment> {
       }
     }
 
-    final baseChain = _prepareOpenChain(id, label, points, color);
+    final baseChain = _prepareOpenChain(
+      id, 
+      label, 
+      points, 
+      color, 
+      dagManager,
+      existingElementLabels: existingElementLabels,
+    );
     final dependencyIds = List<String>.unmodifiable(
       baseChain.points.map((point) => point.id),
     );
@@ -62,6 +71,7 @@ class GeoPolyLine extends GeoPolyArcBase<GeoSegment> {
     required String id,
     required String label,
     required List<GeoPoint> points,
+    required DAGManager dagManager,
     bool visible = true,
     CanvasStyle? style,
     Map<String, dynamic>? styleOverrides,
@@ -75,6 +85,7 @@ class GeoPolyLine extends GeoPolyArcBase<GeoSegment> {
       styleOverrides: styleOverrides,
       color: color,
       points: points,
+      dagManager: dagManager,
     );
   }
 
@@ -99,12 +110,55 @@ class GeoPolyLine extends GeoPolyArcBase<GeoSegment> {
     String? id,
     String? label,
     List<GeoPoint>? points,
+    List<GeoSegment>? elements,
+    List<GeometryObject>? elementsAny,
     bool? visible,
     CanvasStyle? style,
     Map<String, dynamic>? styleOverrides,
     Color? color,
     List<String>? dependencies,
   }) {
+    // If points are being changed, we need dagManager to regenerate labels
+    if (points != null) {
+      throw UnimplementedError(
+        'GeoPolyLine.copyWith cannot change points without DAGManager. Use fromDependencies instead.',
+      );
+    }
+
+    // Support both List<GeoSegment> and List<GeometryObject> for flexibility
+    final elementsToUse = elements ?? (elementsAny?.cast<GeoSegment>());
+
+    // Allow element updates if:
+    // 1. Same number of elements
+    // 2. Same element IDs (only properties like visibility changed)
+    // 3. No label regeneration needed
+    _PolyChainData<GeoSegment> updatedChain = _chain;
+    if (elementsToUse != null) {
+      if (elementsToUse.length != this.elements.length) {
+        throw UnimplementedError(
+          'GeoPolyLine.copyWith cannot change element count without DAGManager. Use fromDependencies instead.',
+        );
+      }
+
+      // Verify all element IDs match (only properties changed)
+      final elementIdsMatch = elementsToUse.every((newElement) {
+        return this.elements.any((oldElement) => oldElement.id == newElement.id);
+      });
+
+      if (!elementIdsMatch) {
+        throw UnimplementedError(
+          'GeoPolyLine.copyWith cannot change element IDs without DAGManager. Use fromDependencies instead.',
+        );
+      }
+
+      // Safe to update: create new chain with updated elements
+      updatedChain = _PolyChainData<GeoSegment>(
+        points: _chain.points,
+        elements: List<GeoSegment>.unmodifiable(elementsToUse),
+        dependencies: _chain.dependencies,
+      );
+    }
+
     final candidateOverrides =
         styleOverrides ??
         (style != null
@@ -114,53 +168,47 @@ class GeoPolyLine extends GeoPolyArcBase<GeoSegment> {
             : null);
     final resolvedOverrides = candidateOverrides ?? this.styleOverrides;
 
-    final nextId = id ?? this.id;
-    final nextLabel = label ?? this.label;
-    final nextColor = color ?? Colors.orange;
-    final nextPoints = points ?? _chain.points;
-    return GeoPolyLine.fromDependencies(
-      id: nextId,
-      label: nextLabel,
+    // Use updated chain if elements were changed, otherwise preserve existing chain
+    return GeoPolyLine._fromChain(
+      id: id ?? this.id,
+      label: label ?? this.label,
+      chain: updatedChain,
       visible: visible ?? this.visible,
       style: style,
       styleOverrides: resolvedOverrides,
-      color: nextColor,
-      points: nextPoints,
+      color: color ?? Colors.orange,
     );
   }
 
   @override
   GeometryObject? rebuildFromParents(List<GeometryObject> parents, dynamic dagManager) {
-    if (dependencies.isEmpty) {
+    if (dagManager is! DAGManager || dependencies.isEmpty) {
       return null;
     }
 
-    final pointMap = <String, GeoPoint>{};
-    for (final parent in parents.whereType<GeoPoint>()) {
-      pointMap[parent.id] = parent;
-    }
-
+    // Use dagManager.getObject() - handles both regular objects and objects in containers
     final orderedPoints = <GeoPoint>[];
     for (final depId in dependencies) {
-      final point = pointMap[depId];
-      if (point == null) {
+      final obj = dagManager.getObject(depId);
+      if (obj is! GeoPoint) {
         return null;
       }
-      orderedPoints.add(point);
+      orderedPoints.add(obj);
     }
 
-    if (orderedPoints.length != dependencies.length) {
-      return null;
-    }
+    // Preserve existing element labels when rebuilding
+    final existingElementLabels = elements.map((e) => e.id).toList();
 
     return GeoPolyLine.fromDependencies(
       id: id,
       label: label,
       points: orderedPoints,
+      dagManager: dagManager,
       visible: visible,
       style: style,
       styleOverrides: styleOverrides.isEmpty ? null : styleOverrides,
       color: style.strokeColor,
+      existingElementLabels: existingElementLabels,
     );
   }
 
@@ -180,6 +228,7 @@ class GeoPolyLine extends GeoPolyArcBase<GeoSegment> {
   static GeoPolyLine fromJson(
     Map<String, dynamic> json,
     GeoPoint Function(String id) resolvePoint,
+    DAGManager dagManager,
   ) {
     final props = (json['properties'] as Map<String, dynamic>? ?? const {});
     final orderedIds =
@@ -198,11 +247,11 @@ class GeoPolyLine extends GeoPolyArcBase<GeoSegment> {
 
     return GeoPolyLine.fromDependencies(
       id: json['id'] as String,
-      label: json['label'] as String? ?? '',
+      label: json['label'] as String,
       points: points,
+      dagManager: dagManager,
       visible: json['visible'] as bool? ?? true,
       styleOverrides: overrides,
-      color: Colors.orange,
     );
   }
 }

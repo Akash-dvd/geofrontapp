@@ -9,6 +9,7 @@ import '../core/command/command_history.dart';
 import '../core/command/command_history_entry.dart';
 import '../core/dag/dag_manager.dart';
 import '../models/geometry_object.dart';
+import '../models/complex/complex_geometry_object.dart';
 import 'tool.dart';
 
 /// Base class for tools using direct execution with sequential validation
@@ -39,6 +40,55 @@ abstract class UnifiedTool with ToolCallbacksMixin implements Tool {
     if (event is PointerDownEvent) {
       _handleClick(event.position);
     }
+  }
+
+  /// Select an object directly (used when object is selected from menu/dropdown)
+  /// This bypasses proximity search and directly adds the object as an argument
+  void selectObject(GeometryObject object) {
+    debugPrint('[UnifiedTool] selectObject: Called with ${object.runtimeType} (${object.id}, label: ${object.label})');
+    debugPrint('[UnifiedTool] selectObject: Current arguments: ${verifier.arguments.length}');
+    for (var i = 0; i < verifier.arguments.length; i++) {
+      final arg = verifier.arguments[i];
+      debugPrint('[UnifiedTool] selectObject:   Arg[$i]: ${arg.runtimeType} (${arg is GeometryObject ? arg.id : 'non-geometry'})');
+    }
+    
+    // Check if command is already complete - if so, don't allow more selections
+    if (verifier.isComplete) {
+      debugPrint('[UnifiedTool] selectObject: Command is already complete, ignoring selection');
+      return;
+    }
+    
+    final nextConstraint = verifier.schema.nextConstraint(verifier.arguments);
+    if (nextConstraint == null) {
+      debugPrint('[UnifiedTool] selectObject: No next constraint available (command may be complete)');
+      return;
+    }
+
+    debugPrint('[UnifiedTool] selectObject: Next constraint: ${nextConstraint.description}');
+    debugPrint('[UnifiedTool] selectObject: Constraint allowedTypes: ${nextConstraint.allowedTypes}');
+    
+    _ensureHistoryMarker();
+
+    // Validate that the object matches the constraint
+    debugPrint('[UnifiedTool] selectObject: Checking if object matches constraint...');
+    final acceptsResult = nextConstraint.accepts(object);
+    debugPrint('[UnifiedTool] selectObject: Constraint.accepts() returned: $acceptsResult');
+    
+    if (!acceptsResult) {
+      debugPrint('[UnifiedTool] selectObject: Object ${object.runtimeType} (${object.id}) rejected by constraint: ${nextConstraint.description}');
+      debugPrint('[UnifiedTool] selectObject: Constraint allowedTypes: ${nextConstraint.allowedTypes}');
+      debugPrint('[UnifiedTool] selectObject: Object is UnionGeometryObjectList: ${object is UnionGeometryObjectList}');
+      if (object is UnionGeometryObjectList) {
+        debugPrint('[UnifiedTool] selectObject: UnionGeometryObjectList type: ${object.runtimeType}');
+      }
+      notifyStateChanged('Invalid selection: expected ${nextConstraint.description}');
+      return;
+    }
+
+    debugPrint('[UnifiedTool] selectObject: Object ${object.runtimeType} (${object.id}) accepted, adding to arguments');
+    // Object is valid - highlight it and add to argument queue
+    notifyObjectSelected(object.id);
+    _addArgument(object);
   }
 
   void _ensureHistoryMarker() {
@@ -113,18 +163,27 @@ abstract class UnifiedTool with ToolCallbacksMixin implements Tool {
 
   void _addArgument(dynamic argument) {
     try {
+      debugPrint('[UnifiedTool] _addArgument: Adding ${argument.runtimeType} (${argument is GeometryObject ? argument.id : 'non-geometry'})');
+      debugPrint('[UnifiedTool] _addArgument: Current arguments count: ${verifier.arguments.length}');
       final result = verifier.addArgument(argument);
+      debugPrint('[UnifiedTool] _addArgument: Result isValid: ${result.isValid}');
       if (!result.isValid) {
+        debugPrint('[UnifiedTool] _addArgument: Validation errors: ${result.errors.join(', ')}');
         notifyStateChanged('Error: ${result.errors.join(', ')}');
         return;
       }
 
+      debugPrint('[UnifiedTool] _addArgument: Argument added successfully. New count: ${verifier.arguments.length}');
+      debugPrint('[UnifiedTool] _addArgument: Is complete: ${verifier.isComplete}');
       notifyStateChanged(verifier.nextArgumentDescription);
 
       if (verifier.isComplete) {
+        debugPrint('[UnifiedTool] _addArgument: Command is complete, executing...');
         _executeCommand();
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
+      debugPrint('[UnifiedTool] _addArgument: Exception: $e');
+      debugPrint('[UnifiedTool] _addArgument: Stack trace: $stackTrace');
       _handleExecutionError(e.toString());
     }
   }

@@ -12,11 +12,13 @@ class DAGNode with EquatableMixin {
   final int depth;
   final bool isDirty;
   final DateTime lastModified;
+  final int creationOrder; // Order when object was first added to DAG (never changes)
 
   DAGNode({
     required this.id,
     required this.object,
     required this.parentIds,
+    required this.creationOrder,
     List<String>? childIds,
     int? depth,
     bool? isDirty,
@@ -34,6 +36,7 @@ class DAGNode with EquatableMixin {
     int? depth,
     bool? isDirty,
     DateTime? lastModified,
+    int? creationOrder, // Optional but preserves existing value if not provided
   }) {
     return DAGNode(
       id: id ?? this.id,
@@ -43,6 +46,7 @@ class DAGNode with EquatableMixin {
       depth: depth ?? this.depth,
       isDirty: isDirty ?? this.isDirty,
       lastModified: lastModified ?? this.lastModified,
+      creationOrder: creationOrder ?? this.creationOrder, // Preserve creation order
     );
   }
 

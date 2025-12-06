@@ -3,6 +3,7 @@ library;
 
 import '../../models/type_hierarchy.dart';
 import '../../models/geometry_object.dart';
+import '../../models/complex/complex_geometry_object.dart';
 
 /// High level categories of argument values supported by the command system
 enum ValueCategory { geometry, numeric, text, boolean, any }
@@ -189,6 +190,14 @@ class TypeConstraint {
     switch (category) {
       case ValueCategory.geometry:
         if (value is GeometryObject) {
+          // For UnionGeometryObjectList, also check using 'is' operator
+          // This handles generic types like GeoPolyArcGon<T> correctly
+          // Check if UnionGeometryObjectList is in the allowed types
+          if (allowedTypes.any((type) => type == UnionGeometryObjectList)) {
+            if (value is UnionGeometryObjectList) {
+              return true;
+            }
+          }
           return _matchesGeometryType(value.runtimeType, value.type);
         }
         if (value is Type) {

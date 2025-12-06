@@ -17,7 +17,9 @@ _PolyChainData<GeoSegment> _prepareOpenChain(
   String label,
   List<GeoPoint> input,
   Color color,
-) {
+  DAGManager dagManager, {
+  List<String>? existingElementLabels,
+}) {
   if (input.length < 2) {
     throw ArgumentError('PolyLine requires at least two points');
   }
@@ -30,15 +32,88 @@ _PolyChainData<GeoSegment> _prepareOpenChain(
   }
 
   final segments = <GeoSegment>[];
+  // Track labels used in this construction for sequential naming
+  final usedLabelsInConstruction = <String>{};
+  
+  // Find the starting point for sequential labels
+  // If we have existing labels, continue from the last one
+  // Otherwise, start from 'a'
+  String? lastExistingLabel;
+  if (existingElementLabels != null && existingElementLabels.isNotEmpty) {
+    lastExistingLabel = existingElementLabels.last;
+    // Add all existing labels to used set
+    usedLabelsInConstruction.addAll(existingElementLabels);
+  }
+  
   for (var i = 0; i < normalized.length - 1; i++) {
-    segments.add(
-      GeoSegment2P.fromDependencies(
-        id: '${ownerId}_edge_$i',
-        label: '${label}_edge_${i + 1}',
-        points: [normalized[i], normalized[i + 1]],
-        color: color,
-      ),
+    // Use existing label if provided, otherwise generate sequential label
+    final String segmentLabel;
+    if (existingElementLabels != null && i < existingElementLabels.length) {
+      segmentLabel = existingElementLabels[i];
+      // Update lastExistingLabel to track the last label we've seen
+      lastExistingLabel = segmentLabel;
+    } else {
+      // Generate next sequential label after the last label we've seen
+      String startLabel;
+      if (lastExistingLabel != null) {
+        // Continue from last label we've seen (existing or newly generated)
+        startLabel = _generateNextSequentialLowercase(lastExistingLabel);
+      } else {
+        // Start from 'a' if no existing labels
+        startLabel = 'a';
+      }
+      
+      // Find the first available label starting from startLabel
+      String candidate = startLabel;
+      int attempts = 0;
+      String foundLabel = startLabel; // Initialize as fallback
+      
+      // Always check global uniqueness, but when continuing from existing labels,
+      // the old container's labels should be unregistered before calling this function
+      // so they're available for reuse and sequential naming works naturally
+      while (attempts < 1000) {
+        // Check if label is not used in this construction AND is globally unique
+        if (!usedLabelsInConstruction.contains(candidate) &&
+            LabelManager.isLabelUnique(
+              dagManager, 
+              candidate, 
+              excludeContainerId: ownerId,
+            )) {
+          foundLabel = candidate;
+          break;
+        }
+        // Try next sequential label
+        candidate = _generateNextSequentialLowercase(candidate);
+        attempts++;
+      }
+      
+      // Fallback if we couldn't find a sequential label
+      if (attempts >= 1000) {
+        foundLabel = LabelManager.getNextAvailableLabel(
+      dagManager,
+      GeometryObjectType.line,
+          excludeContainerId: ownerId,
+        );
+      }
+      
+      segmentLabel = foundLabel;
+      // Update lastExistingLabel to track the last label we've seen
+      lastExistingLabel = segmentLabel;
+    }
+    
+    usedLabelsInConstruction.add(segmentLabel);
+    
+    final segment = GeoSegment2P.fromDependencies(
+      id: segmentLabel, // In new system: ID = label
+      label: segmentLabel,
+      points: [normalized[i], normalized[i + 1]],
+      color: color,
     );
+    
+    // Register element in elementToContainer map
+    dagManager.registerElement(segmentLabel, ownerId);
+    
+    segments.add(segment);
   }
 
   final dependencies = normalized.map((point) => point.id).toSet().toList();
@@ -55,7 +130,9 @@ _PolyChainData<GeoSegment> _prepareClosedChain(
   String label,
   List<GeoPoint> input,
   Color color,
-) {
+  DAGManager dagManager, {
+  List<String>? existingElementLabels,
+}) {
   if (input.length < 3) {
     throw ArgumentError('Polygon requires at least three points');
   }
@@ -77,15 +154,88 @@ _PolyChainData<GeoSegment> _prepareClosedChain(
   }
 
   final segments = <GeoSegment>[];
+  // Track labels used in this construction for sequential naming
+  final usedLabelsInConstruction = <String>{};
+  
+  // Find the starting point for sequential labels
+  // If we have existing labels, continue from the last one
+  // Otherwise, start from 'a'
+  String? lastExistingLabel;
+  if (existingElementLabels != null && existingElementLabels.isNotEmpty) {
+    lastExistingLabel = existingElementLabels.last;
+    // Add all existing labels to used set
+    usedLabelsInConstruction.addAll(existingElementLabels);
+  }
+  
   for (var i = 0; i < normalized.length - 1; i++) {
-    segments.add(
-      GeoSegment2P.fromDependencies(
-        id: '${ownerId}_edge_$i',
-        label: '${label}_edge_${i + 1}',
-        points: [normalized[i], normalized[i + 1]],
-        color: color,
-      ),
+    // Use existing label if provided, otherwise generate sequential label
+    final String segmentLabel;
+    if (existingElementLabels != null && i < existingElementLabels.length) {
+      segmentLabel = existingElementLabels[i];
+      // Update lastExistingLabel to track the last label we've seen
+      lastExistingLabel = segmentLabel;
+    } else {
+      // Generate next sequential label after the last label we've seen
+      String startLabel;
+      if (lastExistingLabel != null) {
+        // Continue from last label we've seen (existing or newly generated)
+        startLabel = _generateNextSequentialLowercase(lastExistingLabel);
+      } else {
+        // Start from 'a' if no existing labels
+        startLabel = 'a';
+      }
+      
+      // Find the first available label starting from startLabel
+      String candidate = startLabel;
+      int attempts = 0;
+      String foundLabel = startLabel; // Initialize as fallback
+      
+      // Always check global uniqueness, but when continuing from existing labels,
+      // the old container's labels should be unregistered before calling this function
+      // so they're available for reuse and sequential naming works naturally
+      while (attempts < 1000) {
+        // Check if label is not used in this construction AND is globally unique
+        if (!usedLabelsInConstruction.contains(candidate) &&
+            LabelManager.isLabelUnique(
+              dagManager, 
+              candidate, 
+              excludeContainerId: ownerId,
+            )) {
+          foundLabel = candidate;
+          break;
+        }
+        // Try next sequential label
+        candidate = _generateNextSequentialLowercase(candidate);
+        attempts++;
+      }
+      
+      // Fallback if we couldn't find a sequential label
+      if (attempts >= 1000) {
+        foundLabel = LabelManager.getNextAvailableLabel(
+      dagManager,
+      GeometryObjectType.line,
+          excludeContainerId: ownerId,
+        );
+      }
+      
+      segmentLabel = foundLabel;
+      // Update lastExistingLabel to track the last label we've seen
+      lastExistingLabel = segmentLabel;
+    }
+    
+    usedLabelsInConstruction.add(segmentLabel);
+    
+    final segment = GeoSegment2P.fromDependencies(
+      id: segmentLabel, // In new system: ID = label
+      label: segmentLabel,
+      points: [normalized[i], normalized[i + 1]],
+      color: color,
     );
+    
+    // Register element in elementToContainer map
+    dagManager.registerElement(segmentLabel, ownerId);
+    
+    segments.add(segment);
   }
 
   final dependencies = normalized
@@ -107,10 +257,14 @@ List<GeoPoint> _regularVerticesFromCenter({
   required GeoPoint center,
   required GeoPoint reference,
   required int sides,
+  required DAGManager dagManager,
 }) {
   if (sides < 3) {
     throw ArgumentError('Regular polygon requires at least three sides');
   }
+
+  // Track labels used in this operation to prevent duplicates
+  final usedLabels = <String>{};
 
   final centerPos = center.position;
   final refPos = reference.position;
@@ -131,7 +285,7 @@ List<GeoPoint> _regularVerticesFromCenter({
     if (i == 0) {
       vertices.add(reference);
     } else {
-      vertices.add(_computedVertex(id, label, i, x, y));
+      vertices.add(_computedVertex(id, label, i, x, y, dagManager, usedLabels));
     }
   }
   vertices.add(vertices.first);
@@ -143,10 +297,14 @@ List<GeoPoint> _regularVerticesFromSegment({
   required String label,
   required GeoSegment2P segment,
   required int sides,
+  required DAGManager dagManager,
 }) {
   if (sides < 3) {
     throw ArgumentError('Regular polygon requires at least three sides');
   }
+
+  // Track labels used in this operation to prevent duplicates
+  final usedLabels = <String>{};
 
   final start = segment.startPoint;
   final end = segment.endPoint;
@@ -190,7 +348,7 @@ List<GeoPoint> _regularVerticesFromSegment({
     } else if (i == 1) {
       vertices.add(end);
     } else {
-      vertices.add(_computedVertex(id, label, i, x, y));
+      vertices.add(_computedVertex(id, label, i, x, y, dagManager, usedLabels));
     }
   }
   vertices.add(vertices.first);
@@ -203,10 +361,23 @@ GeoPointer _computedVertex(
   int index,
   double x,
   double y,
+  DAGManager dagManager,
+  Set<String>? usedLabels,
 ) {
+  // Use LabelManager to get unique uppercase label for point
+  // Track labels used in this operation to prevent duplicates
+  final pointLabel = LabelManager.getNextAvailableLabel(
+    dagManager,
+    GeometryObjectType.point,
+    usedReservedLabels: usedLabels,
+  );
+  
+  // Track this label as used
+  usedLabels?.add(pointLabel);
+  
   return GeoPointer(
-    id: '${ownerId}_v$index',
-    label: '${label}_V$index',
+    id: pointLabel, // In new system: ID = label
+    label: pointLabel,
     x: x,
     y: y,
   );
@@ -255,4 +426,44 @@ Map<String, dynamic>? _shapeStyleOverrides({
   }
 
   return null;
+}
+
+/// Generate next sequential lowercase label (a -> b -> c -> ... -> z -> aa -> ab -> ...)
+String _generateNextSequentialLowercase(String current) {
+  if (current.isEmpty) return 'a';
+
+  // Single letter: a -> b, z -> aa
+  if (current.length == 1) {
+    final code = current.codeUnitAt(0);
+    if (code >= 97 && code < 122) {
+      // a-y -> b-z
+      return String.fromCharCode(code + 1);
+    } else if (code == 122) {
+      // z -> aa
+      return 'aa';
+    }
+  }
+
+  // Multi-letter: increment last character, carry over if needed
+  final chars = current.split('');
+  int i = chars.length - 1;
+  while (i >= 0) {
+    final code = chars[i].codeUnitAt(0);
+    if (code >= 97 && code < 122) {
+      chars[i] = String.fromCharCode(code + 1);
+      return chars.join();
+    } else if (code == 122) {
+      chars[i] = 'a';
+      i--;
+      if (i < 0) {
+        // All z's, add another a at front
+        return 'a${chars.join()}';
+      }
+    } else {
+      break;
+    }
+  }
+
+  // Fallback: just return next available
+  return 'aa';
 }

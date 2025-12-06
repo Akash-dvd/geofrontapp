@@ -141,11 +141,13 @@ abstract class SimpleGeometryObject extends GeometryObject {
   List<Object?> get props => [...super.props, multivector];
 
   /// Serialize the multivector to a compact list representation.
+  /// Stores: o, e1, e2, O (for lines, circles, points)
   static List<double> encodeMultivector(Multivector mv) {
     return <double>[mv.o, mv.e1, mv.e2, mv.O];
   }
 
   /// Decode a multivector from a serialized representation.
+  /// Expects: o, e1, e2, O (4 components)
   static Multivector decodeMultivector(dynamic raw) {
     if (raw is! List) {
       return Multivector.zero();
@@ -169,6 +171,63 @@ abstract class SimpleGeometryObject extends GeometryObject {
       e2: readComponent(2),
       O: readComponent(3),
     );
+  }
+
+  /// Serialize a transform operator multivector (rotation, dilation, translation, point inversion).
+  /// Stores: s, oe1, oe2, oO, e12, e1O, e2O (7 components)
+  static List<double> encodeTransformOperator(Multivector mv) {
+    return <double>[
+      mv.s,
+      mv.oe1,
+      mv.oe2,
+      mv.oO,
+      mv.e12,
+      mv.e1O,
+      mv.e2O,
+    ];
+  }
+
+  /// Decode a transform operator multivector from serialized representation.
+  /// Expects: s, oe1, oe2, oO, e12, e1O, e2O (7 components)
+  static Multivector decodeTransformOperator(dynamic raw) {
+    if (raw is! List) {
+      return Multivector.zero();
+    }
+
+    double readComponent(int index) {
+      if (index >= raw.length) return 0.0;
+      final value = raw[index];
+      if (value is num) {
+        return value.toDouble();
+      }
+      if (value is String) {
+        return double.tryParse(value) ?? 0.0;
+      }
+      return 0.0;
+    }
+
+    return Multivector(
+      s: readComponent(0),
+      oe1: readComponent(1),
+      oe2: readComponent(2),
+      oO: readComponent(3),
+      e12: readComponent(4),
+      e1O: readComponent(5),
+      e2O: readComponent(6),
+    );
+  }
+
+  /// Check if a multivector is a rotor operator (needs full transform operator encoding).
+  /// Rotor operators (rotation, dilation, translation, point inversion) have non-zero components beyond o,e1,e2,O.
+  static bool isRotorOperator(Multivector mv) {
+    const tolerance = 1e-14;
+    return mv.s.abs() > tolerance ||
+           mv.oe1.abs() > tolerance ||
+           mv.oe2.abs() > tolerance ||
+           mv.oO.abs() > tolerance ||
+           mv.e12.abs() > tolerance ||
+           mv.e1O.abs() > tolerance ||
+           mv.e2O.abs() > tolerance;
   }
 
   @override

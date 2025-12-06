@@ -13,6 +13,7 @@ export 'models/text/canvas_text.dart';
 export 'models/simple/geo_point.dart';
 export 'models/simple/geo_line.dart';
 export 'models/simple/geo_circle.dart';
+export 'models/simple/geo_Inf.dart';
 export 'models/transforms/geo_trans.dart';
 export 'models/simple/geo_transformed_simple.dart';
 
@@ -36,6 +37,7 @@ export 'ui/geodraw_side_panel.dart';
 export 'ui/tool_palette.dart';
 export 'ui/object_browser.dart';
 export 'ui/unified_prompt_panel.dart';
+export 'ui/animated_flame_icon.dart';
 
 // Codec system
 export 'codec/json_codec.dart';

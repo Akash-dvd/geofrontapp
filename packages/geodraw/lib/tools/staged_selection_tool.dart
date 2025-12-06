@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
@@ -114,7 +115,18 @@ abstract class StagedSelectionTool with ToolCallbacksMixin implements Tool {
       return;
     }
 
-    debugPrint('[${name}] Found candidate: ${candidate.runtimeType} (id: ${candidate.id}, label: ${candidate.label})');
+    _processCandidate(candidate);
+  }
+
+  /// Select an object directly (used when object is selected from menu/dropdown)
+  /// This bypasses proximity search and directly processes the object
+  void selectObject(GeometryObject object) {
+    debugPrint('[${name}] selectObject: ${object.runtimeType} (id: ${object.id}, label: ${object.label}), currentStage=$_currentStage');
+    _processCandidate(object);
+  }
+
+  void _processCandidate(GeometryObject candidate) {
+    debugPrint('[${name}] Processing candidate: ${candidate.runtimeType} (id: ${candidate.id}, label: ${candidate.label})');
 
     // Check if candidate matches current stage constraints
     final constraints = stageTypeConstraints[_currentStage];
@@ -226,6 +238,14 @@ abstract class StagedSelectionTool with ToolCallbacksMixin implements Tool {
         return;
       }
       debugPrint('[${name}] Parameters received: $parameters');
+      
+      // Debug print angle in both degrees and radians if it's a rotation
+      // Note: UI sends angle in radians (already converted from degrees if user selected degrees)
+      if (parameters.containsKey('angle')) {
+        final angleRadians = parameters['angle'] as double;
+        final angleDegrees = angleRadians * 180.0 / math.pi;
+        debugPrint('[${name}] Rotation angle: ${angleRadians.toStringAsFixed(6)} radians (${angleDegrees.toStringAsFixed(2)}°)');
+      }
     }
 
     notifyStateChanged('Applying transformation...');

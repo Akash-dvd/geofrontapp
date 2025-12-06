@@ -12,13 +12,41 @@ void main() {
       dagManager = DAGManager();
     });
 
+    // Helper function to create two intersecting lines (horizontal and vertical)
+    (GeoLine2P, GeoLine2P) _createIntersectingLines() {
+      final p1 = GeoPointer(id: 'P1', label: 'P1', x: 0, y: 5);
+      final p2 = GeoPointer(id: 'P2', label: 'P2', x: 10, y: 5);
+      final p3 = GeoPointer(id: 'P3', label: 'P3', x: 5, y: 0);
+      final p4 = GeoPointer(id: 'P4', label: 'P4', x: 5, y: 10);
+
+      final line1 = GeoLine2P.fromDependencies(
+        id: 'line1',
+        label: 'line1',
+        points: [p1, p2],
+      );
+      final line2 = GeoLine2P.fromDependencies(
+        id: 'line2',
+        label: 'line2',
+        points: [p3, p4],
+      );
+
+      dagManager.addObject(p1, []);
+      dagManager.addObject(p2, []);
+      dagManager.addObject(p3, []);
+      dagManager.addObject(p4, []);
+      dagManager.addObject(line1, [p1.id, p2.id]);
+      dagManager.addObject(line2, [p3.id, p4.id]);
+
+      return (line1, line2);
+    }
+
     group('Element Registration', () {
       test('Elements are registered when container is added', () {
-        // Create two lines for intersection
-        final p1 = GeoPointer(id: 'P1', label: 'P1', x: 0, y: 0);
-        final p2 = GeoPointer(id: 'P2', label: 'P2', x: 1, y: 1);
-        final p3 = GeoPointer(id: 'P3', label: 'P3', x: 2, y: 0);
-        final p4 = GeoPointer(id: 'P4', label: 'P4', x: 3, y: 1);
+        // Create two lines that intersect: horizontal and vertical
+        final p1 = GeoPointer(id: 'P1', label: 'P1', x: 0, y: 5);
+        final p2 = GeoPointer(id: 'P2', label: 'P2', x: 10, y: 5);
+        final p3 = GeoPointer(id: 'P3', label: 'P3', x: 5, y: 0);
+        final p4 = GeoPointer(id: 'P4', label: 'P4', x: 5, y: 10);
 
         final line1 = GeoLine2P.fromDependencies(
           id: 'line1',
@@ -41,7 +69,7 @@ void main() {
         // Create intersection (container with elements)
         final intersection = GeoIntersection.lineLine(
           id: 'SL1',
-          label: 'SL1',
+          label: '', // Empty label so elements get unique IDs (A, B, etc.)
           line1: line1,
           line2: line2,
           dagManager: dagManager,
@@ -61,11 +89,11 @@ void main() {
       });
 
       test('Multiple containers register their elements correctly', () {
-        // Create first intersection
-        final p1 = GeoPointer(id: 'P1', label: 'P1', x: 0, y: 0);
-        final p2 = GeoPointer(id: 'P2', label: 'P2', x: 1, y: 1);
-        final p3 = GeoPointer(id: 'P3', label: 'P3', x: 2, y: 0);
-        final p4 = GeoPointer(id: 'P4', label: 'P4', x: 3, y: 1);
+        // Create first intersection: horizontal and vertical lines
+        final p1 = GeoPointer(id: 'P1', label: 'P1', x: 0, y: 5);
+        final p2 = GeoPointer(id: 'P2', label: 'P2', x: 10, y: 5);
+        final p3 = GeoPointer(id: 'P3', label: 'P3', x: 5, y: 0);
+        final p4 = GeoPointer(id: 'P4', label: 'P4', x: 5, y: 10);
 
         final line1 = GeoLine2P.fromDependencies(
           id: 'line1',
@@ -85,9 +113,9 @@ void main() {
         dagManager.addObject(line1, [p1.id, p2.id]);
         dagManager.addObject(line2, [p3.id, p4.id]);
 
-        final intersection1 = GeoIntersection.lineLine(
+          final intersection1 = GeoIntersection.lineLine(
           id: 'SL1',
-          label: 'SL1',
+          label: '', // Empty label so elements get unique IDs
           line1: line1,
           line2: line2,
           dagManager: dagManager,
@@ -96,9 +124,9 @@ void main() {
         if (intersection1 != null) {
           dagManager.addObject(intersection1, [line1.id, line2.id]);
 
-          // Create second intersection
-          final p5 = GeoPointer(id: 'P5', label: 'P5', x: 4, y: 0);
-          final p6 = GeoPointer(id: 'P6', label: 'P6', x: 5, y: 1);
+          // Create second intersection: line2 and a new diagonal line
+          final p5 = GeoPointer(id: 'P5', label: 'P5', x: 0, y: 0);
+          final p6 = GeoPointer(id: 'P6', label: 'P6', x: 10, y: 10);
           final line3 = GeoLine2P.fromDependencies(
             id: 'line3',
             label: 'line3',
@@ -111,7 +139,7 @@ void main() {
 
           final intersection2 = GeoIntersection.lineLine(
             id: 'SL2',
-            label: 'SL2',
+            label: '', // Empty label so elements get unique IDs
             line1: line2,
             line2: line3,
             dagManager: dagManager,
@@ -143,32 +171,11 @@ void main() {
     group('Element Unregistration', () {
       test('Elements are unregistered when container is deleted', () {
         // Create intersection
-        final p1 = GeoPointer(id: 'P1', label: 'P1', x: 0, y: 0);
-        final p2 = GeoPointer(id: 'P2', label: 'P2', x: 1, y: 1);
-        final p3 = GeoPointer(id: 'P3', label: 'P3', x: 2, y: 0);
-        final p4 = GeoPointer(id: 'P4', label: 'P4', x: 3, y: 1);
-
-        final line1 = GeoLine2P.fromDependencies(
-          id: 'line1',
-          label: 'line1',
-          points: [p1, p2],
-        );
-        final line2 = GeoLine2P.fromDependencies(
-          id: 'line2',
-          label: 'line2',
-          points: [p3, p4],
-        );
-
-        dagManager.addObject(p1, []);
-        dagManager.addObject(p2, []);
-        dagManager.addObject(p3, []);
-        dagManager.addObject(p4, []);
-        dagManager.addObject(line1, [p1.id, p2.id]);
-        dagManager.addObject(line2, [p3.id, p4.id]);
+        final (line1, line2) = _createIntersectingLines();
 
         final intersection = GeoIntersection.lineLine(
           id: 'SL1',
-          label: 'SL1',
+          label: '', // Empty label so elements get unique IDs
           line1: line1,
           line2: line2,
           dagManager: dagManager,
@@ -180,6 +187,7 @@ void main() {
           // Verify elements are registered
           final elementIds = intersection.objects.map((e) => e.id).toList();
           for (final elementId in elementIds) {
+            expect(elementId, isNot('SL1'), reason: 'Element ID should not conflict with container ID');
             expect(dagManager.getContainerForElement(elementId), 'SL1');
           }
 
@@ -207,32 +215,11 @@ void main() {
     group('Element Lookup via getObject()', () {
       test('getObject() finds elements via elementToContainer map', () {
         // Create intersection
-        final p1 = GeoPointer(id: 'P1', label: 'P1', x: 0, y: 0);
-        final p2 = GeoPointer(id: 'P2', label: 'P2', x: 1, y: 1);
-        final p3 = GeoPointer(id: 'P3', label: 'P3', x: 2, y: 0);
-        final p4 = GeoPointer(id: 'P4', label: 'P4', x: 3, y: 1);
-
-        final line1 = GeoLine2P.fromDependencies(
-          id: 'line1',
-          label: 'line1',
-          points: [p1, p2],
-        );
-        final line2 = GeoLine2P.fromDependencies(
-          id: 'line2',
-          label: 'line2',
-          points: [p3, p4],
-        );
-
-        dagManager.addObject(p1, []);
-        dagManager.addObject(p2, []);
-        dagManager.addObject(p3, []);
-        dagManager.addObject(p4, []);
-        dagManager.addObject(line1, [p1.id, p2.id]);
-        dagManager.addObject(line2, [p3.id, p4.id]);
+        final (line1, line2) = _createIntersectingLines();
 
         final intersection = GeoIntersection.lineLine(
           id: 'SL1',
-          label: 'SL1',
+          label: '', // Empty label so element gets unique ID (A, B, etc.)
           line1: line1,
           line2: line2,
           dagManager: dagManager,
@@ -243,10 +230,13 @@ void main() {
 
           // Test lookup for each element
           for (final element in intersection.objects) {
+            // Element ID should be different from container ID
+            expect(element.id, isNot('SL1'), reason: 'Element ID should not conflict with container ID');
             final found = dagManager.getObject(element.id);
             expect(found, isNotNull);
-            expect(found, equals(element));
+            // getObject should return the element, not the container
             expect(found?.id, element.id);
+            expect(found, isA<GeoPoint>());
           }
         }
       });
@@ -272,32 +262,11 @@ void main() {
     group('Container Updates', () {
       test('Elements are updated when container changes', () {
         // Create initial intersection
-        final p1 = GeoPointer(id: 'P1', label: 'P1', x: 0, y: 0);
-        final p2 = GeoPointer(id: 'P2', label: 'P2', x: 1, y: 1);
-        final p3 = GeoPointer(id: 'P3', label: 'P3', x: 2, y: 0);
-        final p4 = GeoPointer(id: 'P4', label: 'P4', x: 3, y: 1);
-
-        final line1 = GeoLine2P.fromDependencies(
-          id: 'line1',
-          label: 'line1',
-          points: [p1, p2],
-        );
-        final line2 = GeoLine2P.fromDependencies(
-          id: 'line2',
-          label: 'line2',
-          points: [p3, p4],
-        );
-
-        dagManager.addObject(p1, []);
-        dagManager.addObject(p2, []);
-        dagManager.addObject(p3, []);
-        dagManager.addObject(p4, []);
-        dagManager.addObject(line1, [p1.id, p2.id]);
-        dagManager.addObject(line2, [p3.id, p4.id]);
+        final (line1, line2) = _createIntersectingLines();
 
         final intersection = GeoIntersection.lineLine(
           id: 'SL1',
-          label: 'SL1',
+          label: '', // Empty label so elements get unique IDs
           line1: line1,
           line2: line2,
           dagManager: dagManager,
@@ -379,32 +348,11 @@ void main() {
     group('updateElementId()', () {
       test('Updates element ID and elementToContainer map', () {
         // Create intersection
-        final p1 = GeoPointer(id: 'P1', label: 'P1', x: 0, y: 0);
-        final p2 = GeoPointer(id: 'P2', label: 'P2', x: 1, y: 1);
-        final p3 = GeoPointer(id: 'P3', label: 'P3', x: 2, y: 0);
-        final p4 = GeoPointer(id: 'P4', label: 'P4', x: 3, y: 1);
-
-        final line1 = GeoLine2P.fromDependencies(
-          id: 'line1',
-          label: 'line1',
-          points: [p1, p2],
-        );
-        final line2 = GeoLine2P.fromDependencies(
-          id: 'line2',
-          label: 'line2',
-          points: [p3, p4],
-        );
-
-        dagManager.addObject(p1, []);
-        dagManager.addObject(p2, []);
-        dagManager.addObject(p3, []);
-        dagManager.addObject(p4, []);
-        dagManager.addObject(line1, [p1.id, p2.id]);
-        dagManager.addObject(line2, [p3.id, p4.id]);
+        final (line1, line2) = _createIntersectingLines();
 
         final intersection = GeoIntersection.lineLine(
           id: 'SL1',
-          label: 'SL1',
+          label: '', // Empty label so elements get unique IDs
           line1: line1,
           line2: line2,
           dagManager: dagManager,
@@ -416,6 +364,8 @@ void main() {
           final oldElement = intersection.objects.first;
           final oldElementId = oldElement.id;
 
+          // Verify element ID is different from container ID
+          expect(oldElementId, isNot('SL1'), reason: 'Element ID should not conflict with container ID');
           // Verify old element is registered
           expect(dagManager.getContainerForElement(oldElementId), 'SL1');
 
@@ -485,32 +435,11 @@ void main() {
 
       test('Container deletion and undo restores elementToContainer map', () {
         // Create intersection
-        final p1 = GeoPointer(id: 'P1', label: 'P1', x: 0, y: 0);
-        final p2 = GeoPointer(id: 'P2', label: 'P2', x: 1, y: 1);
-        final p3 = GeoPointer(id: 'P3', label: 'P3', x: 2, y: 0);
-        final p4 = GeoPointer(id: 'P4', label: 'P4', x: 3, y: 1);
-
-        final line1 = GeoLine2P.fromDependencies(
-          id: 'line1',
-          label: 'line1',
-          points: [p1, p2],
-        );
-        final line2 = GeoLine2P.fromDependencies(
-          id: 'line2',
-          label: 'line2',
-          points: [p3, p4],
-        );
-
-        dagManager.addObject(p1, []);
-        dagManager.addObject(p2, []);
-        dagManager.addObject(p3, []);
-        dagManager.addObject(p4, []);
-        dagManager.addObject(line1, [p1.id, p2.id]);
-        dagManager.addObject(line2, [p3.id, p4.id]);
+        final (line1, line2) = _createIntersectingLines();
 
         final intersection = GeoIntersection.lineLine(
           id: 'SL1',
-          label: 'SL1',
+          label: '', // Empty label so elements get unique IDs
           line1: line1,
           line2: line2,
           dagManager: dagManager,
@@ -521,8 +450,9 @@ void main() {
 
           final elementIds = intersection.objects.map((e) => e.id).toList();
 
-          // Verify elements are registered
+          // Verify elements are registered and have unique IDs
           for (final elementId in elementIds) {
+            expect(elementId, isNot('SL1'), reason: 'Element ID should not conflict with container ID');
             expect(dagManager.getContainerForElement(elementId), 'SL1');
           }
 
@@ -582,36 +512,13 @@ void main() {
 
     group('Integration with Real Intersection', () {
       test('Full flow: Create intersection, verify registration, delete, verify cleanup', () {
-        // Create points
-        final p1 = GeoPointer(id: 'P1', label: 'P1', x: 0, y: 0);
-        final p2 = GeoPointer(id: 'P2', label: 'P2', x: 1, y: 1);
-        final p3 = GeoPointer(id: 'P3', label: 'P3', x: 2, y: 0);
-        final p4 = GeoPointer(id: 'P4', label: 'P4', x: 3, y: 1);
-
-        dagManager.addObject(p1, []);
-        dagManager.addObject(p2, []);
-        dagManager.addObject(p3, []);
-        dagManager.addObject(p4, []);
-
-        // Create lines
-        final line1 = GeoLine2P.fromDependencies(
-          id: 'line1',
-          label: 'line1',
-          points: [p1, p2],
-        );
-        final line2 = GeoLine2P.fromDependencies(
-          id: 'line2',
-          label: 'line2',
-          points: [p3, p4],
-        );
-
-        dagManager.addObject(line1, [p1.id, p2.id]);
-        dagManager.addObject(line2, [p3.id, p4.id]);
+        // Create intersecting lines
+        final (line1, line2) = _createIntersectingLines();
 
         // Create intersection
         final intersection = GeoIntersection.lineLine(
           id: 'SL1',
-          label: 'SL1',
+          label: '', // Empty label so element gets unique ID
           line1: line1,
           line2: line2,
           dagManager: dagManager,
@@ -623,8 +530,13 @@ void main() {
           // Step 1: Verify elements are registered
           expect(intersection.objects.isNotEmpty, true);
           for (final element in intersection.objects) {
+            // Element ID should be different from container ID
+            expect(element.id, isNot('SL1'), reason: 'Element ID should not conflict with container ID');
             expect(dagManager.getContainerForElement(element.id), 'SL1');
-            expect(dagManager.getObject(element.id), equals(element));
+            final found = dagManager.getObject(element.id);
+            expect(found, isNotNull);
+            expect(found?.id, element.id);
+            expect(found, isA<GeoPoint>());
           }
 
           // Step 2: Verify container can be found

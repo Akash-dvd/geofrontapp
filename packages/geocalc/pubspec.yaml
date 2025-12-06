@@ -6,10 +6,12 @@ environment:
   sdk: ^3.9.2
 
 dependencies:
+  flutter:
+    sdk: flutter
   equatable: ^2.0.5
   dartz: ^0.10.1
   
 dev_dependencies:
   test: ^1.24.0
 
-# For packages, you don't need to specify flutter as a dependency unless you use Flutter-specific APIs
+# Flutter is included for debugPrint support

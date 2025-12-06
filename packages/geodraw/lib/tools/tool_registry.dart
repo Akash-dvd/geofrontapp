@@ -23,7 +23,6 @@ class ToolFactoryContext {
   final OnObjectSelected? onObjectSelected;
   final OnToolStateChanged? onToolStateChanged;
   final GeoPointer Function(Offset position)? createFreePoint;
-  final dynamic labelGenerator;
   final dynamic onParameterRequest;
 
   ToolFactoryContext({
@@ -33,7 +32,6 @@ class ToolFactoryContext {
     this.onObjectSelected,
     this.onToolStateChanged,
     this.createFreePoint,
-    this.labelGenerator,
     this.onParameterRequest,
   });
 }

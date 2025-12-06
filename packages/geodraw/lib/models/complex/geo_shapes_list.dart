@@ -9,6 +9,8 @@ import '../canvas_style.dart';
 import '../canvas_style_defaults.dart';
 import '../geometry_object.dart';
 import '../simple/geo_point.dart';
+import '../../core/dag/dag_manager.dart';
+import '../../core/label_manager.dart';
 import 'complex_geometry_object.dart';
 import 'geo_shapes.dart';
 

@@ -51,22 +51,24 @@ This document tracks the implementation of Option B where:
 - **Examples**: SL1, SL2, SL3, ...
 - **Conflict Resolution**: If SL1, SL2, SL3 are taken by regular objects, use SL4 (next available)
 
-**UnionGeometryObjectList**:
-- **Format**: U followed by number
-- **Sequence**: U1, U2, U3, U4, ...
-- **Examples**: U1, U2, U3, ...
-- **Conflict Resolution**: If U1, U2, U3 are taken by regular objects, use U4 (next available)
+**UnionGeometryObjectList** (GeoPolygon, GeoPolyLine, GeoPolyArc, GeoPolyArcGon):
+- **Format**: UN followed by number
+- **Sequence**: UN1, UN2, UN3, UN4, ...
+- **Examples**: UN1, UN2, UN3, ...
+- **Conflict Resolution**: If UN1, UN2, UN3 are taken by regular objects, use UN4 (next available)
 
 **Note**: Elements inside containers use their own type-based naming (uppercase for points, lowercase for lines)
 
 ### Conflict Resolution Strategy
 
-1. **Container Names (SL1, U1, etc.)**:
+1. **Container Names (SL1, UN1, etc.)**:
    - Check all used labels (nodes + elements)
    - Find the least available index (start from 1)
    - **Label Recycling**: If SL1 is deleted, reuse SL1 before creating SL4
    - Example: If SL1, SL2, SL3 are taken, use SL4
    - Example: If SL1, SL2, SL3 are taken, and SL1 is deleted, use SL1 (not SL4)
+   - Example: If UN1, UN2, UN3 are taken, use UN4
+   - Example: If UN1, UN2, UN3 are taken, and UN1 is deleted, use UN1 (not UN4)
 
 2. **Regular Object Names (A, B, a, b, etc.)**:
    - Check all used labels (nodes + elements)
@@ -318,8 +320,8 @@ This document tracks the implementation of Option B where:
   - [x] Use `LabelManager.getNextAvailableLabel(dagManager, GeometryObjectType.simpleList)` for container ID - implemented in command_registry.dart (intersection, tangent, angle bisector commands)
   - [x] Assign SL1, SL2, SL3, ... (find least available index) - implemented via `_findNextContainerLabel()`
 - [x] Update container naming for `UnionGeometryObjectList`:
-  - [x] Use `LabelManager.getNextAvailableLabel(dagManager, GeometryObjectType.union)` for container ID - ready (no union command exists yet, but LabelManager supports it)
-  - [x] Assign U1, U2, U3, ... (find least available index) - implemented via `_findNextContainerLabel()`
+  - [x] Use `LabelManager.getNextAvailableLabel(dagManager, GeometryObjectType.union)` for container ID - implemented for polygon, polyline, polyarc, polyarcgon commands
+  - [x] Assign UN1, UN2, UN3, ... (find least available index) - implemented via `_findNextContainerLabel()` with 'UN' prefix
 - [x] Update any other `GenSimpleGeometryObjectList` subclasses - all major ones updated (intersection, tangent, angle bisector)
 
 ### 3.4 Update Command Registry

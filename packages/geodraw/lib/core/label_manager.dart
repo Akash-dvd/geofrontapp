@@ -13,12 +13,12 @@ enum GeometryObjectType {
   circle, // GeoCircle (a-z, aa-zz, ...)
   arc, // GeoArc (a-z, aa-zz, ...)
   simpleList, // GenSimpleGeometryObjectList containers (SL1, SL2, ...)
-  union, // UnionGeometryObjectList containers (U1, U2, ...)
+  union, // UnionGeometryObjectList containers (UN1, UN2, ...)
   polygon, // GeoPolygon
   polyLine, // GeoPolyLine
   polyArc, // GeoPolyArc
   polyArcGon, // GeoPolyArcGon
-  transform, // GeoTrans objects (GeoRotate, GeoDilate, GeoInverse)
+  transform, // GeoTrans objects (GeoRotate, GeoDilate, GeoLineInverse, GeoCircleInverse, GeoPointInverse)
   text, // CanvasText (may keep custom format)
 }
 
@@ -26,42 +26,90 @@ enum GeometryObjectType {
 class LabelManager {
   /// Get the next available label for a given object type
   /// Uses frugal naming: always checks from start to reuse deleted labels
+  /// [excludeContainerId] - If provided, excludes labels from this container (useful during rebuild)
+  /// [reservedLabels] - If provided, these labels are reserved for this operation and won't be used by others
+  /// [usedReservedLabels] - Mutable set tracking which reserved labels have been consumed (will be updated)
   static String getNextAvailableLabel(
     DAGManager dagManager,
     GeometryObjectType type, {
     String? preferred,
+    String? excludeContainerId,
+    Set<String>? reservedLabels,
+    Set<String>? usedReservedLabels,
   }) {
-    // If preferred label is provided and unique, use it
+    // If preferred label is provided and unique, validate it matches the type convention
     if (preferred != null && preferred.isNotEmpty) {
-      if (isLabelUnique(dagManager, preferred)) {
-        return preferred;
+      // Validate preferred label matches the expected convention for this type
+      bool isValidPreferred = false;
+      switch (type) {
+        case GeometryObjectType.point:
+          // Points should be uppercase (A-Z, AA-ZZ, etc.)
+          isValidPreferred = _isUppercaseLabel(preferred);
+          break;
+        case GeometryObjectType.line:
+        case GeometryObjectType.circle:
+        case GeometryObjectType.arc:
+          // Lines/circles/arcs should be lowercase (a-z, aa-zz, etc.)
+          isValidPreferred = _isLowercaseLabel(preferred);
+          break;
+        case GeometryObjectType.simpleList:
+          // SimpleList containers should be SL1, SL2, etc.
+          isValidPreferred = _isContainerLabel(preferred, 'SL');
+          break;
+        case GeometryObjectType.union:
+        case GeometryObjectType.polygon:
+        case GeometryObjectType.polyLine:
+        case GeometryObjectType.polyArc:
+        case GeometryObjectType.polyArcGon:
+          // Union containers should be UN1, UN2, etc.
+          isValidPreferred = _isContainerLabel(preferred, 'UN');
+          break;
+        default:
+          // For other types, accept any preferred label if unique
+          isValidPreferred = true;
+      }
+      
+      // Only use preferred label if it's valid for this type and unique
+      // Also check if it's in reserved labels (if provided)
+      if (isValidPreferred) {
+        if (reservedLabels != null && 
+            usedReservedLabels != null &&
+            reservedLabels.contains(preferred) &&
+            !usedReservedLabels.contains(preferred)) {
+          // Reserved label is available and not yet used - consume it
+          usedReservedLabels.add(preferred);
+          return preferred;
+        }
+        if (isLabelUnique(dagManager, preferred, excludeContainerId: excludeContainerId, reservedLabels: reservedLabels, usedReservedLabels: usedReservedLabels)) {
+          return preferred;
+        }
       }
     }
 
     // Generate label based on type
     switch (type) {
       case GeometryObjectType.point:
-        return _findFirstAvailableUppercase(dagManager);
+        return _findFirstAvailableUppercase(dagManager, excludeContainerId: excludeContainerId, reservedLabels: reservedLabels, usedReservedLabels: usedReservedLabels);
       case GeometryObjectType.line:
       case GeometryObjectType.circle:
       case GeometryObjectType.arc:
-        return _findFirstAvailableLowercase(dagManager);
+        return _findFirstAvailableLowercase(dagManager, excludeContainerId: excludeContainerId, reservedLabels: reservedLabels, usedReservedLabels: usedReservedLabels);
       case GeometryObjectType.simpleList:
-        return _findNextContainerLabel(dagManager, 'SL');
+        return _findNextContainerLabel(dagManager, 'SL', excludeContainerId: excludeContainerId, reservedLabels: reservedLabels, usedReservedLabels: usedReservedLabels);
       case GeometryObjectType.union:
-        return _findNextContainerLabel(dagManager, 'U');
+        return _findNextContainerLabel(dagManager, 'UN', excludeContainerId: excludeContainerId, reservedLabels: reservedLabels, usedReservedLabels: usedReservedLabels);
       case GeometryObjectType.polygon:
       case GeometryObjectType.polyLine:
       case GeometryObjectType.polyArc:
       case GeometryObjectType.polyArcGon:
-        // For now, use lowercase convention
-        return _findFirstAvailableLowercase(dagManager);
+        // These are UnionGeometryObjectList subtypes, use UN1, UN2, etc.
+        return _findNextContainerLabel(dagManager, 'UN', excludeContainerId: excludeContainerId, reservedLabels: reservedLabels, usedReservedLabels: usedReservedLabels);
       case GeometryObjectType.transform:
         // Transform labels - may need custom handling
-        return _findFirstAvailableLowercase(dagManager);
+        return _findFirstAvailableLowercase(dagManager, excludeContainerId: excludeContainerId, reservedLabels: reservedLabels, usedReservedLabels: usedReservedLabels);
       case GeometryObjectType.text:
         // Text labels - may keep custom format
-        return _findFirstAvailableLowercase(dagManager);
+        return _findFirstAvailableLowercase(dagManager, excludeContainerId: excludeContainerId, reservedLabels: reservedLabels, usedReservedLabels: usedReservedLabels);
     }
   }
 
@@ -124,16 +172,34 @@ class LabelManager {
     DAGManager dagManager,
     String label, {
     String? excludeId,
+    String? excludeContainerId,
+    Set<String>? reservedLabels,
+    Set<String>? usedReservedLabels,
   }) {
-    final usedLabels = getAllUsedLabels(dagManager);
+    final usedLabels = getAllUsedLabels(dagManager, excludeContainerId: excludeContainerId, reservedLabels: reservedLabels, usedReservedLabels: usedReservedLabels);
     if (excludeId != null) {
       usedLabels.remove(excludeId);
+    }
+    // Reserved labels are available for this operation (if not already used)
+    if (reservedLabels != null && 
+        reservedLabels.contains(label) &&
+        (usedReservedLabels == null || !usedReservedLabels.contains(label))) {
+      return true;
     }
     return !usedLabels.contains(label);
   }
 
   /// Get all used labels from DAG nodes and elements
-  static Set<String> getAllUsedLabels(DAGManager dagManager) {
+  /// Includes elements registered in elementToContainer map (even if container not yet in DAG)
+  /// [excludeContainerId] - If provided, excludes labels from this container (useful during rebuild)
+  /// [reservedLabels] - If provided, these labels are reserved and won't be considered as used
+  /// [usedReservedLabels] - Labels from reservedLabels that have been consumed (should be treated as used)
+  static Set<String> getAllUsedLabels(
+    DAGManager dagManager, {
+    String? excludeContainerId,
+    Set<String>? reservedLabels,
+    Set<String>? usedReservedLabels,
+  }) {
     final usedLabels = <String>{};
 
     // Collect labels from DAG nodes
@@ -142,22 +208,46 @@ class LabelManager {
       if (obj is GeometryObject) {
         // For regular objects, label is the display label
         if (obj.label.isNotEmpty) {
-          usedLabels.add(obj.label);
+          // Skip reserved labels that haven't been used yet (they're available for the current operation)
+          if (reservedLabels == null || 
+              !reservedLabels.contains(obj.label) ||
+              (usedReservedLabels != null && usedReservedLabels.contains(obj.label))) {
+            usedLabels.add(obj.label);
+          }
         }
         // Also check ID (which equals label in new system)
-        usedLabels.add(obj.id);
+        // Skip reserved labels that haven't been used yet
+        if (reservedLabels == null || 
+            !reservedLabels.contains(obj.id) ||
+            (usedReservedLabels != null && usedReservedLabels.contains(obj.id))) {
+          usedLabels.add(obj.id);
+        }
       }
     }
 
     // Collect element IDs from containers
     for (final node in dagManager.nodes.values) {
       final obj = node.object;
+      // Skip labels from the container being rebuilt
+      if (excludeContainerId != null && node.id == excludeContainerId) {
+        continue;
+      }
+      
       if (obj is GenSimpleGeometryObjectList) {
         for (final element in obj.objects) {
           // Element ID is the label in new system
-          usedLabels.add(element.id);
+          // Skip reserved labels that haven't been used yet
+          if (reservedLabels == null || 
+              !reservedLabels.contains(element.id) ||
+              (usedReservedLabels != null && usedReservedLabels.contains(element.id))) {
+            usedLabels.add(element.id);
+          }
           if (element.label.isNotEmpty) {
-            usedLabels.add(element.label);
+            if (reservedLabels == null || 
+                !reservedLabels.contains(element.label) ||
+                (usedReservedLabels != null && usedReservedLabels.contains(element.label))) {
+              usedLabels.add(element.label);
+            }
           }
         }
       } else if (obj is UnionGeometryObjectList) {
@@ -165,12 +255,58 @@ class LabelManager {
         // But check their labels anyway
         for (final element in obj.elements) {
           // Elements in UnionGeometryObjectList are always GeometryObject
-          usedLabels.add(element.id);
+          // Skip reserved labels that haven't been used yet
+          if (reservedLabels == null || 
+              !reservedLabels.contains(element.id) ||
+              (usedReservedLabels != null && usedReservedLabels.contains(element.id))) {
+            usedLabels.add(element.id);
+          }
           if (element.label.isNotEmpty) {
-            usedLabels.add(element.label);
+            if (reservedLabels == null || 
+                !reservedLabels.contains(element.label) ||
+                (usedReservedLabels != null && usedReservedLabels.contains(element.label))) {
+              usedLabels.add(element.label);
+            }
           }
         }
       }
+    }
+
+    // CRITICAL: Also check elementToContainer map for elements that have been registered
+    // but whose containers haven't been added to DAG yet (prevents duplicate labels
+    // when creating multiple elements in quick succession)
+    // Exclude elements from the container being rebuilt (only during rebuild, not initial creation)
+    for (final elementId in dagManager.elementToContainer.keys) {
+      final containerId = dagManager.elementToContainer[elementId];
+      
+      // During rebuild: exclude old container elements, but include newly created ones (via usedReservedLabels)
+      if (excludeContainerId != null && reservedLabels != null) {
+        // If this element belongs to the container being rebuilt
+        if (containerId == excludeContainerId) {
+          // Only skip if it's a reserved label that hasn't been used yet
+          // If it's been used (in usedReservedLabels), include it (it's a newly created label)
+          if (reservedLabels.contains(elementId) &&
+              (usedReservedLabels == null || !usedReservedLabels.contains(elementId))) {
+            continue; // Skip old reserved labels that haven't been reused yet
+          }
+          // Include newly created labels (in usedReservedLabels) or non-reserved labels
+          usedLabels.add(elementId);
+          continue;
+        }
+      }
+      
+      // Skip reserved labels that haven't been used yet (they're available for the current operation)
+      if (reservedLabels != null && 
+          reservedLabels.contains(elementId) &&
+          (usedReservedLabels == null || !usedReservedLabels.contains(elementId))) {
+        continue;
+      }
+      // Always include labels that are in usedReservedLabels (tracked as used in this operation)
+      if (usedReservedLabels != null && usedReservedLabels.contains(elementId)) {
+        usedLabels.add(elementId);
+        continue;
+      }
+      usedLabels.add(elementId);
     }
 
     return usedLabels;
@@ -198,7 +334,7 @@ class LabelManager {
       case GeometryObjectType.simpleList:
         return _suggestNextContainer(dagManager, baseLabel, 'SL');
       case GeometryObjectType.union:
-        return _suggestNextContainer(dagManager, baseLabel, 'U');
+        return _suggestNextContainer(dagManager, baseLabel, 'UN');
       default:
         return getNextAvailableLabel(dagManager, type);
     }
@@ -210,13 +346,31 @@ class LabelManager {
 
   /// Find first available uppercase label (A-Z, then AA-ZZ, then AAA-ZZZ, ...)
   /// Frugal naming: checks from start to reuse deleted labels
-  static String _findFirstAvailableUppercase(DAGManager dagManager) {
-    final usedLabels = getAllUsedLabels(dagManager);
+  static String _findFirstAvailableUppercase(
+    DAGManager dagManager, {
+    String? excludeContainerId,
+    Set<String>? reservedLabels,
+    Set<String>? usedReservedLabels,
+  }) {
+    final usedLabels = getAllUsedLabels(dagManager, excludeContainerId: excludeContainerId, reservedLabels: reservedLabels, usedReservedLabels: usedReservedLabels);
+    
+    // First, try to get an unused reserved label (during rebuild)
+    if (reservedLabels != null && usedReservedLabels != null) {
+      for (final reserved in reservedLabels) {
+        if (!usedReservedLabels.contains(reserved) && _isUppercaseLabel(reserved)) {
+          // Consume this reserved label
+          usedReservedLabels.add(reserved);
+          return reserved;
+        }
+      }
+    }
 
     // Try single letters first (A-Z)
     for (int i = 0; i < 26; i++) {
       final label = String.fromCharCode(65 + i); // A-Z
       if (!usedLabels.contains(label)) {
+        // Track this label as used if tracking set is provided
+        usedReservedLabels?.add(label);
         return label;
       }
     }
@@ -228,6 +382,8 @@ class LabelManager {
         final second = String.fromCharCode(65 + j);
         final label = '$first$second';
         if (!usedLabels.contains(label)) {
+          // Track this label as used if tracking set is provided
+          usedReservedLabels?.add(label);
           return label;
         }
       }
@@ -242,6 +398,8 @@ class LabelManager {
           final third = String.fromCharCode(65 + k);
           final label = '$first$second$third';
           if (!usedLabels.contains(label)) {
+            // Track this label as used if tracking set is provided
+            usedReservedLabels?.add(label);
             return label;
           }
         }
@@ -254,8 +412,24 @@ class LabelManager {
 
   /// Find first available lowercase label (a-z, then aa-zz, then aaa-zzz, ...)
   /// Frugal naming: checks from start to reuse deleted labels
-  static String _findFirstAvailableLowercase(DAGManager dagManager) {
-    final usedLabels = getAllUsedLabels(dagManager);
+  static String _findFirstAvailableLowercase(
+    DAGManager dagManager, {
+    String? excludeContainerId,
+    Set<String>? reservedLabels,
+    Set<String>? usedReservedLabels,
+  }) {
+    final usedLabels = getAllUsedLabels(dagManager, excludeContainerId: excludeContainerId, reservedLabels: reservedLabels, usedReservedLabels: usedReservedLabels);
+    
+    // First, try to get an unused reserved label
+    if (reservedLabels != null && usedReservedLabels != null) {
+      for (final reserved in reservedLabels) {
+        if (!usedReservedLabels.contains(reserved) && _isLowercaseLabel(reserved)) {
+          // Consume this reserved label
+          usedReservedLabels.add(reserved);
+          return reserved;
+        }
+      }
+    }
 
     // Try single letters first (a-z)
     for (int i = 0; i < 26; i++) {
@@ -296,10 +470,27 @@ class LabelManager {
     throw StateError('Unable to generate unique lowercase label');
   }
 
-  /// Find next available container label (SL1, SL2, ... or U1, U2, ...)
+  /// Find next available container label (SL1, SL2, ... or UN1, UN2, ...)
   /// Frugal naming: checks from 1 to reuse deleted labels
-  static String _findNextContainerLabel(DAGManager dagManager, String prefix) {
-    final usedLabels = getAllUsedLabels(dagManager);
+  static String _findNextContainerLabel(
+    DAGManager dagManager,
+    String prefix, {
+    String? excludeContainerId,
+    Set<String>? reservedLabels,
+    Set<String>? usedReservedLabels,
+  }) {
+    final usedLabels = getAllUsedLabels(dagManager, excludeContainerId: excludeContainerId, reservedLabels: reservedLabels, usedReservedLabels: usedReservedLabels);
+    
+    // First, try to get an unused reserved label
+    if (reservedLabels != null && usedReservedLabels != null) {
+      for (final reserved in reservedLabels) {
+        if (!usedReservedLabels.contains(reserved) && _isContainerLabel(reserved, prefix)) {
+          // Consume this reserved label
+          usedReservedLabels.add(reserved);
+          return reserved;
+        }
+      }
+    }
 
     // Check from 1 onwards (frugal naming)
     int index = 1;
@@ -464,7 +655,7 @@ class LabelManager {
     return RegExp(r'^[a-z]+$').hasMatch(label);
   }
 
-  /// Check if label is a container label (SL1, U1, etc.)
+  /// Check if label is a container label (SL1, UN1, etc.)
   static bool _isContainerLabel(String label, String prefix) {
     if (label.isEmpty) return false;
     final pattern = RegExp('^$prefix\\d+\$');

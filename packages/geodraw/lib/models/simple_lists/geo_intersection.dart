@@ -154,6 +154,8 @@ class GeoIntersection extends GenSimpleGeometryObjectList<GeoPoint> {
     required DAGManager dagManager,
     Color color = Colors.orange,
     bool visible = true,
+    Set<String>? reservedLabels,
+    Set<String>? usedReservedLabels,
   }) {
     // debugPrint(
     //   '[GeoIntersection] Computing line-line intersection between ${line1.label} and ${line2.label}',
@@ -187,6 +189,8 @@ class GeoIntersection extends GenSimpleGeometryObjectList<GeoPoint> {
       preferredLabel: label.isNotEmpty ? label : null,
       color: color,
       visible: visible,
+      reservedLabels: reservedLabels,
+      usedReservedLabels: usedReservedLabels,
     );
 
     // debugPrint('[GeoIntersection] Line-line intersection created with 1 point.');
@@ -209,6 +213,8 @@ class GeoIntersection extends GenSimpleGeometryObjectList<GeoPoint> {
     required DAGManager dagManager,
     Color color = Colors.orange,
     bool visible = true,
+    Set<String>? reservedLabels,
+    Set<String>? usedReservedLabels,
   }) {
     // debugPrint(
     //   '[GeoIntersection] Computing line-circle intersection between ${line.label} and ${circle.label}',
@@ -271,6 +277,8 @@ class GeoIntersection extends GenSimpleGeometryObjectList<GeoPoint> {
           preferredLabel: intersections.length == 1 && label.isNotEmpty ? label : null,
           color: color,
           visible: visible,
+          reservedLabels: reservedLabels,
+          usedReservedLabels: usedReservedLabels,
         ),
       );
     }
@@ -297,6 +305,8 @@ class GeoIntersection extends GenSimpleGeometryObjectList<GeoPoint> {
     required DAGManager dagManager,
     Color color = Colors.orange,
     bool visible = true,
+    Set<String>? reservedLabels,
+    Set<String>? usedReservedLabels,
   }) {
     // debugPrint(
     //   '[GeoIntersection] Computing circle-circle intersection between ${circle1.label} and ${circle2.label}',
@@ -357,6 +367,8 @@ class GeoIntersection extends GenSimpleGeometryObjectList<GeoPoint> {
           preferredLabel: intersections.length == 1 && label.isNotEmpty ? label : null,
           color: color,
           visible: visible,
+          reservedLabels: reservedLabels,
+          usedReservedLabels: usedReservedLabels,
         ),
       );
     }
@@ -383,6 +395,8 @@ class GeoIntersection extends GenSimpleGeometryObjectList<GeoPoint> {
     required DAGManager dagManager,
     Color color = Colors.orange,
     bool visible = true,
+    Set<String>? reservedLabels,
+    Set<String>? usedReservedLabels,
   }) {
     // debugPrint(
     //   '[GeoIntersection] Computing line-segment intersection between ${line.label} and ${segment.label}',
@@ -431,6 +445,9 @@ class GeoIntersection extends GenSimpleGeometryObjectList<GeoPoint> {
       );
     }
     
+    // Create tracking set if not provided (for initial creation to track labels used in this operation)
+    final trackingSet = usedReservedLabels ?? <String>{};
+    
     final point = _pointFromMultivector(
       dagManager: dagManager,
       containerId: id,
@@ -438,6 +455,8 @@ class GeoIntersection extends GenSimpleGeometryObjectList<GeoPoint> {
       preferredLabel: label.isNotEmpty ? label : null,
       color: color,
       visible: visible,
+      reservedLabels: reservedLabels,
+      usedReservedLabels: trackingSet,
     );
     
     debugPrint(
@@ -462,6 +481,8 @@ class GeoIntersection extends GenSimpleGeometryObjectList<GeoPoint> {
     required DAGManager dagManager,
     Color color = Colors.orange,
     bool visible = true,
+    Set<String>? reservedLabels,
+    Set<String>? usedReservedLabels,
   }) {
     // debugPrint(
     //   '[GeoIntersection] Computing line-arc intersection between ${line.label} and ${arc.label}',
@@ -513,6 +534,8 @@ class GeoIntersection extends GenSimpleGeometryObjectList<GeoPoint> {
             preferredLabel: intersections.length == 1 && label.isNotEmpty ? label : null,
             color: color,
             visible: visible,
+            reservedLabels: reservedLabels,
+            usedReservedLabels: usedReservedLabels,
           ),
         );
       }
@@ -543,6 +566,8 @@ class GeoIntersection extends GenSimpleGeometryObjectList<GeoPoint> {
     required DAGManager dagManager,
     Color color = Colors.orange,
     bool visible = true,
+    Set<String>? reservedLabels,
+    Set<String>? usedReservedLabels,
   }) {
     // debugPrint(
     //   '[GeoIntersection] Computing circle-segment intersection between ${circle.label} and ${segment.label}',
@@ -591,6 +616,8 @@ class GeoIntersection extends GenSimpleGeometryObjectList<GeoPoint> {
             preferredLabel: intersections.length == 1 && label.isNotEmpty ? label : null,
             color: color,
             visible: visible,
+            reservedLabels: reservedLabels,
+            usedReservedLabels: usedReservedLabels,
           ),
         );
       }
@@ -618,6 +645,8 @@ class GeoIntersection extends GenSimpleGeometryObjectList<GeoPoint> {
     required DAGManager dagManager,
     Color color = Colors.orange,
     bool visible = true,
+    Set<String>? reservedLabels,
+    Set<String>? usedReservedLabels,
   }) {
     // debugPrint(
     //   '[GeoIntersection] Computing circle-arc intersection between ${circle.label} and ${arc.label}',
@@ -666,6 +695,8 @@ class GeoIntersection extends GenSimpleGeometryObjectList<GeoPoint> {
             preferredLabel: intersections.length == 1 && label.isNotEmpty ? label : null,
             color: color,
             visible: visible,
+            reservedLabels: reservedLabels,
+            usedReservedLabels: usedReservedLabels,
           ),
         );
       }
@@ -693,6 +724,8 @@ class GeoIntersection extends GenSimpleGeometryObjectList<GeoPoint> {
     required DAGManager dagManager,
     Color color = Colors.orange,
     bool visible = true,
+    Set<String>? reservedLabels,
+    Set<String>? usedReservedLabels,
   }) {
     // debugPrint(
     //   '[GeoIntersection] Computing segment-segment intersection between ${segment1.label} and ${segment2.label}',
@@ -743,6 +776,9 @@ class GeoIntersection extends GenSimpleGeometryObjectList<GeoPoint> {
       );
     }
     
+    // Create tracking set if not provided (for initial creation to track labels used in this operation)
+    final trackingSet = usedReservedLabels ?? <String>{};
+    
     final point = _pointFromMultivector(
       dagManager: dagManager,
       containerId: id,
@@ -750,6 +786,8 @@ class GeoIntersection extends GenSimpleGeometryObjectList<GeoPoint> {
       preferredLabel: label.isNotEmpty ? label : null,
       color: color,
       visible: visible,
+      reservedLabels: reservedLabels,
+      usedReservedLabels: trackingSet,
     );
     
     // debugPrint(
@@ -774,6 +812,8 @@ class GeoIntersection extends GenSimpleGeometryObjectList<GeoPoint> {
     required DAGManager dagManager,
     Color color = Colors.orange,
     bool visible = true,
+    Set<String>? reservedLabels,
+    Set<String>? usedReservedLabels,
   }) {
     // debugPrint(
     //   '[GeoIntersection] Computing segment-arc intersection between ${segment.label} and ${arc.label}',
@@ -823,6 +863,8 @@ class GeoIntersection extends GenSimpleGeometryObjectList<GeoPoint> {
             preferredLabel: intersections.length == 1 && label.isNotEmpty ? label : null,
             color: color,
             visible: visible,
+            reservedLabels: reservedLabels,
+            usedReservedLabels: usedReservedLabels,
           ),
         );
       }else{
@@ -853,6 +895,8 @@ class GeoIntersection extends GenSimpleGeometryObjectList<GeoPoint> {
     required DAGManager dagManager,
     Color color = Colors.orange,
     bool visible = true,
+    Set<String>? reservedLabels,
+    Set<String>? usedReservedLabels,
   }) {
     // debugPrint(
     //   '[GeoIntersection] Computing union-object intersection between ${union.label} and ${other.label}',
@@ -860,183 +904,37 @@ class GeoIntersection extends GenSimpleGeometryObjectList<GeoPoint> {
     
     final allPoints = <GeoPoint>[];
     
+    // Create tracking set if not provided (for initial creation to track labels used in this operation)
+    final trackingSet = usedReservedLabels ?? <String>{};
+    
     // Iterate through all elements in the union
+    // Compute intersections directly without creating temporary containers
     for (final element in union.elements) {
-      GeoIntersection? elementIntersection;
+      final intersectionMvs = _computeIntersectionMultivectors(element, other);
       
-      // Compute intersection based on element and other object types
-      // Note: These nested intersections create temporary containers, but we use the main container ID
-      // The elements will be registered in the main container's elementToContainer map
-      if (element is GeoLine && other is GeoLine) {
-        elementIntersection = GeoIntersection.lineLine(
-          id: '${id}_${element.id}',
-          label: '${label}_${element.id}',
-          line1: element,
-          line2: other,
+      // Convert multivectors to points and register with main container ID
+      for (final mv in intersectionMvs) {
+        if (!_isFinitePoint(mv)) continue;
+        
+        // Check if point is valid for the geometry types (e.g., on segment/arc)
+        if (!_isValidIntersectionPoint(mv, element, other)) continue;
+        
+        // Check for duplicates before adding
+        if (_containsPoint(allPoints, mv)) continue;
+        
+        // Create point directly with main container ID (no temporary containers)
+        final point = _pointFromMultivector(
           dagManager: dagManager,
+          containerId: id, // Use main container ID directly
+          multivector: mv,
+          preferredLabel: null, // Let LabelManager assign unique label
           color: color,
           visible: visible,
+          reservedLabels: reservedLabels,
+          usedReservedLabels: trackingSet, // Use tracking set to track labels used in this operation
         );
-      } else if (element is GeoLine && other is GeoCircle) {
-        elementIntersection = GeoIntersection.lineCircle(
-          id: '${id}_${element.id}',
-          label: '${label}_${element.id}',
-          line: element,
-          circle: other,
-          dagManager: dagManager,
-          color: color,
-          visible: visible,
-        );
-      } else if (element is GeoCircle && other is GeoLine) {
-        elementIntersection = GeoIntersection.lineCircle(
-          id: '${id}_${element.id}',
-          label: '${label}_${element.id}',
-          line: other,
-          circle: element,
-          dagManager: dagManager,
-          color: color,
-          visible: visible,
-        );
-      } else if (element is GeoCircle && other is GeoCircle) {
-        elementIntersection = GeoIntersection.circleCircle(
-          id: '${id}_${element.id}',
-          label: '${label}_${element.id}',
-          circle1: element,
-          circle2: other,
-          dagManager: dagManager,
-          color: color,
-          visible: visible,
-        );
-      } else if (element is GeoLine && other is GeoSegment) {
-        elementIntersection = GeoIntersection.lineSegment(
-          id: '${id}_${element.id}',
-          label: '${label}_${element.id}',
-          line: element,
-          segment: other,
-          dagManager: dagManager,
-          color: color,
-          visible: visible,
-        );
-      } else if (element is GeoSegment && other is GeoLine) {
-        elementIntersection = GeoIntersection.lineSegment(
-          id: '${id}_${element.id}',
-          label: '${label}_${element.id}',
-          line: other,
-          segment: element,
-          dagManager: dagManager,
-          color: color,
-          visible: visible,
-        );
-      } else if (element is GeoLine && other is GeoArc) {
-        elementIntersection = GeoIntersection.lineArc(
-          id: '${id}_${element.id}',
-          label: '${label}_${element.id}',
-          line: element,
-          arc: other,
-          dagManager: dagManager,
-          color: color,
-          visible: visible,
-        );
-      } else if (element is GeoArc && other is GeoLine) {
-        elementIntersection = GeoIntersection.lineArc(
-          id: '${id}_${element.id}',
-          label: '${label}_${element.id}',
-          line: other,
-          arc: element,
-          dagManager: dagManager,
-          color: color,
-          visible: visible,
-        );
-      } else if (element is GeoCircle && other is GeoSegment) {
-        elementIntersection = GeoIntersection.circleSegment(
-          id: '${id}_${element.id}',
-          label: '${label}_${element.id}',
-          circle: element,
-          segment: other,
-          dagManager: dagManager,
-          color: color,
-          visible: visible,
-        );
-      } else if (element is GeoSegment && other is GeoCircle) {
-        elementIntersection = GeoIntersection.circleSegment(
-          id: '${id}_${element.id}',
-          label: '${label}_${element.id}',
-          circle: other,
-          segment: element,
-          dagManager: dagManager,
-          color: color,
-          visible: visible,
-        );
-      } else if (element is GeoCircle && other is GeoArc) {
-        elementIntersection = GeoIntersection.circleArc(
-          id: '${id}_${element.id}',
-          label: '${label}_${element.id}',
-          circle: element,
-          arc: other,
-          dagManager: dagManager,
-          color: color,
-          visible: visible,
-        );
-      } else if (element is GeoArc && other is GeoCircle) {
-        elementIntersection = GeoIntersection.circleArc(
-          id: '${id}_${element.id}',
-          label: '${label}_${element.id}',
-          circle: other,
-          arc: element,
-          dagManager: dagManager,
-          color: color,
-          visible: visible,
-        );
-      } else if (element is GeoSegment && other is GeoSegment) {
-        elementIntersection = GeoIntersection.segmentSegment(
-          id: '${id}_${element.id}',
-          label: '${label}_${element.id}',
-          segment1: element,
-          segment2: other,
-          dagManager: dagManager,
-          color: color,
-          visible: visible,
-        );
-      } else if (element is GeoSegment && other is GeoArc) {
-        elementIntersection = GeoIntersection.segmentArc(
-          id: '${id}_${element.id}',
-          label: '${label}_${element.id}',
-          segment: element,
-          arc: other,
-          dagManager: dagManager,
-          color: color,
-          visible: visible,
-        );
-      } else if (element is GeoArc && other is GeoSegment) {
-        elementIntersection = GeoIntersection.segmentArc(
-          id: '${id}_${element.id}',
-          label: '${label}_${element.id}',
-          segment: other,
-          arc: element,
-          dagManager: dagManager,
-          color: color,
-          visible: visible,
-        );
-      } else if (element is GeoArc && other is GeoArc) {
-        elementIntersection = GeoIntersection.arcArc(
-          id: '${id}_${element.id}',
-          label: '${label}_${element.id}',
-          arc1: element,
-          arc2: other,
-          dagManager: dagManager,
-          color: color,
-          visible: visible,
-        );
-      }
-      
-      // Collect points from this element's intersection
-      if (elementIntersection != null && elementIntersection.objects.isNotEmpty) {
-        for (final point in elementIntersection.objects) {
-          // Check for duplicates before adding
-          if (!_containsPoint(allPoints, point.multivector)) {
-            allPoints.add(point);
-          }
-        }
+        
+        allPoints.add(point);
       }
     }
     
@@ -1055,6 +953,8 @@ class GeoIntersection extends GenSimpleGeometryObjectList<GeoPoint> {
 
   /// Calculate intersection between two union objects
   /// Iterates through all elements in both unions and finds intersections
+  /// Computes intersections directly without creating temporary containers
+  /// All label assignment is handled by LabelManager via _pointFromMultivector
   static GeoIntersection unionWithUnion({
     required String id,
     required String label,
@@ -1063,6 +963,8 @@ class GeoIntersection extends GenSimpleGeometryObjectList<GeoPoint> {
     required DAGManager dagManager,
     Color color = Colors.orange,
     bool visible = true,
+    Set<String>? reservedLabels,
+    Set<String>? usedReservedLabels,
   }) {
     // debugPrint(
     //   '[GeoIntersection] Computing union-union intersection between ${union1.label} and ${union2.label}',
@@ -1070,184 +972,38 @@ class GeoIntersection extends GenSimpleGeometryObjectList<GeoPoint> {
     
     final allPoints = <GeoPoint>[];
     
+    // Create tracking set if not provided (for initial creation to track labels used in this operation)
+    final trackingSet = usedReservedLabels ?? <String>{};
+    
     // Iterate through all pairs of elements
+    // Compute intersections directly without creating temporary containers
     for (final element1 in union1.elements) {
       for (final element2 in union2.elements) {
-        GeoIntersection? elementIntersection;
+        final intersectionMvs = _computeIntersectionMultivectors(element1, element2);
         
-        // Compute intersection based on element types
-        // Note: These nested intersections create temporary containers, but we use the main container ID
-        // The elements will be registered in the main container's elementToContainer map
-        if (element1 is GeoLine && element2 is GeoLine) {
-          elementIntersection = GeoIntersection.lineLine(
-            id: '${id}_${element1.id}_${element2.id}',
-            label: '${label}_${element1.id}_${element2.id}',
-            line1: element1,
-            line2: element2,
+        // Convert multivectors to points and register with main container ID
+        for (final mv in intersectionMvs) {
+          if (!_isFinitePoint(mv)) continue;
+          
+          // Check if point is valid for the geometry types (e.g., on segment/arc)
+          if (!_isValidIntersectionPoint(mv, element1, element2)) continue;
+          
+          // Check for duplicates before adding
+          if (_containsPoint(allPoints, mv)) continue;
+          
+          // Create point directly with main container ID (no temporary containers)
+          final point = _pointFromMultivector(
             dagManager: dagManager,
+            containerId: id, // Use main container ID directly
+            multivector: mv,
+            preferredLabel: null, // Let LabelManager assign unique label
             color: color,
             visible: visible,
+            reservedLabels: reservedLabels,
+            usedReservedLabels: trackingSet, // Use tracking set to track labels used in this operation
           );
-        } else if (element1 is GeoLine && element2 is GeoCircle) {
-          elementIntersection = GeoIntersection.lineCircle(
-            id: '${id}_${element1.id}_${element2.id}',
-            label: '${label}_${element1.id}_${element2.id}',
-            line: element1,
-            circle: element2,
-            dagManager: dagManager,
-            color: color,
-            visible: visible,
-          );
-        } else if (element1 is GeoCircle && element2 is GeoLine) {
-          elementIntersection = GeoIntersection.lineCircle(
-            id: '${id}_${element1.id}_${element2.id}',
-            label: '${label}_${element1.id}_${element2.id}',
-            line: element2,
-            circle: element1,
-            dagManager: dagManager,
-            color: color,
-            visible: visible,
-          );
-        } else if (element1 is GeoCircle && element2 is GeoCircle) {
-          elementIntersection = GeoIntersection.circleCircle(
-            id: '${id}_${element1.id}_${element2.id}',
-            label: '${label}_${element1.id}_${element2.id}',
-            circle1: element1,
-            circle2: element2,
-            dagManager: dagManager,
-            color: color,
-            visible: visible,
-          );
-        } else if (element1 is GeoLine && element2 is GeoSegment) {
-          elementIntersection = GeoIntersection.lineSegment(
-            id: '${id}_${element1.id}_${element2.id}',
-            label: '${label}_${element1.id}_${element2.id}',
-            line: element1,
-            segment: element2,
-            dagManager: dagManager,
-            color: color,
-            visible: visible,
-          );
-        } else if (element1 is GeoSegment && element2 is GeoLine) {
-          elementIntersection = GeoIntersection.lineSegment(
-            id: '${id}_${element1.id}_${element2.id}',
-            label: '${label}_${element1.id}_${element2.id}',
-            line: element2,
-            segment: element1,
-            dagManager: dagManager,
-            color: color,
-            visible: visible,
-          );
-        } else if (element1 is GeoLine && element2 is GeoArc) {
-          elementIntersection = GeoIntersection.lineArc(
-            id: '${id}_${element1.id}_${element2.id}',
-            label: '${label}_${element1.id}_${element2.id}',
-            line: element1,
-            arc: element2,
-            dagManager: dagManager,
-            color: color,
-            visible: visible,
-          );
-        } else if (element1 is GeoArc && element2 is GeoLine) {
-          elementIntersection = GeoIntersection.lineArc(
-            id: '${id}_${element1.id}_${element2.id}',
-            label: '${label}_${element1.id}_${element2.id}',
-            line: element2,
-            arc: element1,
-            dagManager: dagManager,
-            color: color,
-            visible: visible,
-          );
-        } else if (element1 is GeoCircle && element2 is GeoSegment) {
-          elementIntersection = GeoIntersection.circleSegment(
-            id: '${id}_${element1.id}_${element2.id}',
-            label: '${label}_${element1.id}_${element2.id}',
-            circle: element1,
-            segment: element2,
-            dagManager: dagManager,
-            color: color,
-            visible: visible,
-          );
-        } else if (element1 is GeoSegment && element2 is GeoCircle) {
-          elementIntersection = GeoIntersection.circleSegment(
-            id: '${id}_${element1.id}_${element2.id}',
-            label: '${label}_${element1.id}_${element2.id}',
-            circle: element2,
-            segment: element1,
-            dagManager: dagManager,
-            color: color,
-            visible: visible,
-          );
-        } else if (element1 is GeoCircle && element2 is GeoArc) {
-          elementIntersection = GeoIntersection.circleArc(
-            id: '${id}_${element1.id}_${element2.id}',
-            label: '${label}_${element1.id}_${element2.id}',
-            circle: element1,
-            arc: element2,
-            dagManager: dagManager,
-            color: color,
-            visible: visible,
-          );
-        } else if (element1 is GeoArc && element2 is GeoCircle) {
-          elementIntersection = GeoIntersection.circleArc(
-            id: '${id}_${element1.id}_${element2.id}',
-            label: '${label}_${element1.id}_${element2.id}',
-            circle: element2,
-            arc: element1,
-            dagManager: dagManager,
-            color: color,
-            visible: visible,
-          );
-        } else if (element1 is GeoSegment && element2 is GeoSegment) {
-          elementIntersection = GeoIntersection.segmentSegment(
-            id: '${id}_${element1.id}_${element2.id}',
-            label: '${label}_${element1.id}_${element2.id}',
-            segment1: element1,
-            segment2: element2,
-            dagManager: dagManager,
-            color: color,
-            visible: visible,
-          );
-        } else if (element1 is GeoSegment && element2 is GeoArc) {
-          elementIntersection = GeoIntersection.segmentArc(
-            id: '${id}_${element1.id}_${element2.id}',
-            label: '${label}_${element1.id}_${element2.id}',
-            segment: element1,
-            arc: element2,
-            dagManager: dagManager,
-            color: color,
-            visible: visible,
-          );
-        } else if (element1 is GeoArc && element2 is GeoSegment) {
-          elementIntersection = GeoIntersection.segmentArc(
-            id: '${id}_${element1.id}_${element2.id}',
-            label: '${label}_${element1.id}_${element2.id}',
-            segment: element2,
-            arc: element1,
-            dagManager: dagManager,
-            color: color,
-            visible: visible,
-          );
-        } else if (element1 is GeoArc && element2 is GeoArc) {
-          elementIntersection = GeoIntersection.arcArc(
-            id: '${id}_${element1.id}_${element2.id}',
-            label: '${label}_${element1.id}_${element2.id}',
-            arc1: element1,
-            arc2: element2,
-            dagManager: dagManager,
-            color: color,
-            visible: visible,
-          );
-        }
-        
-        // Collect points from this pair's intersection
-        if (elementIntersection != null && elementIntersection.objects.isNotEmpty) {
-          for (final point in elementIntersection.objects) {
-            // Check for duplicates before adding
-            if (!_containsPoint(allPoints, point.multivector)) {
-              allPoints.add(point);
-            }
-          }
+          
+          allPoints.add(point);
         }
       }
     }
@@ -1274,6 +1030,8 @@ class GeoIntersection extends GenSimpleGeometryObjectList<GeoPoint> {
     required DAGManager dagManager,
     Color color = Colors.orange,
     bool visible = true,
+    Set<String>? reservedLabels,
+    Set<String>? usedReservedLabels,
   }) {
     // debugPrint(
     //   '[GeoIntersection] Computing arc-arc intersection between ${arc1.label} and ${arc2.label}',
@@ -1323,6 +1081,8 @@ class GeoIntersection extends GenSimpleGeometryObjectList<GeoPoint> {
             preferredLabel: intersections.length == 1 && label.isNotEmpty ? label : null,
             color: color,
             visible: visible,
+            reservedLabels: reservedLabels,
+            usedReservedLabels: usedReservedLabels,
           ),
         );
       }
@@ -1375,224 +1135,285 @@ class GeoIntersection extends GenSimpleGeometryObjectList<GeoPoint> {
     List<GeometryObject> parents,
     dynamic dagManager,
   ) {
-    if (parents.length != 2) {
+    if (dagManager is! DAGManager || dependencies.length != 2) {
       debugPrint(
-        '[GeoIntersection] Expected 2 parents, received ${parents.length}.',
+        '[GeoIntersection] Expected 2 dependencies, received ${dependencies.length}.',
       );
       return null;
     }
 
-    // Cast dagManager to DAGManager
-    if (dagManager is! DAGManager) {
-      debugPrint('[GeoIntersection] rebuildFromParents: dagManager is not DAGManager');
+    // Use dagManager.getObject() - handles both regular objects and objects in containers
+    final parentAObj = dagManager.getObject(dependencies[0]);
+    final parentBObj = dagManager.getObject(dependencies[1]);
+    
+    if (parentAObj is! GeometryObject || parentBObj is! GeometryObject) {
+      debugPrint('[GeoIntersection] Failed to resolve dependencies');
       return null;
     }
-
-    final GeometryObject parentA = parents[0];
-    final GeometryObject parentB = parents[1];
+    
+    final GeometryObject parentA = parentAObj;
+    final GeometryObject parentB = parentBObj;
     final color = style.strokeColor;
 
-    GeoIntersection? rebuilt;
+    // STEP 1: Reserve old labels for this rebuild (DON'T unregister yet)
+    // This ensures they're only available for THIS container's rebuild, not others
+    final oldPointLabels = this.objects.map((p) => p.id).toSet();
+    
+    // Track which reserved labels have been consumed during rebuild
+    // This prevents multiple points from getting the same label
+    final usedReservedLabels = <String>{};
 
-    // Simple × Simple cases
-    if (parentA is GeoLine && parentB is GeoLine) {
-      rebuilt = GeoIntersection.lineLine(
-        id: id,
-        label: label,
-        line1: parentA,
-        line2: parentB,
-        dagManager: dagManager,
-        color: color,
-        visible: visible,
-      );
-    } else if (parentA is GeoLine && parentB is GeoCircle) {
-      rebuilt = GeoIntersection.lineCircle(
-        id: id,
-        label: label,
-        line: parentA,
-        circle: parentB,
-        dagManager: dagManager,
-        color: color,
-        visible: visible,
-      );
-    } else if (parentA is GeoCircle && parentB is GeoLine) {
-      rebuilt = GeoIntersection.lineCircle(
-        id: id,
-        label: label,
-        line: parentB,
-        circle: parentA,
-        dagManager: dagManager,
-        color: color,
-        visible: visible,
-      );
-    } else if (parentA is GeoCircle && parentB is GeoCircle) {
-      rebuilt = GeoIntersection.circleCircle(
-        id: id,
-        label: label,
-        circle1: parentA,
-        circle2: parentB,
-        dagManager: dagManager,
-        color: color,
-        visible: visible,
-      );
-    }
-    // Simple × Complex cases
-    else if (parentA is GeoLine && parentB is GeoSegment) {
-      rebuilt = GeoIntersection.lineSegment(
-        id: id,
-        label: label,
-        line: parentA,
-        segment: parentB,
-        dagManager: dagManager,
-        color: color,
-        visible: visible,
-      );
-    } else if (parentA is GeoSegment && parentB is GeoLine) {
-      rebuilt = GeoIntersection.lineSegment(
-        id: id,
-        label: label,
-        line: parentB,
-        segment: parentA,
-        dagManager: dagManager,
-        color: color,
-        visible: visible,
-      );
-    } else if (parentA is GeoLine && parentB is GeoArc) {
-      rebuilt = GeoIntersection.lineArc(
-        id: id,
-        label: label,
-        line: parentA,
-        arc: parentB,
-        dagManager: dagManager,
-        color: color,
-        visible: visible,
-      );
-    } else if (parentA is GeoArc && parentB is GeoLine) {
-      rebuilt = GeoIntersection.lineArc(
-        id: id,
-        label: label,
-        line: parentB,
-        arc: parentA,
-        dagManager: dagManager,
-        color: color,
-        visible: visible,
-      );
-    } else if (parentA is GeoCircle && parentB is GeoSegment) {
-      rebuilt = GeoIntersection.circleSegment(
-        id: id,
-        label: label,
-        circle: parentA,
-        segment: parentB,
-        dagManager: dagManager,
-        color: color,
-        visible: visible,
-      );
-    } else if (parentA is GeoSegment && parentB is GeoCircle) {
-      rebuilt = GeoIntersection.circleSegment(
-        id: id,
-        label: label,
-        circle: parentB,
-        segment: parentA,
-        dagManager: dagManager,
-        color: color,
-        visible: visible,
-      );
-    } else if (parentA is GeoCircle && parentB is GeoArc) {
-      rebuilt = GeoIntersection.circleArc(
-        id: id,
-        label: label,
-        circle: parentA,
-        arc: parentB,
-        dagManager: dagManager,
-        color: color,
-        visible: visible,
-      );
-    } else if (parentA is GeoArc && parentB is GeoCircle) {
-      rebuilt = GeoIntersection.circleArc(
-        id: id,
-        label: label,
-        circle: parentB,
-        arc: parentA,
-        dagManager: dagManager,
-        color: color,
-        visible: visible,
-      );
-    }
-    // Complex × Complex cases
-    else if (parentA is GeoSegment && parentB is GeoSegment) {
-      rebuilt = GeoIntersection.segmentSegment(
-        id: id,
-        label: label,
-        segment1: parentA,
-        segment2: parentB,
-        dagManager: dagManager,
-        color: color,
-        visible: visible,
-      );
-    } else if (parentA is GeoSegment && parentB is GeoArc) {
-      rebuilt = GeoIntersection.segmentArc(
-        id: id,
-        label: label,
-        segment: parentA,
-        arc: parentB,
-        dagManager: dagManager,
-        color: color,
-        visible: visible,
-      );
-    } else if (parentA is GeoArc && parentB is GeoSegment) {
-      rebuilt = GeoIntersection.segmentArc(
-        id: id,
-        label: label,
-        segment: parentB,
-        arc: parentA,
-        dagManager: dagManager,
-        color: color,
-        visible: visible,
-      );
-    } else if (parentA is GeoArc && parentB is GeoArc) {
-      rebuilt = GeoIntersection.arcArc(
-        id: id,
-        label: label,
-        arc1: parentA,
-        arc2: parentB,
-        dagManager: dagManager,
-        color: color,
-        visible: visible,
-      );
-    }
-    // Union × Union case (check this first)
-    else if (parentA is UnionGeometryObjectList && parentB is UnionGeometryObjectList) {
-      rebuilt = GeoIntersection.unionWithUnion(
-        id: id,
-        label: label,
-        union1: parentA,
-        union2: parentB,
-        dagManager: dagManager,
-        color: color,
-        visible: visible,
-      );
-    }
-    // Union × Simple/Complex cases
-    else if (parentA is UnionGeometryObjectList) {
-      rebuilt = GeoIntersection.unionWithObject(
-        id: id,
-        label: label,
-        union: parentA,
-        other: parentB,
-        dagManager: dagManager,
-        color: color,
-        visible: visible,
-      );
-    } else if (parentB is UnionGeometryObjectList) {
-      rebuilt = GeoIntersection.unionWithObject(
-        id: id,
-        label: label,
-        union: parentB,
-        other: parentA,
-        dagManager: dagManager,
-        color: color,
-        visible: visible,
-      );
+    // STEP 2: Rebuild intersection (factory methods will create new points)
+    // LabelManager will consume reserved labels as they're used
+    // Reserved labels ensure old labels are only reused by THIS container, not others
+    GeoIntersection? rebuilt;
+    try {
+      // Simple × Simple cases
+      if (parentA is GeoLine && parentB is GeoLine) {
+        rebuilt = GeoIntersection.lineLine(
+          id: id,
+          label: label,
+          line1: parentA,
+          line2: parentB,
+          dagManager: dagManager,
+          color: color,
+          visible: visible,
+          reservedLabels: oldPointLabels,
+          usedReservedLabels: usedReservedLabels,
+        );
+      } else if (parentA is GeoLine && parentB is GeoCircle) {
+        rebuilt = GeoIntersection.lineCircle(
+          id: id,
+          label: label,
+          line: parentA,
+          circle: parentB,
+          dagManager: dagManager,
+          color: color,
+          visible: visible,
+          reservedLabels: oldPointLabels,
+          usedReservedLabels: usedReservedLabels,
+        );
+      } else if (parentA is GeoCircle && parentB is GeoLine) {
+        rebuilt = GeoIntersection.lineCircle(
+          id: id,
+          label: label,
+          line: parentB,
+          circle: parentA,
+          dagManager: dagManager,
+          color: color,
+          visible: visible,
+          reservedLabels: oldPointLabels,
+          usedReservedLabels: usedReservedLabels,
+        );
+      } else if (parentA is GeoCircle && parentB is GeoCircle) {
+        rebuilt = GeoIntersection.circleCircle(
+          id: id,
+          label: label,
+          circle1: parentA,
+          circle2: parentB,
+          dagManager: dagManager,
+          color: color,
+          visible: visible,
+          reservedLabels: oldPointLabels,
+          usedReservedLabels: usedReservedLabels,
+        );
+      }
+      // Simple × Complex cases
+      else if (parentA is GeoLine && parentB is GeoSegment) {
+        rebuilt = GeoIntersection.lineSegment(
+          id: id,
+          label: label,
+          line: parentA,
+          segment: parentB,
+          dagManager: dagManager,
+          color: color,
+          visible: visible,
+          reservedLabels: oldPointLabels,
+          usedReservedLabels: usedReservedLabels,
+        );
+      } else if (parentA is GeoSegment && parentB is GeoLine) {
+        rebuilt = GeoIntersection.lineSegment(
+          id: id,
+          label: label,
+          line: parentB,
+          segment: parentA,
+          dagManager: dagManager,
+          color: color,
+          visible: visible,
+          reservedLabels: oldPointLabels,
+          usedReservedLabels: usedReservedLabels,
+        );
+      } else if (parentA is GeoLine && parentB is GeoArc) {
+        rebuilt = GeoIntersection.lineArc(
+          id: id,
+          label: label,
+          line: parentA,
+          arc: parentB,
+          dagManager: dagManager,
+          color: color,
+          visible: visible,
+          reservedLabels: oldPointLabels,
+          usedReservedLabels: usedReservedLabels,
+        );
+      } else if (parentA is GeoArc && parentB is GeoLine) {
+        rebuilt = GeoIntersection.lineArc(
+          id: id,
+          label: label,
+          line: parentB,
+          arc: parentA,
+          dagManager: dagManager,
+          color: color,
+          visible: visible,
+          reservedLabels: oldPointLabels,
+          usedReservedLabels: usedReservedLabels,
+        );
+      } else if (parentA is GeoCircle && parentB is GeoSegment) {
+        rebuilt = GeoIntersection.circleSegment(
+          id: id,
+          label: label,
+          circle: parentA,
+          segment: parentB,
+          dagManager: dagManager,
+          color: color,
+          visible: visible,
+          reservedLabels: oldPointLabels,
+          usedReservedLabels: usedReservedLabels,
+        );
+      } else if (parentA is GeoSegment && parentB is GeoCircle) {
+        rebuilt = GeoIntersection.circleSegment(
+          id: id,
+          label: label,
+          circle: parentB,
+          segment: parentA,
+          dagManager: dagManager,
+          color: color,
+          visible: visible,
+          reservedLabels: oldPointLabels,
+          usedReservedLabels: usedReservedLabels,
+        );
+      } else if (parentA is GeoCircle && parentB is GeoArc) {
+        rebuilt = GeoIntersection.circleArc(
+          id: id,
+          label: label,
+          circle: parentA,
+          arc: parentB,
+          dagManager: dagManager,
+          color: color,
+          visible: visible,
+          reservedLabels: oldPointLabels,
+          usedReservedLabels: usedReservedLabels,
+        );
+      } else if (parentA is GeoArc && parentB is GeoCircle) {
+        rebuilt = GeoIntersection.circleArc(
+          id: id,
+          label: label,
+          circle: parentB,
+          arc: parentA,
+          dagManager: dagManager,
+          color: color,
+          visible: visible,
+          reservedLabels: oldPointLabels,
+          usedReservedLabels: usedReservedLabels,
+        );
+      }
+      // Complex × Complex cases
+      else if (parentA is GeoSegment && parentB is GeoSegment) {
+        rebuilt = GeoIntersection.segmentSegment(
+          id: id,
+          label: label,
+          segment1: parentA,
+          segment2: parentB,
+          dagManager: dagManager,
+          color: color,
+          visible: visible,
+          reservedLabels: oldPointLabels,
+          usedReservedLabels: usedReservedLabels,
+        );
+      } else if (parentA is GeoSegment && parentB is GeoArc) {
+        rebuilt = GeoIntersection.segmentArc(
+          id: id,
+          label: label,
+          segment: parentA,
+          arc: parentB,
+          dagManager: dagManager,
+          color: color,
+          visible: visible,
+          reservedLabels: oldPointLabels,
+          usedReservedLabels: usedReservedLabels,
+        );
+      } else if (parentA is GeoArc && parentB is GeoSegment) {
+        rebuilt = GeoIntersection.segmentArc(
+          id: id,
+          label: label,
+          segment: parentB,
+          arc: parentA,
+          dagManager: dagManager,
+          color: color,
+          visible: visible,
+          reservedLabels: oldPointLabels,
+          usedReservedLabels: usedReservedLabels,
+        );
+      } else if (parentA is GeoArc && parentB is GeoArc) {
+        rebuilt = GeoIntersection.arcArc(
+          id: id,
+          label: label,
+          arc1: parentA,
+          arc2: parentB,
+          dagManager: dagManager,
+          color: color,
+          visible: visible,
+          reservedLabels: oldPointLabels,
+          usedReservedLabels: usedReservedLabels,
+        );
+      }
+      // Union × Union case (check this first)
+      else if (parentA is UnionGeometryObjectList && parentB is UnionGeometryObjectList) {
+        rebuilt = GeoIntersection.unionWithUnion(
+          id: id,
+          label: label,
+          union1: parentA,
+          union2: parentB,
+          dagManager: dagManager,
+          color: color,
+          visible: visible,
+          reservedLabels: oldPointLabels,
+          usedReservedLabels: usedReservedLabels,
+        );
+      }
+      // Union × Simple/Complex cases
+      else if (parentA is UnionGeometryObjectList) {
+        rebuilt = GeoIntersection.unionWithObject(
+          id: id,
+          label: label,
+          union: parentA,
+          other: parentB,
+          dagManager: dagManager,
+          color: color,
+          visible: visible,
+          reservedLabels: oldPointLabels,
+          usedReservedLabels: usedReservedLabels,
+        );
+      } else if (parentB is UnionGeometryObjectList) {
+        rebuilt = GeoIntersection.unionWithObject(
+          id: id,
+          label: label,
+          union: parentB,
+          other: parentA,
+          dagManager: dagManager,
+          color: color,
+          visible: visible,
+          reservedLabels: oldPointLabels,
+          usedReservedLabels: usedReservedLabels,
+        );
+      }
+    } catch (e) {
+      // If rebuild fails, restore old labels to prevent label loss
+      for (final label in oldPointLabels) {
+        if (!dagManager.elementToContainer.containsKey(label)) {
+          dagManager.registerElement(label, id);
+        }
+      }
+      rethrow;
     }
 
     if (rebuilt == null) {
@@ -1600,14 +1421,32 @@ class GeoIntersection extends GenSimpleGeometryObjectList<GeoPoint> {
         '[GeoIntersection] Unable to rebuild intersection for parents '
         '${parentA.runtimeType} and ${parentB.runtimeType}.',
       );
+      // Restore old labels if rebuild returned null
+      for (final label in oldPointLabels) {
+        if (!dagManager.elementToContainer.containsKey(label)) {
+          dagManager.registerElement(label, id);
+        }
+      }
       return null;
     }
 
+    // STEP 3: Unregister old labels that weren't reused
+    // Only unregister labels that are no longer in the new intersection
+    final newPointLabels = rebuilt.objects.map((p) => p.id).toSet();
+    for (final oldLabel in oldPointLabels) {
+      if (!newPointLabels.contains(oldLabel)) {
+        // Old label not reused, unregister it (becomes available for future use)
+        dagManager.unregisterElement(oldLabel);
+      }
+    }
+
+    // STEP 4: Factory methods have already registered the new points
+    // Labels are preserved for reused points, new labels assigned for new points
     return GeoIntersection(
       id: id,
       label: label,
       dependencies: [parentA.id, parentB.id],
-      objects: rebuilt.objects,
+      objects: rebuilt.objects, // Labels preserved via reserved labels mechanism
       visible: visible,
       color: color,
       styleOverrides: styleOverrides,
@@ -1617,6 +1456,204 @@ class GeoIntersection extends GenSimpleGeometryObjectList<GeoPoint> {
 
 const double _intersectionTolerance = 1e-8;
 
+/// Compute intersection multivectors directly from two geometry objects
+/// Returns list of Multivectors representing intersection points
+/// Does NOT create temporary containers - just computes the geometry
+List<Multivector> _computeIntersectionMultivectors(
+  GeometryObject obj1,
+  GeometryObject obj2,
+) {
+  if (obj1 is GeoLine && obj2 is GeoLine) {
+    final wedge = obj1.multivector ^ obj2.multivector;
+    if (wedge.isZero()) {
+      return []; // Parallel lines
+    }
+    try {
+      final mv = constructLineLineIntersection(
+        obj1.multivector,
+        obj2.multivector,
+      );
+      return [mv];
+    } catch (_) {
+      return [];
+    }
+  } else if (obj1 is GeoLine && obj2 is GeoCircle) {
+    try {
+      return constructLineCircleIntersection(
+        obj1.multivector,
+        obj2.multivector,
+      );
+    } catch (_) {
+      return [];
+    }
+  } else if (obj1 is GeoCircle && obj2 is GeoLine) {
+    try {
+      return constructLineCircleIntersection(
+        obj2.multivector,
+        obj1.multivector,
+      );
+    } catch (_) {
+      return [];
+    }
+  } else if (obj1 is GeoCircle && obj2 is GeoCircle) {
+    try {
+      return constructCircleCircleIntersection(
+        obj1.multivector,
+        obj2.multivector,
+      );
+    } catch (_) {
+      return [];
+    }
+  } else if (obj1 is GeoLine && obj2 is GeoSegment) {
+    try {
+      final mv = constructLineLineIntersection(
+        obj1.multivector,
+        obj2.boundary.multivector,
+      );
+      return [mv];
+    } catch (_) {
+      return [];
+    }
+  } else if (obj1 is GeoSegment && obj2 is GeoLine) {
+    try {
+      final mv = constructLineLineIntersection(
+        obj2.multivector,
+        obj1.boundary.multivector,
+      );
+      return [mv];
+    } catch (_) {
+      return [];
+    }
+  } else if (obj1 is GeoLine && obj2 is GeoArc) {
+    try {
+      return constructLineCircleIntersection(
+        obj1.multivector,
+        obj2.boundary.multivector,
+      );
+    } catch (_) {
+      return [];
+    }
+  } else if (obj1 is GeoArc && obj2 is GeoLine) {
+    try {
+      return constructLineCircleIntersection(
+        obj2.multivector,
+        obj1.boundary.multivector,
+      );
+    } catch (_) {
+      return [];
+    }
+  } else if (obj1 is GeoCircle && obj2 is GeoSegment) {
+    try {
+      return constructLineCircleIntersection(
+        obj2.boundary.multivector,
+        obj1.multivector,
+      );
+    } catch (_) {
+      return [];
+    }
+  } else if (obj1 is GeoSegment && obj2 is GeoCircle) {
+    try {
+      return constructLineCircleIntersection(
+        obj1.boundary.multivector,
+        obj2.multivector,
+      );
+    } catch (_) {
+      return [];
+    }
+  } else if (obj1 is GeoCircle && obj2 is GeoArc) {
+    try {
+      return constructCircleCircleIntersection(
+        obj1.multivector,
+        obj2.boundary.multivector,
+      );
+    } catch (_) {
+      return [];
+    }
+  } else if (obj1 is GeoArc && obj2 is GeoCircle) {
+    try {
+      return constructCircleCircleIntersection(
+        obj2.multivector,
+        obj1.boundary.multivector,
+      );
+    } catch (_) {
+      return [];
+    }
+  } else if (obj1 is GeoSegment && obj2 is GeoSegment) {
+    try {
+      final mv = constructLineLineIntersection(
+        obj1.boundary.multivector,
+        obj2.boundary.multivector,
+      );
+      return [mv];
+    } catch (_) {
+      return [];
+    }
+  } else if (obj1 is GeoSegment && obj2 is GeoArc) {
+    try {
+      return constructLineCircleIntersection(
+        obj1.boundary.multivector,
+        obj2.boundary.multivector,
+      );
+    } catch (_) {
+      return [];
+    }
+  } else if (obj1 is GeoArc && obj2 is GeoSegment) {
+    try {
+      return constructLineCircleIntersection(
+        obj2.boundary.multivector,
+        obj1.boundary.multivector,
+      );
+    } catch (_) {
+      return [];
+    }
+  } else if (obj1 is GeoArc && obj2 is GeoArc) {
+    try {
+      return constructCircleCircleIntersection(
+        obj1.boundary.multivector,
+        obj2.boundary.multivector,
+      );
+    } catch (_) {
+      return [];
+    }
+  }
+  
+  return [];
+}
+
+/// Check if an intersection point is valid for the given geometry objects
+/// (e.g., point lies on segment/arc boundaries)
+bool _isValidIntersectionPoint(
+  Multivector mv,
+  GeometryObject obj1,
+  GeometryObject obj2,
+) {
+  // For segments, check if point lies on the segment
+  if (obj1 is GeoSegment) {
+    if (!isPointOnSegment(mv, obj1.boundary.boundary)) {
+      return false;
+    }
+  }
+  if (obj2 is GeoSegment) {
+    if (!isPointOnSegment(mv, obj2.boundary.boundary)) {
+      return false;
+    }
+  }
+  
+  // For arcs, check if point lies on the arc
+  if (obj1 is GeoArc) {
+    if (!isPointOnArc(mv, obj1.boundary.boundary)) {
+      return false;
+    }
+  }
+  if (obj2 is GeoArc) {
+    if (!isPointOnArc(mv, obj2.boundary.boundary)) {
+      return false;
+    }
+  }
+  
+  return true;
+}
+
 GeoPointer _pointFromMultivector({
   required DAGManager dagManager,
   required String containerId,
@@ -1624,13 +1661,25 @@ GeoPointer _pointFromMultivector({
   String? preferredLabel,
   required Color color,
   required bool visible,
+  Set<String>? reservedLabels,
+  Set<String>? usedReservedLabels,
 }) {
   // Get unique label from LabelManager (uppercase for points)
+  // Only exclude container during rebuild (when reservedLabels is provided)
+  // During initial creation, we track labels via usedReservedLabels set
+  // Reserved labels ensure old labels are only reused by THIS container, not others
+  // usedReservedLabels tracks which labels have been consumed in this operation
   final elementLabel = LabelManager.getNextAvailableLabel(
     dagManager,
     GeometryObjectType.point,
     preferred: preferredLabel,
+    excludeContainerId: reservedLabels != null ? containerId : null, // Only exclude during rebuild
+    reservedLabels: reservedLabels,
+    usedReservedLabels: usedReservedLabels,
   );
+  
+  // Track this label as used (add to set if provided)
+  usedReservedLabels?.add(elementLabel);
 
   // Create point with label as ID
   final point = GeoPointer(

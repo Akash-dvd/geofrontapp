@@ -16,6 +16,7 @@ import '../command/command_registry.dart';
 class DAGManager {
   final Map<String, DAGNode> _nodes = {};
   int _idCounter = 0;
+  int _creationOrderCounter = 0; // Tracks insertion order for stable sorting
 
   /// Maps element ID to container ID for efficient element lookup
   /// Used to track which container owns each element (for GenSimpleGeometryObjectList)
@@ -278,6 +279,7 @@ class DAGManager {
       parentIds: List.from(resolvedDependencies),
       depth: depth,
       isDirty: true,
+      creationOrder: _creationOrderCounter++, // Set creation order (never changes)
     );
 
     _nodes[object.id] = node;
@@ -294,9 +296,15 @@ class DAGManager {
       for (final element in object.objects) {
         registerElement(element.id, object.id);
       }
+    } else if (object is UnionGeometryObjectList) {
+      // Register union elements for efficient lookup via getObject()
+      // Note: Some union elements may be DAG nodes (when union groups existing objects),
+      // but newly created elements (like segments/arcs in polygons) are not DAG nodes
+      // and need elementToContainer registration for getObject() to find them
+      for (final element in object.elements) {
+        registerElement(element.id, object.id);
+      }
     }
-    // Note: UnionGeometryObjectList elements are DAG nodes, not elements,
-    // so they don't need to be registered in elementToContainer
 
     return object.id;
   }
@@ -325,6 +333,22 @@ class DAGManager {
       
       // Register new elements
       for (final element in updatedObject.objects) {
+        registerElement(element.id, id);
+      }
+    } else if (oldObject is UnionGeometryObjectList && updatedObject is UnionGeometryObjectList) {
+      // Compare old vs new elements
+      final oldElementIds = oldObject.elements.map((e) => e.id).toSet();
+      final newElementIds = updatedObject.elements.map((e) => e.id).toSet();
+      
+      // Unregister removed elements
+      for (final elementId in oldElementIds) {
+        if (!newElementIds.contains(elementId)) {
+          unregisterElement(elementId);
+        }
+      }
+      
+      // Register new elements
+      for (final element in updatedObject.elements) {
         registerElement(element.id, id);
       }
     }
@@ -445,6 +469,10 @@ class DAGManager {
     final obj = node.object;
     if (obj is GenSimpleGeometryObjectList) {
       for (final element in obj.objects) {
+        unregisterElement(element.id);
+      }
+    } else if (obj is UnionGeometryObjectList) {
+      for (final element in obj.elements) {
         unregisterElement(element.id);
       }
     }
@@ -777,6 +805,7 @@ class DAGManager {
     history.record();
     _nodes.clear();
     _idCounter = 0;
+    _creationOrderCounter = 0; // Reset creation order counter
   }
 
   int get nodeCount => _nodes.length;
@@ -817,6 +846,7 @@ class DAGManager {
         depth: node.depth,
         isDirty: node.isDirty,
         lastModified: node.lastModified,
+        creationOrder: node.creationOrder, // Preserve creation order in snapshots
       );
     }
 
@@ -847,6 +877,7 @@ class DAGManager {
     return _DagState(
       nodes: nodeCopies,
       idCounter: _idCounter,
+      creationOrderCounter: _creationOrderCounter, // Preserve creation order counter
       metadata: metadataCopy,
       constraints: constraintsCopy,
       viewport: viewportCopy,
@@ -859,6 +890,7 @@ class DAGManager {
       ..clear()
       ..addAll(state.nodes);
     _idCounter = state.idCounter;
+    _creationOrderCounter = state.creationOrderCounter; // Restore creation order counter
     metadata = Map<String, dynamic>.from(state.metadata);
     constraints = List<dynamic>.from(state.constraints);
     viewport = state.viewport;
@@ -930,6 +962,7 @@ class Viewport {
 class _DagState {
   final Map<String, DAGNode> nodes;
   final int idCounter;
+  final int creationOrderCounter; // Preserve creation order counter for undo/redo
   final Map<String, dynamic> metadata;
   final List<dynamic> constraints;
   final Viewport? viewport;
@@ -938,6 +971,7 @@ class _DagState {
   _DagState({
     required this.nodes,
     required this.idCounter,
+    required this.creationOrderCounter,
     required this.metadata,
     required this.constraints,
     required this.viewport,
