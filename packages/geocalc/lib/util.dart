@@ -31,6 +31,28 @@ extension MultivectorDefinitions on Multivector {
         oe12O.abs() < threshold;
   }
 
+  /// Check if multivector represents infinity (only O component is finite)
+  bool isInf({double? customTolerance}) {
+    final threshold = _effectiveTolerance(customTolerance);
+    // A multivector is infinity if only O component is finite (non-zero)
+    return O.abs() >= threshold &&
+        s.abs() < threshold &&
+        o.abs() < threshold &&
+        e1.abs() < threshold &&
+        e2.abs() < threshold &&
+        oe1.abs() < threshold &&
+        oe2.abs() < threshold &&
+        oO.abs() < threshold &&
+        e12.abs() < threshold &&
+        e1O.abs() < threshold &&
+        e2O.abs() < threshold &&
+        oe12.abs() < threshold &&
+        oe1O.abs() < threshold &&
+        oe2O.abs() < threshold &&
+        e12O.abs() < threshold &&
+        oe12O.abs() < threshold;
+  }
+
   /// Example function - replace with your actual implementation
   bool isScalar({double? customTolerance}) {
     final threshold = _effectiveTolerance(customTolerance);

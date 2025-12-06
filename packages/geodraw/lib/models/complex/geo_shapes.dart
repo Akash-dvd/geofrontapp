@@ -6,6 +6,7 @@ import 'package:geocalc/Multivector.dart';
 import '../canvas_style.dart';
 import '../canvas_style_defaults.dart';
 import '../geometry_object.dart';
+import '../../core/dag/dag_manager.dart';
 import '../simple/geo_point.dart';
 import 'complex_geometry_object.dart';
 
@@ -448,25 +449,23 @@ class GeoArc3P extends GeoArc {
 
   @override
   GeometryObject? rebuildFromParents(List<GeometryObject> parents, dynamic dagManager) {
-    final byId = <String, GeoPoint>{};
-    for (final parent in parents.whereType<GeoPoint>()) {
-      byId[parent.id] = parent;
+    if (dagManager is! DAGManager || dependencies.length != 3) {
+      return null;
     }
 
-    final ordered = dependencies
-        .map((id) => byId[id])
-        .whereType<GeoPoint>()
-        .toList(growable: false);
-
-    // debugPrint("##################");
-    if (ordered.length != 3) {
+    // Use dagManager.getObject() - handles both regular objects and objects in containers
+    final point1Obj = dagManager.getObject(dependencies[0]);
+    final point2Obj = dagManager.getObject(dependencies[1]);
+    final point3Obj = dagManager.getObject(dependencies[2]);
+    
+    if (point1Obj is! GeoPoint || point2Obj is! GeoPoint || point3Obj is! GeoPoint) {
       return null;
     }
 
     return GeoArc3P.fromDependencies(
       id: id,
       label: label,
-      points: ordered,
+      points: [point1Obj, point2Obj, point3Obj],
       visible: visible,
       styleOverrides: styleOverrides,
     );
@@ -526,9 +525,6 @@ class GeoSegment extends ComplexGeometryObject {
   final signedDistance =
     _orientationSignedDistance(rotatedPoint: rotatedPointMv);
   final directSweep = _shouldUseDirectSweep(signedDistance);
-  final rotatedPointOffset = rotatedPointMv != null
-    ? Offset(rotatedPointMv.e1, rotatedPointMv.e2)
-    : null;
 
     final segmentPaint = Paint()
       ..color = strokeColor
@@ -548,21 +544,11 @@ class GeoSegment extends ComplexGeometryObject {
           }
           canvas.drawLine(from, to, segmentPaint);
         }
-        if (rotatedPointOffset != null) {
-          _drawRotatedReferencePoint(
-            canvas,
-            rotatedPointOffset,
-            effectiveStyle,
-          );
-        }
         return;
       }
     }
 
     canvas.drawLine(start, end, segmentPaint);
-    if (rotatedPointOffset != null) {
-      _drawRotatedReferencePoint(canvas, rotatedPointOffset, effectiveStyle);
-    }
   }
 
   @override
@@ -697,6 +683,10 @@ class GeoSegment extends ComplexGeometryObject {
   }
 
   double? _orientationSignedDistance({Multivector? rotatedPoint}) {
+    // Cannot compute signed distance for infinity
+    if (multivector.isInf()) {
+      return null;
+    }
     if (multivector.isZero() || !multivector.isLine()) {
       return null;
     }
@@ -723,6 +713,10 @@ class GeoSegment extends ComplexGeometryObject {
   }
 
   Multivector? _computeRotatedEndpoint() {
+    // Cannot compute rotated endpoint for infinity
+    if (multivector.isInf()) {
+      return null;
+    }
     if (multivector.isZero() || !multivector.isLine()) {
       return null;
     }
@@ -736,26 +730,6 @@ class GeoSegment extends ComplexGeometryObject {
 
     final rotatedOffset = Offset(start.dx + dy, start.dy - dx);
     return constructFreePoint(rotatedOffset.dx, rotatedOffset.dy);
-  }
-
-  void _drawRotatedReferencePoint(
-    Canvas canvas,
-    Offset position,
-    CanvasStyle effectiveStyle,
-  ) {
-    
-    final markerRadius = math.max(3.0, effectiveStyle.strokeWidth * 1.2);
-
-    final markerFill = Paint()
-      ..color = effectiveStyle.strokeColor.withOpacity(0.35)
-      ..style = PaintingStyle.fill;
-    canvas.drawCircle(position, markerRadius, markerFill);
-
-    final markerStroke = Paint()
-      ..color = effectiveStyle.strokeColor
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = math.max(1.0, effectiveStyle.strokeWidth * 0.6);
-    canvas.drawCircle(position, markerRadius, markerStroke);
   }
 
   bool _shouldUseDirectSweep(double? signedDistance) {
@@ -940,8 +914,6 @@ class GeoSegment2P extends GeoSegment {
 
   final p1 = points[0];
   final p2 = points[1];
-  final p1Pos = p1.position;
-  final p2Pos = p2.position;
 
   final computedMv = p1.position == p2.position
     ? Multivector.zero()
@@ -1055,22 +1027,21 @@ class GeoSegment2P extends GeoSegment {
 
   @override
   GeometryObject? rebuildFromParents(List<GeometryObject> parents, dynamic dagManager) {
-    final byId = <String, GeoPoint>{};
-    for (final parent in parents.whereType<GeoPoint>()) {
-      byId[parent.id] = parent;
-    }
-
-    final ordered = dependencies
-        .map((id) => byId[id])
-        .whereType<GeoPoint>()
-        .toList(growable: false);
-
-    if (ordered.length != 2) {
+    if (dagManager is! DAGManager || dependencies.length != 2) {
       return null;
     }
 
-    final p1 = ordered[0];
-    final p2 = ordered[1];
+    // Use dagManager.getObject() - handles both regular objects and objects in containers
+    final point1Obj = dagManager.getObject(dependencies[0]);
+    final point2Obj = dagManager.getObject(dependencies[1]);
+    
+    if (point1Obj is! GeoPoint || point2Obj is! GeoPoint) {
+      return null;
+    }
+
+    final p1 = point1Obj;
+    final p2 = point2Obj;
+    final ordered = [p1, p2];
 
     final recomputed = p1.position == p2.position
       ? Multivector.zero()

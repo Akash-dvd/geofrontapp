@@ -1,11 +1,10 @@
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 import 'package:geocalc/Multivector.dart';
 
 import '../canvas_style.dart';
 import '../canvas_style_defaults.dart';
 import '../geometry_object.dart';
+import '../../core/dag/dag_manager.dart';
 
 /// Abstract base class for geometric transformations
 abstract class GeoTrans extends SimpleGeometryObject {
@@ -37,32 +36,122 @@ abstract class GeoTrans extends SimpleGeometryObject {
   bool intersects(other) => false;
 }
 
-/// Inversion transformation
-class GeoInverse extends GeoTrans {
-  /// Center of inversion
-  final String centerPointId;
-
-  /// Power of inversion (radius squared)
-  final double power;
-
-  GeoInverse({
+/// Line inversion (reflection) transformation
+class GeoLineInverse extends GeoTrans {
+  GeoLineInverse({
     required super.id,
     required super.label,
     required super.dependencies,
     required super.multivector,
-    required this.centerPointId,
+    super.visible,
+    super.styleOverrides,
+  });
+
+  @override
+  GeoLineInverse copyWith({
+    String? id,
+    String? label,
+    List<String>? dependencies,
+    Multivector? multivector,
+    bool? visible,
+    CanvasStyle? style,
+    Map<String, dynamic>? styleOverrides,
+  }) {
+    final overrides =
+        styleOverrides ??
+        (style == null ? this.styleOverrides : resolveStyleOverrides(style));
+    return GeoLineInverse(
+      id: id ?? this.id,
+      label: label ?? this.label,
+      dependencies: dependencies ?? this.dependencies,
+      multivector: multivector ?? this.multivector,
+      visible: visible ?? this.visible,
+      styleOverrides: overrides,
+    );
+  }
+
+  @override
+  String get type => 'GeoLineInverse';
+
+  @override
+  Map<String, dynamic> toJson() {
+    final json = super.toJson();
+    json['properties'] = <String, dynamic>{};
+    // Line inversion uses simple encoding (o, e1, e2, O)
+    json[SimpleGeometryObject.multivectorKey] = 
+        SimpleGeometryObject.encodeMultivector(multivector);
+    return json;
+  }
+
+  static GeoLineInverse fromJson(Map<String, dynamic> json) {
+    final deps = (json['dependencies'] as List).cast<String>();
+    final styleOverrides = _transformStyleOverridesFromJson(json, GeoLineInverse);
+    final mv = SimpleGeometryObject.decodeMultivector(
+      json[SimpleGeometryObject.multivectorKey],
+    );
+
+    return GeoLineInverse(
+      id: json['id'] as String,
+      label: json['label'] as String,
+      dependencies: deps,
+      multivector: mv,
+      visible: json['visible'] as bool? ?? true,
+      styleOverrides: styleOverrides,
+    );
+  }
+
+  @override
+  GeometryObject? rebuildFromParents(List<GeometryObject> parents, dynamic dagManager) {
+    if (dagManager is! DAGManager) {
+      return null;
+    }
+
+    // Parents order: parents[0] = object, parents[1] = subject (mirror line)
+    // For GeoLineInverse: dependencies = [lineId], so parents[0] = mirror line
+    if (parents.isEmpty) {
+      return null;
+    }
+
+    final mirrorObj = parents[0];
+    if (mirrorObj is! SimpleGeometryObject) {
+      return null;
+    }
+
+    final mirrorMv = mirrorObj.multivector;
+    // Cannot create line reflection with infinity
+    if (mirrorMv.isInf()) {
+      return null;
+    }
+    if (!mirrorMv.isLine()) {
+      return null;
+    }
+
+    final operator = constructLineReflectionOperator(mirrorMv);
+    return copyWith(multivector: operator);
+  }
+}
+
+/// Circle inversion (reflection) transformation
+class GeoCircleInverse extends GeoTrans {
+  /// Power of inversion (radius squared)
+  final double power;
+
+  GeoCircleInverse({
+    required super.id,
+    required super.label,
+    required super.dependencies,
+    required super.multivector,
     required this.power,
     super.visible,
     super.styleOverrides,
   });
 
   @override
-  GeoInverse copyWith({
+  GeoCircleInverse copyWith({
     String? id,
     String? label,
     List<String>? dependencies,
     Multivector? multivector,
-    String? centerPointId,
     double? power,
     bool? visible,
     CanvasStyle? style,
@@ -71,12 +160,11 @@ class GeoInverse extends GeoTrans {
     final overrides =
         styleOverrides ??
         (style == null ? this.styleOverrides : resolveStyleOverrides(style));
-    return GeoInverse(
+    return GeoCircleInverse(
       id: id ?? this.id,
       label: label ?? this.label,
       dependencies: dependencies ?? this.dependencies,
       multivector: multivector ?? this.multivector,
-      centerPointId: centerPointId ?? this.centerPointId,
       power: power ?? this.power,
       visible: visible ?? this.visible,
       styleOverrides: overrides,
@@ -84,32 +172,34 @@ class GeoInverse extends GeoTrans {
   }
 
   @override
-  List<Object?> get props => [...super.props, centerPointId, power];
+  List<Object?> get props => [...super.props, power];
 
   @override
-  String get type => 'GeoInverse';
+  String get type => 'GeoCircleInverse';
 
   @override
   Map<String, dynamic> toJson() {
     final json = super.toJson();
-    json['properties'] = {'centerPointId': centerPointId, 'power': power};
+    json['properties'] = {'power': power};
+    // Circle inversion uses simple encoding (o, e1, e2, O)
+    json[SimpleGeometryObject.multivectorKey] = 
+        SimpleGeometryObject.encodeMultivector(multivector);
     return json;
   }
 
-  static GeoInverse fromJson(Map<String, dynamic> json) {
+  static GeoCircleInverse fromJson(Map<String, dynamic> json) {
     final props = json['properties'] as Map<String, dynamic>;
     final deps = (json['dependencies'] as List).cast<String>();
-    final styleOverrides = _transformStyleOverridesFromJson(json, GeoInverse);
+    final styleOverrides = _transformStyleOverridesFromJson(json, GeoCircleInverse);
     final mv = SimpleGeometryObject.decodeMultivector(
       json[SimpleGeometryObject.multivectorKey],
     );
 
-    return GeoInverse(
+    return GeoCircleInverse(
       id: json['id'] as String,
       label: json['label'] as String,
       dependencies: deps,
       multivector: mv,
-      centerPointId: props['centerPointId'] as String,
       power: (props['power'] as num).toDouble(),
       visible: json['visible'] as bool? ?? true,
       styleOverrides: styleOverrides,
@@ -118,57 +208,127 @@ class GeoInverse extends GeoTrans {
 
   @override
   GeometryObject? rebuildFromParents(List<GeometryObject> parents, dynamic dagManager) {
-    final parentsById = {for (final parent in parents) parent.id: parent};
-
-    Multivector? subjectMv;
-
-    for (final depId in dependencies) {
-      if (depId == centerPointId) {
-        continue;
-      }
-      final parent = parentsById[depId];
-      if (parent is SimpleGeometryObject) {
-        subjectMv = _subjectFromSimple(parent);
-        if (subjectMv != null) {
-          break;
-        }
-      }
-    }
-
-      if (subjectMv == null && centerPointId.isNotEmpty) {
-        final centerParent = parentsById[centerPointId];
-        if (centerParent is SimpleGeometryObject) {
-          final centerMv = centerParent.multivector;
-          if (centerMv.isPoint() && power > 0) {
-            final radius = math.sqrt(power);
-            final circleMv = constructCircleFromCenterAndRadius(
-              centerMv,
-              radius,
-            );
-            subjectMv = constructCircleReflectionOperator(circleMv);
-          }
-        }
-    }
-
-    if (subjectMv == null) {
+    if (dagManager is! DAGManager) {
       return null;
     }
 
-    return copyWith(multivector: subjectMv);
+    // Parents order: parents[0] = object, parents[1] = subject (mirror circle)
+    // For GeoCircleInverse: dependencies = [circleId], so parents[0] = mirror circle
+    if (parents.isEmpty) {
+      return null;
+    }
+
+    final mirrorObj = parents[0];
+    if (mirrorObj is! SimpleGeometryObject) {
+      return null;
+    }
+
+    final mirrorMv = mirrorObj.multivector;
+    // Cannot create circle reflection with infinity
+    if (mirrorMv.isInf()) {
+      return null;
+    }
+    if (!mirrorMv.isCircle()) {
+      return null;
+    }
+
+    final operator = constructCircleReflectionOperator(mirrorMv);
+    return copyWith(multivector: operator);
+  }
+}
+
+/// Point inversion (reflection) transformation
+class GeoPointInverse extends GeoTrans {
+  GeoPointInverse({
+    required super.id,
+    required super.label,
+    required super.dependencies,
+    required super.multivector,
+    super.visible,
+    super.styleOverrides,
+  });
+
+  @override
+  GeoPointInverse copyWith({
+    String? id,
+    String? label,
+    List<String>? dependencies,
+    Multivector? multivector,
+    bool? visible,
+    CanvasStyle? style,
+    Map<String, dynamic>? styleOverrides,
+  }) {
+    final overrides =
+        styleOverrides ??
+        (style == null ? this.styleOverrides : resolveStyleOverrides(style));
+    return GeoPointInverse(
+      id: id ?? this.id,
+      label: label ?? this.label,
+      dependencies: dependencies ?? this.dependencies,
+      multivector: multivector ?? this.multivector,
+      visible: visible ?? this.visible,
+      styleOverrides: overrides,
+    );
   }
 
-  Multivector? _subjectFromSimple(SimpleGeometryObject subject) {
-    final subjectMv = subject.multivector;
-      if (subjectMv.isLine()) {
-      return constructLineReflectionOperator(subjectMv);
+  @override
+  String get type => 'GeoPointInverse';
+
+  @override
+  Map<String, dynamic> toJson() {
+    final json = super.toJson();
+    json['properties'] = <String, dynamic>{};
+    // Point inversion uses full transform operator encoding (s, oe1, oe2, oO, e12, e1O, e2O)
+    json[SimpleGeometryObject.multivectorKey] = 
+        SimpleGeometryObject.encodeTransformOperator(multivector);
+    return json;
+  }
+
+  static GeoPointInverse fromJson(Map<String, dynamic> json) {
+    final deps = (json['dependencies'] as List).cast<String>();
+    final styleOverrides = _transformStyleOverridesFromJson(json, GeoPointInverse);
+    final mv = SimpleGeometryObject.decodeTransformOperator(
+      json[SimpleGeometryObject.multivectorKey],
+    );
+
+    return GeoPointInverse(
+      id: json['id'] as String,
+      label: json['label'] as String,
+      dependencies: deps,
+      multivector: mv,
+      visible: json['visible'] as bool? ?? true,
+      styleOverrides: styleOverrides,
+    );
+  }
+
+  @override
+  GeometryObject? rebuildFromParents(List<GeometryObject> parents, dynamic dagManager) {
+    if (dagManager is! DAGManager) {
+      return null;
     }
-    if (subjectMv.isCircle()) {
-      return constructCircleReflectionOperator(subjectMv);
+
+    // Parents order: parents[0] = object, parents[1] = subject (mirror point)
+    // For GeoPointInverse: dependencies = [pointId], so parents[0] = mirror point
+    if (parents.isEmpty) {
+      return null;
     }
-    if (subjectMv.isPoint()) {
-      return constructPointReflectionOperator(subjectMv);
+
+    final mirrorObj = parents[0];
+    if (mirrorObj is! SimpleGeometryObject) {
+      return null;
     }
-    return null;
+
+    final mirrorMv = mirrorObj.multivector;
+    // Cannot create point reflection with infinity
+    if (mirrorMv.isInf()) {
+      return null;
+    }
+    if (!mirrorMv.isPoint()) {
+      return null;
+    }
+
+    final operator = constructPointReflectionOperator(mirrorMv);
+    return copyWith(multivector: operator);
   }
 }
 
@@ -228,6 +388,9 @@ class GeoRotate extends GeoTrans {
   Map<String, dynamic> toJson() {
     final json = super.toJson();
     json['properties'] = {'centerPointId': centerPointId, 'angle': angle};
+    // Use transform operator encoding for rotation
+    json[SimpleGeometryObject.multivectorKey] = 
+        SimpleGeometryObject.encodeTransformOperator(multivector);
     return json;
   }
 
@@ -235,7 +398,7 @@ class GeoRotate extends GeoTrans {
     final props = json['properties'] as Map<String, dynamic>;
     final deps = (json['dependencies'] as List).cast<String>();
     final styleOverrides = _transformStyleOverridesFromJson(json, GeoRotate);
-    final mv = SimpleGeometryObject.decodeMultivector(
+    final mv = SimpleGeometryObject.decodeTransformOperator(
       json[SimpleGeometryObject.multivectorKey],
     );
 
@@ -253,25 +416,32 @@ class GeoRotate extends GeoTrans {
 
   @override
   GeometryObject? rebuildFromParents(List<GeometryObject> parents, dynamic dagManager) {
-    final centerMv = _findPointMv(parents, centerPointId);
-    if (centerMv == null) {
+    if (dagManager is! DAGManager) {
+      return null;
+    }
+
+    // Parents order: parents[0] = object, parents[1] = subject (center point for rotation)
+    // For GeoRotate: dependencies = [centerPointId], so parents[0] = center point
+    if (parents.isEmpty) {
+      return null;
+    }
+
+    final centerObj = parents[0];
+    if (centerObj is! SimpleGeometryObject) {
+      return null;
+    }
+    
+    final centerMv = centerObj.multivector;
+    // Cannot create rotation with infinity center
+    if (centerMv.isInf()) {
+      return null;
+    }
+    if (!centerMv.isPoint()) {
       return null;
     }
 
     final rotor = constructRotationOperator(centerMv, angle);
     return copyWith(multivector: rotor);
-  }
-
-  Multivector? _findPointMv(List<GeometryObject> parents, String targetId) {
-    for (final parent in parents) {
-      if (parent is SimpleGeometryObject && parent.id == targetId) {
-        final mv = parent.multivector;
-        if (mv.isPoint()) {
-          return mv;
-        }
-      }
-    }
-    return null;
   }
 }
 
@@ -331,6 +501,9 @@ class GeoDilate extends GeoTrans {
   Map<String, dynamic> toJson() {
     final json = super.toJson();
     json['properties'] = {'centerPointId': centerPointId, 'factor': factor};
+    // Use transform operator encoding for dilation
+    json[SimpleGeometryObject.multivectorKey] = 
+        SimpleGeometryObject.encodeTransformOperator(multivector);
     return json;
   }
 
@@ -338,7 +511,7 @@ class GeoDilate extends GeoTrans {
     final props = json['properties'] as Map<String, dynamic>;
     final deps = (json['dependencies'] as List).cast<String>();
     final styleOverrides = _transformStyleOverridesFromJson(json, GeoDilate);
-    final mv = SimpleGeometryObject.decodeMultivector(
+    final mv = SimpleGeometryObject.decodeTransformOperator(
       json[SimpleGeometryObject.multivectorKey],
     );
 
@@ -356,25 +529,32 @@ class GeoDilate extends GeoTrans {
 
   @override
   GeometryObject? rebuildFromParents(List<GeometryObject> parents, dynamic dagManager) {
-    final centerMv = _findPointMv(parents, centerPointId);
-    if (centerMv == null) {
+    if (dagManager is! DAGManager) {
+      return null;
+    }
+
+    // Parents order: parents[0] = object, parents[1] = subject (center point for dilation)
+    // For GeoDilate: dependencies = [centerPointId], so parents[0] = center point
+    if (parents.isEmpty) {
+      return null;
+    }
+
+    final centerObj = parents[0];
+    if (centerObj is! SimpleGeometryObject) {
+      return null;
+    }
+    
+    final centerMv = centerObj.multivector;
+    // Cannot create dilation with infinity center
+    if (centerMv.isInf()) {
+      return null;
+    }
+    if (!centerMv.isPoint()) {
       return null;
     }
 
     final dilator = constructDilationOperator(centerMv, factor);
     return copyWith(multivector: dilator);
-  }
-
-  Multivector? _findPointMv(List<GeometryObject> parents, String targetId) {
-    for (final parent in parents) {
-      if (parent is SimpleGeometryObject && parent.id == targetId) {
-        final mv = parent.multivector;
-        if (mv.isPoint()) {
-          return mv;
-        }
-      }
-    }
-    return null;
   }
 }
 
@@ -437,6 +617,9 @@ class GeoTranslate extends GeoTrans {
       'fromPointId': fromPointId,
       'toPointId': toPointId,
     };
+    // Use transform operator encoding for translation
+    json[SimpleGeometryObject.multivectorKey] = 
+        SimpleGeometryObject.encodeTransformOperator(multivector);
     return json;
   }
 
@@ -444,7 +627,7 @@ class GeoTranslate extends GeoTrans {
     final props = json['properties'] as Map<String, dynamic>;
     final deps = (json['dependencies'] as List).cast<String>();
     final styleOverrides = _transformStyleOverridesFromJson(json, GeoTranslate);
-    final mv = SimpleGeometryObject.decodeMultivector(
+    final mv = SimpleGeometryObject.decodeTransformOperator(
       json[SimpleGeometryObject.multivectorKey],
     );
 
@@ -462,9 +645,31 @@ class GeoTranslate extends GeoTrans {
 
   @override
   GeometryObject? rebuildFromParents(List<GeometryObject> parents, dynamic dagManager) {
-    final fromMv = _findPointMv(parents, fromPointId);
-    final toMv = _findPointMv(parents, toPointId);
-    if (fromMv == null || toMv == null) {
+    if (dagManager is! DAGManager) {
+      return null;
+    }
+
+    // Parents order: parents[0] = object, parents[1] = from point, parents[2] = to point
+    // For GeoTranslate: dependencies = [fromPointId, toPointId], so parents[0] = from, parents[1] = to
+    if (parents.length < 2) {
+      return null;
+    }
+
+    final fromObj = parents[0];
+    final toObj = parents[1];
+    
+    if (fromObj is! SimpleGeometryObject || toObj is! SimpleGeometryObject) {
+      return null;
+    }
+    
+    final fromMv = fromObj.multivector;
+    final toMv = toObj.multivector;
+    
+    // Cannot create translation with infinity points
+    if (fromMv.isInf() || toMv.isInf()) {
+      return null;
+    }
+    if (!fromMv.isPoint() || !toMv.isPoint()) {
       return null;
     }
 
@@ -476,18 +681,6 @@ class GeoTranslate extends GeoTrans {
     final translator = constructTranslationOperator(dx, dy);
 
     return copyWith(multivector: translator);
-  }
-
-  Multivector? _findPointMv(List<GeometryObject> parents, String targetId) {
-    for (final parent in parents) {
-      if (parent is SimpleGeometryObject && parent.id == targetId) {
-        final mv = parent.multivector;
-        if (mv.isPoint()) {
-          return mv;
-        }
-      }
-    }
-    return null;
   }
 }
 

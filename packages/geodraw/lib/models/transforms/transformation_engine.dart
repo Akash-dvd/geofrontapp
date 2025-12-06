@@ -6,6 +6,7 @@ import 'geo_trans.dart';
 import '../simple/geo_point.dart';
 import '../simple/geo_line.dart';
 import '../simple/geo_circle.dart';
+import '../simple/geo_Inf.dart';
 import '../simple/geo_transformed_simple.dart';
 import '../complex/complex_geometry_object.dart';
 import '../complex/geo_shapes.dart';
@@ -39,6 +40,18 @@ class TransformationEngine {
         subject: source.multivector,
         transform: transform,
       );
+      
+      // Check if the result is infinity (e.g., center point inverted around circle)
+      if (transformed.isInf()) {
+        return GeoInf.fromMultivector(
+          id: id,
+          label: label,
+          multivector: transformed,
+          dependencies: dependencies,
+          visible: visible ?? source.visible,
+          styleOverrides: styleOverrides ?? source.styleOverrides,
+        );
+      }
       
       // Force the result to be treated as a point, even if kind inference says otherwise
       // This is because points should always remain points
@@ -111,12 +124,29 @@ class TransformationEngine {
     required GeoTrans transform,
     bool useSignedOperators = false,
   }) {
-    // All reflection-based operators (rotation, dilation) use the same pattern
-    if (transform is GeoRotate || transform is GeoDilate) {
-      return applyOperator(transform.multivector, subject);
+    // All rotor-based operators (rotation, dilation, translation, inversions) use signed forms for complex types
+    if (transform is GeoRotate) {
+      // For rotation, the reflection method does R^-1 * object * R, but we need R * object * R^-1
+      // So we reverse the operator before applying: (R^-1)^-1 = R, giving us R * object * R^-1
+      final reversedRotor = transform.multivector.reversion();
+      final result = applyRotationOperator(reversedRotor, subject);
+      return useSignedOperators 
+          ? _normalizeWithSignedForms(result)
+          : normalizeTransformedMultivector(result);
+    }
+    if (transform is GeoDilate) {
+      // For dilation, the reflection method does D^-1 * object * D, but we need D * object * D^-1
+      // So we reverse the operator before applying: (D^-1)^-1 = D, giving us D * object * D^-1
+      final reversedDilator = transform.multivector.reversion();
+      final result = applyDilationOperator(reversedDilator, subject);
+      return useSignedOperators 
+          ? _normalizeWithSignedForms(result)
+          : normalizeTransformedMultivector(result);
     }
 
-    if (transform is GeoInverse) {
+    if (transform is GeoLineInverse || 
+        transform is GeoCircleInverse || 
+        transform is GeoPointInverse) {
       return _applyInverseToMultivector(
         subject,
         transform.multivector,
@@ -125,7 +155,10 @@ class TransformationEngine {
     }
 
     if (transform is GeoTranslate) {
-      return applyTranslationOperator(transform.multivector, subject);
+      final result = applyTranslationOperator(transform.multivector, subject);
+      return useSignedOperators 
+          ? _normalizeWithSignedForms(result)
+          : normalizeTransformedMultivector(result);
     }
 
     return subject;
@@ -203,6 +236,36 @@ class TransformationEngine {
     final sourceId = source.id;
     final transformId = transform.id;
 
+    // Validate that start and end points are perpendicular to the curve
+    if (!isPerpendicular(start.multivector, curve)) {
+      debugPrint('[TransformationEngine] ========== VALIDATION ERROR ==========');
+      debugPrint('[TransformationEngine] Start point multivector is not perpendicular to curve multivector');
+      debugPrint('[TransformationEngine] Original segment start point: (${source.startPoint.x}, ${source.startPoint.y})');
+      debugPrint('[TransformationEngine] Original segment end point: (${source.endPoint.x}, ${source.endPoint.y})');
+      debugPrint('[TransformationEngine] Transformed start point: (${start.x}, ${start.y})');
+      debugPrint('[TransformationEngine] Transformed end point: (${end.x}, ${end.y})');
+      debugPrint('[TransformationEngine] Original segment multivector: o=${source.boundary.multivector.o}, e1=${source.boundary.multivector.e1}, e2=${source.boundary.multivector.e2}, O=${source.boundary.multivector.O}');
+      debugPrint('[TransformationEngine] Transformed curve multivector: o=${curve.o}, e1=${curve.e1}, e2=${curve.e2}, O=${curve.O}');
+      debugPrint('[TransformationEngine] Curve kind: $kind');
+      debugPrint('[TransformationEngine] Transform type: ${transform.runtimeType} (${transform.id})');
+      debugPrint('[TransformationEngine] ======================================');
+      throw StateError('Start point is not perpendicular to transformed curve');
+    }
+    if (!isPerpendicular(end.multivector, curve)) {
+      debugPrint('[TransformationEngine] ========== VALIDATION ERROR ==========');
+      debugPrint('[TransformationEngine] End point multivector is not perpendicular to curve multivector');
+      debugPrint('[TransformationEngine] Original segment start point: (${source.startPoint.x}, ${source.startPoint.y})');
+      debugPrint('[TransformationEngine] Original segment end point: (${source.endPoint.x}, ${source.endPoint.y})');
+      debugPrint('[TransformationEngine] Transformed start point: (${start.x}, ${start.y})');
+      debugPrint('[TransformationEngine] Transformed end point: (${end.x}, ${end.y})');
+      debugPrint('[TransformationEngine] Original segment multivector: o=${source.boundary.multivector.o}, e1=${source.boundary.multivector.e1}, e2=${source.boundary.multivector.e2}, O=${source.boundary.multivector.O}');
+      debugPrint('[TransformationEngine] Transformed curve multivector: o=${curve.o}, e1=${curve.e1}, e2=${curve.e2}, O=${curve.O}');
+      debugPrint('[TransformationEngine] Curve kind: $kind');
+      debugPrint('[TransformationEngine] Transform type: ${transform.runtimeType} (${transform.id})');
+      debugPrint('[TransformationEngine] ======================================');
+      throw StateError('End point is not perpendicular to transformed curve');
+    }
+
     if (kind == SimpleTransformKind.circle) {
       final control = _transformSegmentControlPoint(
         ownerId: source.id,
@@ -276,6 +339,36 @@ class TransformationEngine {
     final sourceId = source.id;
     final transformId = transform.id;
 
+    // Validate that start and end points are perpendicular to the curve
+    if (!isPerpendicular(start.multivector, curve)) {
+      debugPrint('[TransformationEngine] ========== VALIDATION ERROR ==========');
+      debugPrint('[TransformationEngine] Start point multivector is not perpendicular to curve multivector');
+      debugPrint('[TransformationEngine] Original arc start point: (${source.startPoint.x}, ${source.startPoint.y})');
+      debugPrint('[TransformationEngine] Original arc end point: (${source.endPoint.x}, ${source.endPoint.y})');
+      debugPrint('[TransformationEngine] Transformed start point: (${start.x}, ${start.y})');
+      debugPrint('[TransformationEngine] Transformed end point: (${end.x}, ${end.y})');
+      debugPrint('[TransformationEngine] Original arc multivector: o=${source.boundary.multivector.o}, e1=${source.boundary.multivector.e1}, e2=${source.boundary.multivector.e2}, O=${source.boundary.multivector.O}');
+      debugPrint('[TransformationEngine] Transformed curve multivector: o=${curve.o}, e1=${curve.e1}, e2=${curve.e2}, O=${curve.O}');
+      debugPrint('[TransformationEngine] Curve kind: $kind');
+      debugPrint('[TransformationEngine] Transform type: ${transform.runtimeType} (${transform.id})');
+      debugPrint('[TransformationEngine] ======================================');
+      throw StateError('Start point is not perpendicular to transformed curve');
+    }
+    if (!isPerpendicular(end.multivector, curve)) {
+      debugPrint('[TransformationEngine] ========== VALIDATION ERROR ==========');
+      debugPrint('[TransformationEngine] End point multivector is not perpendicular to curve multivector');
+      debugPrint('[TransformationEngine] Original arc start point: (${source.startPoint.x}, ${source.startPoint.y})');
+      debugPrint('[TransformationEngine] Original arc end point: (${source.endPoint.x}, ${source.endPoint.y})');
+      debugPrint('[TransformationEngine] Transformed start point: (${start.x}, ${start.y})');
+      debugPrint('[TransformationEngine] Transformed end point: (${end.x}, ${end.y})');
+      debugPrint('[TransformationEngine] Original arc multivector: o=${source.boundary.multivector.o}, e1=${source.boundary.multivector.e1}, e2=${source.boundary.multivector.e2}, O=${source.boundary.multivector.O}');
+      debugPrint('[TransformationEngine] Transformed curve multivector: o=${curve.o}, e1=${curve.e1}, e2=${curve.e2}, O=${curve.O}');
+      debugPrint('[TransformationEngine] Curve kind: $kind');
+      debugPrint('[TransformationEngine] Transform type: ${transform.runtimeType} (${transform.id})');
+      debugPrint('[TransformationEngine] ======================================');
+      throw StateError('End point is not perpendicular to transformed curve');
+    }
+
     if (kind == SimpleTransformKind.line) {
       return GeoTransSegment(
         id: id,
@@ -327,17 +420,8 @@ class TransformationEngine {
       transform: transform,
     );
 
-    if (!result.isPoint()) {
-      return GeoPointer(
-        id: '${ownerId}_$suffix',
-        label: source.label,
-        x: source.x,
-        y: source.y,
-        visible: source.visible,
-        styleOverrides: source.styleOverrides,
-      );
-    }
-
+    // Extract coordinates from transformed multivector and create a new GeoPointer
+    // This ensures the point remains a point regardless of multivector type detection
     return GeoPointer(
       id: '${ownerId}_$suffix',
       label: source.label,
@@ -401,7 +485,36 @@ class TransformationEngine {
     return applyReflectionByType(object, subject, useSignedOperators);
   }
 
+  /// Normalize a multivector with signed forms for complex geometry (segments/arcs)
+  /// This preserves orientation information needed for correct arc rendering
+  static Multivector _normalizeWithSignedForms(Multivector mv) {
+    // Infinity multivectors don't need normalization - return as-is
+    if (mv.isInf()) {
+      return mv;
+    }
+    if (mv.isCircle()) {
+      return signedInfForm(mv);
+    }
+    
+    if (mv.isLine()) {
+      return uniForm(mv);
+    }
+    
+    if (mv.isPoint()) {
+      return infForm(mv);
+    }
+    
+    // Fallback to standard normalization if type is unclear
+    return normalizeTransformedMultivector(mv);
+  }
+
   static SimpleTransformKind _inferKind(Multivector mv) {
+    // Check for infinity first - infinity is a special case
+    if (mv.isInf()) {
+      // Infinity points don't have a standard transform kind
+      // Return point kind as infinity is conceptually a point at infinity
+      return SimpleTransformKind.point;
+    }
     if (mv.isPoint()) {
       return SimpleTransformKind.point;
     }
@@ -567,10 +680,15 @@ class TransformationEngine {
       );
     }
 
-    // For union lists, translate recursively
+    // For union lists, use the transformation system instead
+    // The translate command now uses GeoTranslate transform objects and _createTransformedGeometry
+    // which properly handles union types by creating GeoTransUnionGeometryObjectList
     if (source is UnionGeometryObjectList) {
-      // TODO: Implement translation for union lists if needed
-      throw UnimplementedError('Translation of UnionGeometryObjectList not yet implemented');
+      throw UnimplementedError(
+        'Translation of UnionGeometryObjectList should use the transformation system '
+        '(GeoTranslate transform object) instead of TransformationEngine.translate(). '
+        'Use the translate command which properly handles union types.'
+      );
     }
 
     // Fallback: return source unchanged

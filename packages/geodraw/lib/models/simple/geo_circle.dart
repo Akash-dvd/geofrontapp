@@ -5,6 +5,7 @@ import 'package:geocalc/Multivector.dart';
 import '../canvas_style.dart';
 import '../canvas_style_defaults.dart';
 import '../geometry_object.dart';
+import '../../core/dag/dag_manager.dart';
 import 'geo_point.dart';
 import 'geo_line.dart';
 
@@ -333,15 +334,22 @@ class GeoCircle2P extends GeoCircle {
 
   @override
   GeometryObject? rebuildFromParents(List<GeometryObject> parents, dynamic dagManager) {
-    final points = parents.whereType<GeoPoint>().toList(growable: false);
-    if (points.length != 2) {
+    if (dagManager is! DAGManager || dependencies.length != 2) {
+      return null;
+    }
+
+    // Use dagManager.getObject() - handles both regular objects and objects in containers
+    final point1Obj = dagManager.getObject(dependencies[0]);
+    final point2Obj = dagManager.getObject(dependencies[1]);
+    
+    if (point1Obj is! GeoPoint || point2Obj is! GeoPoint) {
       return null;
     }
 
     return GeoCircle2P.fromDependencies(
       id: id,
       label: label,
-      points: points,
+      points: [point1Obj, point2Obj],
       visible: visible,
       styleOverrides: styleOverrides,
     );
@@ -493,15 +501,23 @@ class GeoCircle3P extends GeoCircle {
 
   @override
   GeometryObject? rebuildFromParents(List<GeometryObject> parents, dynamic dagManager) {
-    final points = parents.whereType<GeoPoint>().toList(growable: false);
-    if (points.length != 3) {
+    if (dagManager is! DAGManager || dependencies.length != 3) {
+      return null;
+    }
+
+    // Use dagManager.getObject() - handles both regular objects and objects in containers
+    final point1Obj = dagManager.getObject(dependencies[0]);
+    final point2Obj = dagManager.getObject(dependencies[1]);
+    final point3Obj = dagManager.getObject(dependencies[2]);
+    
+    if (point1Obj is! GeoPoint || point2Obj is! GeoPoint || point3Obj is! GeoPoint) {
       return null;
     }
 
     return GeoCircle3P.fromDependencies(
       id: id,
       label: label,
-      points: points,
+      points: [point1Obj, point2Obj, point3Obj],
       visible: visible,
       styleOverrides: styleOverrides,
     );
@@ -581,68 +597,52 @@ class GeoInvCircle extends GeoCircle {
   }
 }
 
-/// Circle with flexible center and point (accepts point or circle, not line)
-class GeoCircleFlex extends GeoCircle {
-  GeoCircleFlex({
+/// Imaginary circle constructed from two points
+class GeoIcircle extends GeoCircle {
+  GeoIcircle({
     required super.id,
     required super.label,
-    required super.dependencies, // Should have exactly 2 dependencies
+    required super.dependencies,
     required super.multivector,
     super.visible,
     super.styleOverrides,
   }) : assert(
          dependencies.length == 2,
-         'GeoCircleFlex requires exactly 2 dependencies',
+         'GeoIcircle requires exactly 2 point dependencies',
        );
 
-  /// Construct a circle from flexible dependencies (SimpleGeometryObject)
-  static GeoCircleFlex fromDependencies({
+  /// Construct an imaginary circle from two points
+  static GeoIcircle? fromDependencies({
     required String id,
     required String label,
-    required List<SimpleGeometryObject> objects,
+    required List<GeoPoint> points,
     bool visible = true,
     CanvasStyle? style,
     Map<String, dynamic>? styleOverrides,
   }) {
-    if (objects.length != 2) {
-      throw ArgumentError('GeoCircleFlex requires exactly 2 dependencies');
+    if (points.length != 2) {
+      throw ArgumentError('GeoIcircle requires exactly 2 point dependencies');
     }
 
-    final centerObj = objects[0];
-    final pointObj = objects[1];
+    final mv = constructImaginaryCircleFrom2Points(
+      points[0].multivector,
+      points[1].multivector,
+    );
 
-    // Validate center: must be point or circle, not line
-    if (centerObj is GeoLine) {
-      throw ArgumentError('Center cannot be a line. Use a point or circle.');
+    if (mv == null) {
+      return null;
     }
-
-    // Validate point on circle: must be point or circle, not line
-    if (pointObj is GeoLine) {
-      throw ArgumentError('Point on circle cannot be a line. Use a point or circle.');
-    }
-
-    // Extract center multivector (point or circle center)
-    final centerMv = centerObj is GeoCircle
-        ? getCircleCenter(centerObj.multivector)
-        : infForm(centerObj.multivector);
-
-    // Extract point multivector (point or circle center)
-    final pointMv = pointObj is GeoCircle
-        ? getCircleCenter(pointObj.multivector)
-        : infForm(pointObj.multivector);
-
-    final mv = constructCircleFromCenterAndPoint(centerMv, pointMv);
 
     final normalizedOverrides = _styleOverridesFromStyle(
-      type: GeoCircleFlex,
+      type: GeoIcircle,
       style: style,
       overrides: styleOverrides,
     );
 
-    return GeoCircleFlex(
+    return GeoIcircle(
       id: id,
       label: label,
-      dependencies: objects.map((o) => o.id).toList(growable: false),
+      dependencies: points.map((p) => p.id).toList(growable: false),
       multivector: mv,
       visible: visible,
       styleOverrides: normalizedOverrides,
@@ -650,7 +650,7 @@ class GeoCircleFlex extends GeoCircle {
   }
 
   @override
-  GeoCircleFlex copyWith({
+  GeoIcircle copyWith({
     String? id,
     String? label,
     List<String>? dependencies,
@@ -662,7 +662,7 @@ class GeoCircleFlex extends GeoCircle {
     final overrides =
         styleOverrides ??
         (style == null ? this.styleOverrides : resolveStyleOverrides(style));
-    return GeoCircleFlex(
+    return GeoIcircle(
       id: id ?? this.id,
       label: label ?? this.label,
       dependencies: dependencies ?? this.dependencies,
@@ -673,7 +673,7 @@ class GeoCircleFlex extends GeoCircle {
   }
 
   @override
-  String get type => 'GeoCircleFlex';
+  String get type => 'GeoIcircle';
 
   @override
   Map<String, dynamic> toJson() {
@@ -686,7 +686,7 @@ class GeoCircleFlex extends GeoCircle {
     return json;
   }
 
-  static GeoCircleFlex fromJson(Map<String, dynamic> json) {
+  static GeoIcircle fromJson(Map<String, dynamic> json) {
     final props = (json['properties'] as Map<String, dynamic>?) ?? const {};
     final mv = SimpleGeometryObject.decodeMultivector(
       json[SimpleGeometryObject.multivectorKey],
@@ -695,12 +695,12 @@ class GeoCircleFlex extends GeoCircle {
       json,
       legacyProps: props,
       fallbackColor: CanvasStyleDefaults.instance
-          .resolveForType(GeoCircleFlex)
+          .resolveForType(GeoIcircle)
           .strokeColor,
     );
     final deps = (json['dependencies'] as List).cast<String>();
 
-    return GeoCircleFlex(
+    return GeoIcircle(
       id: json['id'] as String,
       label: json['label'] as String,
       dependencies: deps,
@@ -708,101 +708,87 @@ class GeoCircleFlex extends GeoCircle {
       visible: json['visible'] as bool? ?? true,
       styleOverrides: styleOverrides,
     );
-  }
+    }
 
   @override
   GeometryObject? rebuildFromParents(List<GeometryObject> parents, dynamic dagManager) {
-    final objects = parents.whereType<SimpleGeometryObject>().toList(growable: false);
-    if (objects.length != 2) {
+    if (dagManager is! DAGManager || dependencies.length != 2) {
       return null;
     }
 
-    try {
-      return GeoCircleFlex.fromDependencies(
-        id: id,
-        label: label,
-        objects: objects,
-        visible: visible,
-        styleOverrides: styleOverrides,
-      );
-    } catch (e) {
+    final point1Obj = dagManager.getObject(dependencies[0]);
+    final point2Obj = dagManager.getObject(dependencies[1]);
+
+    if (point1Obj is! GeoPoint || point2Obj is! GeoPoint) {
       return null;
     }
+
+    return GeoIcircle.fromDependencies(
+      id: id,
+      label: label,
+      points: [point1Obj, point2Obj],
+      visible: visible,
+      styleOverrides: styleOverrides,
+    );
   }
 }
 
-/// Circle through three flexible objects (accepts any SimpleGeometryObject)
-class GeoCircle3Flex extends GeoCircle {
-  GeoCircle3Flex({
+/// Incircle of a triangle (circle inscribed in triangle, tangent to all three sides)
+class GeoIncircle extends GeoCircle {
+  GeoIncircle({
     required super.id,
     required super.label,
-    required super.dependencies, // Should have exactly 3 dependencies
+    required super.dependencies, // Should have exactly 3 point dependencies
     required super.multivector,
     super.visible,
     super.styleOverrides,
   }) : assert(
          dependencies.length == 3,
-         'GeoCircle3Flex requires exactly 3 dependencies',
+         'GeoIncircle requires exactly 3 vertex dependencies',
        );
 
-  /// Construct a circle through three flexible objects
-  static GeoCircle3Flex? fromDependencies({
+  /// Construct incircle from three triangle vertices
+  static GeoIncircle? fromDependencies({
     required String id,
     required String label,
-    required List<SimpleGeometryObject> objects,
+    required List<GeoPoint> vertices,
     bool visible = true,
     CanvasStyle? style,
     Map<String, dynamic>? styleOverrides,
   }) {
-    if (objects.length != 3) {
-      throw ArgumentError('GeoCircle3Flex requires exactly 3 dependencies');
+    if (vertices.length != 3) {
+      throw ArgumentError('GeoIncircle requires exactly 3 vertex dependencies');
     }
 
-    // Extract multivectors (point or circle center)
-    final mv1 = objects[0] is GeoCircle
-        ? getCircleCenter(objects[0].multivector)
-        : infForm(objects[0].multivector);
-    final mv2 = objects[1] is GeoCircle
-        ? getCircleCenter(objects[1].multivector)
-        : infForm(objects[1].multivector);
-    final mv3 = objects[2] is GeoCircle
-        ? getCircleCenter(objects[2].multivector)
-        : infForm(objects[2].multivector);
-
-    // Check for collinearity (similar to GeoCircle3P)
-    final p1 = constructFreePoint(mv1.e1, mv1.e2);
-    final p2 = constructFreePoint(mv2.e1, mv2.e2);
-    final p3 = constructFreePoint(mv3.e1, mv3.e2);
-
-    final d = 2 *
-        (p1.e1 * (p2.e2 - p3.e2) +
-            p2.e1 * (p3.e2 - p1.e2) +
-            p3.e1 * (p1.e2 - p2.e2));
-
-    if (d.abs() < 0.001) {
-      return null;
-    }
-
-    final mv = constructCircleThrough3Points(mv1, mv2, mv3);
+    try {
+      final mv = constructIncircleFrom3Vertices(
+        vertices[0].multivector,
+        vertices[1].multivector,
+        vertices[2].multivector,
+      );
 
     final normalizedOverrides = _styleOverridesFromStyle(
-      type: GeoCircle3Flex,
+        type: GeoIncircle,
       style: style,
       overrides: styleOverrides,
     );
 
-    return GeoCircle3Flex(
+      return GeoIncircle(
       id: id,
       label: label,
-      dependencies: objects.map((o) => o.id).toList(growable: false),
+        dependencies: vertices.map((v) => v.id).toList(growable: false),
       multivector: mv,
       visible: visible,
       styleOverrides: normalizedOverrides,
     );
+    } catch (e) {
+      debugPrint('[GeoIncircle.fromDependencies] Error constructing incircle: $e');
+      rethrow;
+    }
   }
 
   @override
-  GeoCircle3Flex copyWith({
+  GeoIncircle copyWith({
     String? id,
     String? label,
     List<String>? dependencies,
@@ -814,7 +800,7 @@ class GeoCircle3Flex extends GeoCircle {
     final overrides =
         styleOverrides ??
         (style == null ? this.styleOverrides : resolveStyleOverrides(style));
-    return GeoCircle3Flex(
+    return GeoIncircle(
       id: id ?? this.id,
       label: label ?? this.label,
       dependencies: dependencies ?? this.dependencies,
@@ -825,7 +811,7 @@ class GeoCircle3Flex extends GeoCircle {
   }
 
   @override
-  String get type => 'GeoCircle3Flex';
+  String get type => 'GeoIncircle';
 
   @override
   Map<String, dynamic> toJson() {
@@ -838,7 +824,7 @@ class GeoCircle3Flex extends GeoCircle {
     return json;
   }
 
-  static GeoCircle3Flex fromJson(Map<String, dynamic> json) {
+  static GeoIncircle fromJson(Map<String, dynamic> json) {
     final props = (json['properties'] as Map<String, dynamic>?) ?? const {};
     final mv = SimpleGeometryObject.decodeMultivector(
       json[SimpleGeometryObject.multivectorKey],
@@ -847,12 +833,12 @@ class GeoCircle3Flex extends GeoCircle {
       json,
       legacyProps: props,
       fallbackColor: CanvasStyleDefaults.instance
-          .resolveForType(GeoCircle3Flex)
+          .resolveForType(GeoIncircle)
           .strokeColor,
     );
     final deps = (json['dependencies'] as List).cast<String>();
 
-    return GeoCircle3Flex(
+    return GeoIncircle(
       id: json['id'] as String,
       label: json['label'] as String,
       dependencies: deps,
@@ -864,20 +850,175 @@ class GeoCircle3Flex extends GeoCircle {
 
   @override
   GeometryObject? rebuildFromParents(List<GeometryObject> parents, dynamic dagManager) {
-    final objects = parents.whereType<SimpleGeometryObject>().toList(growable: false);
-    if (objects.length != 3) {
+    if (dagManager is! DAGManager || dependencies.length != 3) {
       return null;
     }
 
-    return GeoCircle3Flex.fromDependencies(
+    final v1Obj = dagManager.getObject(dependencies[0]);
+    final v2Obj = dagManager.getObject(dependencies[1]);
+    final v3Obj = dagManager.getObject(dependencies[2]);
+    
+    if (v1Obj is! GeoPoint || v2Obj is! GeoPoint || v3Obj is! GeoPoint) {
+      return null;
+    }
+
+    return GeoIncircle.fromDependencies(
+        id: id,
+        label: label,
+      vertices: [v1Obj, v2Obj, v3Obj],
+        visible: visible,
+        styleOverrides: styleOverrides,
+      );
+  }
+}
+
+/// Excircle of a triangle (circle tangent to one side and extensions of the other two sides)
+class GeoExcircle extends GeoCircle {
+  GeoExcircle({
+    required super.id,
+    required super.label,
+    required super.dependencies, // Should have exactly 4 dependencies (3 vertices + 1 side)
+    required super.multivector,
+    super.visible,
+    super.styleOverrides,
+  }) : assert(
+         dependencies.length == 4,
+         'GeoExcircle requires exactly 4 dependencies (3 vertices + 1 side)',
+       );
+
+  /// Construct excircle from three triangle vertices and one side (line)
+  static GeoExcircle? fromDependencies({
+    required String id,
+    required String label,
+    required List<GeoPoint> vertices,
+    required GeoLine side,
+    bool visible = true,
+    CanvasStyle? style,
+    Map<String, dynamic>? styleOverrides,
+  }) {
+    if (vertices.length != 3) {
+      throw ArgumentError('GeoExcircle requires exactly 3 vertex dependencies');
+    }
+
+    final mv = constructExcircleFrom3VerticesAndSide(
+      vertices[0].multivector,
+      vertices[1].multivector,
+      vertices[2].multivector,
+      side.multivector,
+    );
+
+    final normalizedOverrides = _styleOverridesFromStyle(
+      type: GeoExcircle,
+      style: style,
+      overrides: styleOverrides,
+    );
+
+    return GeoExcircle(
       id: id,
       label: label,
-      objects: objects,
+      dependencies: [
+        ...vertices.map((v) => v.id),
+        side.id,
+      ],
+      multivector: mv,
+      visible: visible,
+      styleOverrides: normalizedOverrides,
+    );
+  }
+
+  @override
+  GeoExcircle copyWith({
+    String? id,
+    String? label,
+    List<String>? dependencies,
+    Multivector? multivector,
+    bool? visible,
+    CanvasStyle? style,
+    Map<String, dynamic>? styleOverrides,
+  }) {
+    final overrides =
+        styleOverrides ??
+        (style == null ? this.styleOverrides : resolveStyleOverrides(style));
+    return GeoExcircle(
+      id: id ?? this.id,
+      label: label ?? this.label,
+      dependencies: dependencies ?? this.dependencies,
+      multivector: multivector ?? this.multivector,
+      visible: visible ?? this.visible,
+      styleOverrides: overrides,
+    );
+  }
+
+  @override
+  String get type => 'GeoExcircle';
+
+  @override
+  Map<String, dynamic> toJson() {
+    final json = super.toJson();
+    json['properties'] = {
+      'centerX': centerX,
+      'centerY': centerY,
+      'radius': radius,
+    };
+    return json;
+  }
+
+  static GeoExcircle fromJson(Map<String, dynamic> json) {
+    final props = (json['properties'] as Map<String, dynamic>?) ?? const {};
+    final mv = SimpleGeometryObject.decodeMultivector(
+      json[SimpleGeometryObject.multivectorKey],
+    );
+    final styleOverrides = _styleOverridesFromJson(
+      json,
+      legacyProps: props,
+      fallbackColor: CanvasStyleDefaults.instance
+          .resolveForType(GeoExcircle)
+          .strokeColor,
+    );
+    final deps = (json['dependencies'] as List).cast<String>();
+
+    return GeoExcircle(
+      id: json['id'] as String,
+      label: json['label'] as String,
+      dependencies: deps,
+      multivector: mv,
+      visible: json['visible'] as bool? ?? true,
+      styleOverrides: styleOverrides,
+    );
+  }
+
+  @override
+  GeometryObject? rebuildFromParents(List<GeometryObject> parents, dynamic dagManager) {
+    if (dagManager is! DAGManager || dependencies.length != 4) {
+      return null;
+    }
+
+    final v1Obj = dagManager.getObject(dependencies[0]);
+    final v2Obj = dagManager.getObject(dependencies[1]);
+    final v3Obj = dagManager.getObject(dependencies[2]);
+    final sideObj = dagManager.getObject(dependencies[3]);
+    
+    if (v1Obj is! GeoPoint || v2Obj is! GeoPoint || v3Obj is! GeoPoint) {
+      return null;
+    }
+    if (sideObj is! GeoLine) {
+      return null;
+    }
+
+    return GeoExcircle.fromDependencies(
+      id: id,
+      label: label,
+      vertices: [v1Obj, v2Obj, v3Obj],
+      side: sideObj,
       visible: visible,
       styleOverrides: styleOverrides,
     );
   }
 }
+
+// ============================================================================
+// HELPER FUNCTIONS FOR STYLE OVERRIDES
+// ============================================================================
 
 Map<String, dynamic>? _styleOverridesFromStyle({
   required Type type,

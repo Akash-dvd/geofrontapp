@@ -325,6 +325,12 @@ const List<_ToolGroupDefinition> _level2GroupDefinitions = [
       ToolType.angleBisector,
       ToolType.midpoint,
       ToolType.tangent,
+      ToolType.incircle,
+      ToolType.excircle,
+      ToolType.orthocenter,
+      ToolType.tangents,
+      ToolType.polar,
+      ToolType.icircle,
     ],
   ),
   _ToolGroupDefinition(
@@ -342,6 +348,9 @@ const List<_ToolGroupDefinition> _level2GroupDefinitions = [
       ToolType.circle,
       ToolType.circleThreePoints,
       ToolType.arcThreePoints,
+      ToolType.incircle,
+      ToolType.excircle,
+      ToolType.icircle,
     ],
   ),
   _ToolGroupDefinition(
@@ -386,11 +395,18 @@ const List<_ToolGroupDefinition> _level3GroupDefinitions = [
     name: 'Construct Tools',
     toolTypes: [
       ToolType.midpoint,
+      ToolType.center,
       ToolType.intersection,
       ToolType.perpendicular,
       ToolType.parallel,
       ToolType.perpBisector,
       ToolType.tangent,
+      ToolType.incircle,
+      ToolType.excircle,
+      ToolType.orthocenter,
+      ToolType.tangents,
+      ToolType.polar,
+      ToolType.alcbc,
     ],
     placeholders: [_locusTool],
   ),
@@ -404,6 +420,8 @@ const List<_ToolGroupDefinition> _level3GroupDefinitions = [
       ToolType.point,
       ToolType.intersection,
       ToolType.midpoint,
+      ToolType.center,
+      ToolType.orthocenter,
     ],
     placeholders: [_pointOnObjectTool, _attachPointTool],
   ),
@@ -421,6 +439,9 @@ const List<_ToolGroupDefinition> _level3GroupDefinitions = [
       ToolType.perpendicularFlex,
       ToolType.parallelFlex,
       ToolType.perpbisectorFlex,
+      // Advanced line tools
+      ToolType.tangents,
+      ToolType.polar,
     ],
     placeholders: [_rayTool, _vectorTool],
   ),
@@ -430,9 +451,15 @@ const List<_ToolGroupDefinition> _level3GroupDefinitions = [
       ToolType.circle,
       ToolType.circleThreePoints,
       ToolType.arcThreePoints,
+      ToolType.center,
       // L3 Flexible commands
       ToolType.circleFlex,
       ToolType.circle3Flex,
+      // Triangle construction
+      ToolType.incircle,
+      ToolType.excircle,
+      // Imaginary circle
+      ToolType.icircle,
     ],
   ),
   _ToolGroupDefinition(
@@ -463,6 +490,9 @@ const List<_ToolGroupDefinition> _level3GroupDefinitions = [
   ),
   _ToolGroupDefinition(
     name: 'Other / Advanced',
+    toolTypes: [
+      ToolType.alcbc,
+    ],
     placeholders: [
       _locusTool,
       _mirrorCurveTool,

@@ -7,6 +7,8 @@ import '../models/canvas_object.dart';
 import '../models/simple/geo_circle.dart';
 import '../models/simple/geo_line.dart';
 import '../models/simple/geo_point.dart';
+import '../models/simple/geo_Inf.dart';
+import '../models/simple/geo_flex.dart';
 import '../models/geometry_object.dart';
 import '../models/transforms/geo_trans.dart';
 import '../models/simple/geo_transformed_simple.dart';
@@ -31,7 +33,10 @@ class GeoDrawDecoder {
     // Points
     'GeoPointer': (json, _) => GeoPointer.fromJson(json),
     'GeoMidpoint': (json, _) => GeoMidpoint.fromJson(json),
+    'GeoOrthocenter': (json, _) => GeoOrthocenter.fromJson(json),
+    'GeoConstructedPoint': (json, _) => GeoConstructedPoint.fromJson(json),
     'GeoInvPoint': (json, _) => GeoTransPoint.fromJson(json),
+    'GeoInf': (json, _) => GeoInf.fromJson(json),
 
     // Lines
     'GeoLine2P': (json, _) => GeoLine2P.fromJson(json),
@@ -50,11 +55,35 @@ class GeoDrawDecoder {
     'GeoCircle2P': (json, _) => GeoCircle2P.fromJson(json),
     'GeoCircle3P': (json, _) => GeoCircle3P.fromJson(json),
     'GeoCircleFlex': (json, _) => GeoCircleFlex.fromJson(json),
-    'GeoCircle3Flex': (json, _) => GeoCircle3Flex.fromJson(json),
+    'Geo3Flex': (json, _) => Geo3Flex.fromJson(json),
+    'GeoALCbc': (json, _) => GeoALCbc.fromJson(json),
+    // Backward compatibility
+    'GeoCircle3Flex': (json, _) => Geo3Flex.fromJson(json),
     'GeoInvCircle': (json, _) => GeoInvCircle.fromJson(json),
 
     // Transformations
-    'GeoInverse': (json, _) => GeoInverse.fromJson(json),
+    'GeoLineInverse': (json, _) => GeoLineInverse.fromJson(json),
+    'GeoCircleInverse': (json, _) => GeoCircleInverse.fromJson(json),
+    'GeoPointInverse': (json, _) => GeoPointInverse.fromJson(json),
+    // Backward compatibility: old GeoInverse type
+    'GeoInverse': (json, _) {
+      final props = json['properties'] as Map<String, dynamic>?;
+      final power = (props?['power'] as num?)?.toDouble() ?? 0.0;
+      final centerPointId = props?['centerPointId'] as String? ?? '';
+      
+      // Try to determine type from multivector encoding
+      final rawMv = json[SimpleGeometryObject.multivectorKey];
+      if (rawMv is List && rawMv.length == 7) {
+        // Full operator encoding = point inversion
+        return GeoPointInverse.fromJson(json);
+      } else if (power > 0 && centerPointId.isNotEmpty) {
+        // Has power and center = circle inversion
+        return GeoCircleInverse.fromJson(json);
+      } else {
+        // Default to line inversion
+        return GeoLineInverse.fromJson(json);
+      }
+    },
     'GeoRotate': (json, _) => GeoRotate.fromJson(json),
     'GeoDilate': (json, _) => GeoDilate.fromJson(json),
     'GeoTranslate': (json, _) => GeoTranslate.fromJson(json),
@@ -80,18 +109,22 @@ class GeoDrawDecoder {
     'polyArc': (json, dagManager) => GeoPolyArc.fromJson(
       json,
       (id) => _resolvePoint(dagManager, 'GeoPolyArc', id),
+      dagManager,
     ),
     'polyArcGon': (json, dagManager) => GeoPolyArcGon.fromJson(
       json,
       (id) => _resolvePoint(dagManager, 'GeoPolyArcGon', id),
+      dagManager,
     ),
     'polyLine': (json, dagManager) => GeoPolyLine.fromJson(
       json,
       (id) => _resolvePoint(dagManager, 'GeoPolyLine', id),
+      dagManager,
     ),
     'polygon': (json, dagManager) => GeoPolygon.fromJson(
       json,
       (id) => _resolvePoint(dagManager, 'GeoPolygon', id),
+      dagManager,
     ),
     'triangle': (json, dagManager) => GeoTriangle.fromJson(
       json,
@@ -112,21 +145,49 @@ class GeoDrawDecoder {
     'GeoIntersection': (json, _) => GeoIntersection.fromJson(json),
     // Backward compatibility: old type string
     'intersection': (json, _) => GeoIntersection.fromJson(json),
+    'GeoTangentList': (json, dagManager) {
+      final deps = (json['dependencies'] as List?)?.cast<String>() ?? const [];
+      if (deps.length != 2) {
+        return GeoTangentList.fromJson(json);
+      }
+
+      final first = dagManager.getObject(deps[0]);
+      final second = dagManager.getObject(deps[1]);
+
+      if (first is! GeometryObject || second is! GeometryObject) {
+        return GeoTangentList.fromJson(json);
+      }
+
+      try {
+        return GeoTangentList.constructFromObjects(
+          id: json['id'] as String,
+          label: (json['label'] as String?) ?? '',
+          first: first,
+          second: second,
+          dagManager: dagManager,
+          styleOverrides: _extractStyleOverrides(json),
+          visible: json['visible'] as bool? ?? true,
+        );
+      } catch (_) {
+        return GeoTangentList.fromJson(json);
+      }
+    },
+    // Backward compatibility: old type strings
     'GeoTangent': (json, dagManager) {
       final deps = (json['dependencies'] as List?)?.cast<String>() ?? const [];
       if (deps.length != 2) {
-        return GeoTangent.fromJson(json);
+        return GeoTangentList.fromJson(json);
       }
 
       final first = dagManager.getObject(deps[0]);
       final second = dagManager.getObject(deps[1]);
 
       if (first is! GeometryObject || second is! GeometryObject) {
-        return GeoTangent.fromJson(json);
+        return GeoTangentList.fromJson(json);
       }
 
       try {
-        return GeoTangent.constructFromObjects(
+        return GeoTangentList.constructFromObjects(
           id: json['id'] as String,
           label: (json['label'] as String?) ?? '',
           first: first,
@@ -136,25 +197,24 @@ class GeoDrawDecoder {
           visible: json['visible'] as bool? ?? true,
         );
       } catch (_) {
-        return GeoTangent.fromJson(json);
+        return GeoTangentList.fromJson(json);
       }
     },
-    // Backward compatibility: old type string
     'tangent': (json, dagManager) {
       final deps = (json['dependencies'] as List?)?.cast<String>() ?? const [];
       if (deps.length != 2) {
-        return GeoTangent.fromJson(json);
+        return GeoTangentList.fromJson(json);
       }
 
       final first = dagManager.getObject(deps[0]);
       final second = dagManager.getObject(deps[1]);
 
       if (first is! GeometryObject || second is! GeometryObject) {
-        return GeoTangent.fromJson(json);
+        return GeoTangentList.fromJson(json);
       }
 
       try {
-        return GeoTangent.constructFromObjects(
+        return GeoTangentList.constructFromObjects(
           id: json['id'] as String,
           label: (json['label'] as String?) ?? '',
           first: first,
@@ -164,7 +224,7 @@ class GeoDrawDecoder {
           visible: json['visible'] as bool? ?? true,
         );
       } catch (_) {
-        return GeoTangent.fromJson(json);
+        return GeoTangentList.fromJson(json);
       }
     },
 

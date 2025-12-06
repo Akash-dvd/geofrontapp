@@ -184,21 +184,20 @@ class GeoAngleBisector2L extends GenSimpleGeometryObjectList<GeoLine> {
     List<GeometryObject> parents,
     dynamic dagManager,
   ) {
-    if (parents.length != 2) {
+    if (dagManager is! DAGManager || dependencies.length != 2) {
       return null;
     }
 
-    // Cast dagManager to DAGManager
-    if (dagManager is! DAGManager) {
+    // Use dagManager.getObject() - handles both regular objects and objects in containers
+    final line1Obj = dagManager.getObject(dependencies[0]);
+    final line2Obj = dagManager.getObject(dependencies[1]);
+    
+    if (line1Obj is! GeoLine || line2Obj is! GeoLine) {
       return null;
     }
-
-    final line1 = parents[0];
-    final line2 = parents[1];
-
-    if (line1 is! GeoLine || line2 is! GeoLine) {
-      return null;
-    }
+    
+    final line1 = line1Obj;
+    final line2 = line2Obj;
 
     try {
       return GeoAngleBisector2L.constructFromLines(
@@ -228,6 +227,10 @@ GeoLine? _decodeLine(Map<String, dynamic> json) {
       return GeoParallelLine.fromJson(json);
     case 'GeoAngleBisector3P':
       return GeoAngleBisector3P.fromJson(json);
+    case 'GeoPolarLine':
+      return GeoPolarLine.fromJson(json);
+    case 'GeoTangentLine':
+      return GeoTangentLine.fromJson(json);
     default:
       return null;
   }

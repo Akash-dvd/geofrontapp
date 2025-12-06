@@ -377,7 +377,13 @@ class _ProblemFormScreenState extends State<ProblemFormScreen> {
 
   Widget _buildBottomBar(BuildContext context) {
     final theme = Theme.of(context);
-    final totalObjects = _dagManager.topologicalSort().length;
+    final allNodes = _dagManager.topologicalSort();
+    final totalObjects = allNodes.length;
+    final infinityNodes = allNodes.where((node) => node.object is GeoInf).toList();
+    final infinityCount = infinityNodes.length;
+    final infinityObjects = infinityNodes
+        .map((node) => node.object as GeoInf)
+        .toList();
 
     return Container(
       decoration: BoxDecoration(
@@ -402,6 +408,35 @@ class _ProblemFormScreenState extends State<ProblemFormScreen> {
             icon: const Icon(Icons.manage_history_outlined),
             label: Text(_metadata == null ? 'Add details' : 'Review details'),
           ),
+          // Display GeoInf count and details (after "Add details")
+          if (infinityCount > 0) ...[
+            const SizedBox(width: 24),
+            // Flame icon for infinity
+            const Icon(
+              Icons.local_fire_department,
+              size: 18,
+              color: Color(0xFFFF6B35),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              '$infinityCount point${infinityCount > 1 ? 's' : ''} at infinity',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: const Color(0xFFFF6B35),
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            // Show labels of infinity points
+            if (infinityObjects.isNotEmpty) ...[
+              const SizedBox(width: 8),
+              Text(
+                '(${infinityObjects.map((obj) => obj.label.isNotEmpty ? obj.label : obj.id).join(', ')})',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant.withOpacity(0.7),
+                  fontStyle: FontStyle.italic,
+                ),
+              ),
+            ],
+          ],
           const Spacer(),
           OutlinedButton.icon(
             onPressed: _isSolving ? null : _handleSolverPush,
@@ -436,7 +471,7 @@ class _ProblemFormScreenState extends State<ProblemFormScreen> {
     if (metadata == null) return;
 
     if (metadata.autoRunSolverOnSave && !_isSolving) {
-      final solved = await _runSolver(triggerSource: 'save');
+      final solved = await _runSolver(triggerSource: 'SAVE');
       if (!mounted) return;
       if (!solved) {
         return;

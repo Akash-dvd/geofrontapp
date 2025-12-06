@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'tool.dart';
@@ -9,13 +10,67 @@ import 'incremental_union_tool.dart';
 import 'staged_selection_tool.dart';
 import '../core/command/command_history.dart';
 import '../core/dag/dag_manager.dart';
+import '../core/label_manager.dart';
 import '../models/complex/geo_shapes.dart';
 import '../models/complex/geo_shapes_list.dart';
 import '../models/geometry_object.dart';
 import '../models/simple/geo_point.dart';
 import '../models/simple/geo_line.dart';
 import '../models/simple/geo_circle.dart';
+import '../models/simple/geo_flex.dart';
 import 'package:geocalc/Multivector.dart' show getCircleCenter;
+
+/// Data class for temporary polygon construction preview
+class TemporaryPolygonData {
+  final List<GeoPoint> points;
+  final int lightSegmentIndex; // Index of the segment that should be drawn light/thin (-1 if none)
+  
+  TemporaryPolygonData({
+    required this.points,
+    this.lightSegmentIndex = -1,
+  });
+}
+
+/// Data class for temporary polyarcgon construction preview
+class TemporaryPolyArcGonData {
+  final List<GeoPoint> points;
+  final int lightArcIndex; // Index of the arc that should be drawn light/thin (-1 if none)
+  
+  TemporaryPolyArcGonData({
+    required this.points,
+    this.lightArcIndex = -1,
+  });
+  
+  /// Get the arcs that can be formed from the current points
+  /// Pattern: 
+  /// - First arc: p1, p2, p3
+  /// - Subsequent arcs: last point of previous arc + 2 new points (p3,p4,p5), (p5,p6,p7), etc.)
+  /// - Closing arc: (second_to_last, last, p1) - created when p1 is added to even number of points
+  List<List<GeoPoint>> get arcTriples {
+    final triples = <List<GeoPoint>>[];
+    
+    // First arc: points 0, 1, 2 (p1, p2, p3)
+    if (points.length >= 3) {
+      triples.add([points[0], points[1], points[2]]);
+    }
+    
+    // Subsequent arcs: each uses last point of previous arc + 2 new points
+    // Arc 2: points[2], points[3], points[4] (p3, p4, p5)
+    // Arc 3: points[4], points[5], points[6] (p5, p6, p7)
+    // etc.
+    // We need at least 5 points for second arc, 7 for third, etc.
+    for (var i = 2; i <= points.length - 3; i += 2) {
+      if (i + 2 < points.length) {
+        triples.add([points[i], points[i + 1], points[i + 2]]);
+      }
+    }
+    
+    // No closing arc preview - closing requires adding p1 when we have even number of points
+    // The closing arc will be: (second_to_last, last, p1)
+    
+    return triples;
+  }
+}
 
 /// Manages the active tool and tool state
 class ToolManager with ToolCallbacksMixin {
@@ -24,8 +79,6 @@ class ToolManager with ToolCallbacksMixin {
 
   ToolType _activeToolType = ToolType.select;
   Tool? _activeTool;
-
-  final _PointLabelGenerator _pointLabelGenerator = _PointLabelGenerator();
 
   final OnParameterRequest? onParameterRequest;
 
@@ -48,6 +101,30 @@ class ToolManager with ToolCallbacksMixin {
 
   /// Get the currently active tool instance
   Tool? get activeTool => _activeTool;
+  
+  /// Get temporary preview polygon if polygon tool is active
+  GeoPolygon? getTemporaryPolygon() {
+    if (_activeTool is _PolygonTool) {
+      return (_activeTool as _PolygonTool).getTemporaryPolygon();
+    }
+    return null;
+  }
+
+  /// Get temporary polygon construction data (points and light segment index) if polygon tool is active
+  TemporaryPolygonData? getTemporaryPolygonData() {
+    if (_activeTool is _PolygonTool) {
+      return (_activeTool as _PolygonTool).getTemporaryPolygonData();
+    }
+    return null;
+  }
+
+  /// Get temporary polyarcgon construction data (points and light arc index) if polyarcgon tool is active
+  TemporaryPolyArcGonData? getTemporaryPolyArcGonData() {
+    if (_activeTool is _PolyArcGonTool) {
+      return (_activeTool as _PolyArcGonTool).getTemporaryPolyArcGonData();
+    }
+    return null;
+  }
 
   /// Select a tool by type
   void selectTool(ToolType type) {
@@ -67,6 +144,16 @@ class ToolManager with ToolCallbacksMixin {
     _activeTool?.handleInput(event);
   }
 
+  /// Select an object directly (used when object is selected from menu/dropdown)
+  /// This bypasses proximity search and directly adds the object as an argument
+  void selectObject(GeometryObject object) {
+    if (_activeTool is UnifiedTool) {
+      (_activeTool as UnifiedTool).selectObject(object);
+    } else if (_activeTool is StagedSelectionTool) {
+      (_activeTool as StagedSelectionTool).selectObject(object);
+    }
+  }
+
   /// Reset the active tool
   void resetTool() {
     _activeTool?.reset();
@@ -81,7 +168,6 @@ class ToolManager with ToolCallbacksMixin {
           onObjectSelected: onObjectSelected,
           onToolStateChanged: onToolStateChanged,
       createFreePoint: _createFreePoint,
-          labelGenerator: _pointLabelGenerator,
       onParameterRequest: onParameterRequest,
     );
 
@@ -101,7 +187,6 @@ class ToolManager with ToolCallbacksMixin {
         onObjectCreated: context.onObjectCreated,
         onObjectSelected: context.onObjectSelected,
         onToolStateChanged: context.onToolStateChanged,
-        labelGenerator: context.labelGenerator as _PointLabelGenerator,
       ),
       const ToolCatalogEntry(
         id: 'point',
@@ -327,6 +412,27 @@ class ToolManager with ToolCallbacksMixin {
         assetIcon: 'assets/tool_icons/midpoint.svg',
         command: 'Midpoint[]',
         toolType: ToolType.midpoint,
+        implemented: true,
+      ),
+    );
+
+    // Center tool
+    registry.registerFromManager(
+      ToolType.center,
+      (context) => _CenterTool(
+        dagManager: context.dagManager,
+        commandHistory: context.commandHistory,
+        onObjectCreated: context.onObjectCreated,
+        onObjectSelected: context.onObjectSelected,
+        onToolStateChanged: context.onToolStateChanged,
+      ),
+      const ToolCatalogEntry(
+        id: 'center',
+        label: 'Center',
+        icon: Icons.center_focus_strong,
+        assetIcon: 'assets/tool_icons/center.svg',
+        command: 'Center[]',
+        toolType: ToolType.center,
         implemented: true,
       ),
     );
@@ -649,10 +755,10 @@ class ToolManager with ToolCallbacksMixin {
       ),
     );
 
-    // Circle 3 Flex tool
+    // Geo 3 Flex tool
     registry.registerFromManager(
       ToolType.circle3Flex,
-      (context) => _Circle3FlexTool(
+      (context) => _Geo3FlexTool(
         dagManager: context.dagManager,
         commandHistory: context.commandHistory,
         onObjectCreated: context.onObjectCreated,
@@ -661,11 +767,11 @@ class ToolManager with ToolCallbacksMixin {
         createFreePoint: context.createFreePoint!,
       ),
       const ToolCatalogEntry(
-        id: 'circle3_flex',
-        label: 'Circle 3 (Flex)',
+        id: 'geo3_flex',
+        label: 'Geo 3 (Flex)',
         icon: Icons.circle,
         assetIcon: 'assets/tool_icons/circle3.svg',
-        command: 'Circle3Flex[]',
+        command: 'Geo3Flex[]',
         toolType: ToolType.circle3Flex,
         implemented: true,
       ),
@@ -737,6 +843,163 @@ class ToolManager with ToolCallbacksMixin {
       ),
     );
 
+    // ========================================================================
+    // TRIANGLE CONSTRUCTION TOOLS
+    // ========================================================================
+
+    // Incircle tool
+    registry.registerFromManager(
+      ToolType.incircle,
+      (context) => _IncircleTool(
+        dagManager: context.dagManager,
+        commandHistory: context.commandHistory,
+        onObjectCreated: context.onObjectCreated,
+        onObjectSelected: context.onObjectSelected,
+        onToolStateChanged: context.onToolStateChanged,
+        createFreePoint: context.createFreePoint!,
+      ),
+      const ToolCatalogEntry(
+        id: 'incircle',
+        label: 'Incircle',
+        icon: Icons.circle,
+        assetIcon: 'assets/tool_icons/circle3.svg',
+        command: 'incircle[]',
+        toolType: ToolType.incircle,
+        implemented: true,
+      ),
+    );
+
+    // Excircle tool
+    registry.registerFromManager(
+      ToolType.excircle,
+      (context) => _ExcircleTool(
+        dagManager: context.dagManager,
+        commandHistory: context.commandHistory,
+        onObjectCreated: context.onObjectCreated,
+        onObjectSelected: context.onObjectSelected,
+        onToolStateChanged: context.onToolStateChanged,
+        createFreePoint: context.createFreePoint!,
+      ),
+      const ToolCatalogEntry(
+        id: 'excircle',
+        label: 'Excircle',
+        icon: Icons.circle_outlined,
+        assetIcon: 'assets/tool_icons/circle3.svg',
+        command: 'excircle[]',
+        toolType: ToolType.excircle,
+        implemented: true,
+      ),
+    );
+
+    // Orthocenter tool
+    registry.registerFromManager(
+      ToolType.orthocenter,
+      (context) => _OrthocenterTool(
+        dagManager: context.dagManager,
+        commandHistory: context.commandHistory,
+        onObjectCreated: context.onObjectCreated,
+        onObjectSelected: context.onObjectSelected,
+        onToolStateChanged: context.onToolStateChanged,
+        createFreePoint: context.createFreePoint!,
+      ),
+      const ToolCatalogEntry(
+        id: 'orthocenter',
+        label: 'Orthocenter',
+        icon: Icons.center_focus_strong,
+        assetIcon: 'assets/tool_icons/center.svg',
+        command: 'orthocenter[]',
+        toolType: ToolType.orthocenter,
+        implemented: true,
+      ),
+    );
+
+    // Tangents tool (different from tangent - this is the new constructTangents)
+    registry.registerFromManager(
+      ToolType.tangents,
+      (context) => _TangentsTool(
+        dagManager: context.dagManager,
+        commandHistory: context.commandHistory,
+        onObjectCreated: context.onObjectCreated,
+        onObjectSelected: context.onObjectSelected,
+        onToolStateChanged: context.onToolStateChanged,
+        createFreePoint: context.createFreePoint!,
+      ),
+      const ToolCatalogEntry(
+        id: 'tangents',
+        label: 'Tangents',
+        icon: Icons.rotate_90_degrees_cw,
+        assetIcon: 'assets/tool_icons/tangent_lines.svg',
+        command: 'tangents[]',
+        toolType: ToolType.tangents,
+        implemented: true,
+      ),
+    );
+
+    // Polar tool
+    registry.registerFromManager(
+      ToolType.polar,
+      (context) => _PolarTool(
+        dagManager: context.dagManager,
+        commandHistory: context.commandHistory,
+        onObjectCreated: context.onObjectCreated,
+        onObjectSelected: context.onObjectSelected,
+        onToolStateChanged: context.onToolStateChanged,
+        createFreePoint: context.createFreePoint!,
+      ),
+      const ToolCatalogEntry(
+        id: 'polar',
+        label: 'Polar',
+        icon: Icons.straighten,
+        assetIcon: 'assets/tool_icons/perpendicularbisector.svg',
+        command: 'polar[]',
+        toolType: ToolType.polar,
+        implemented: true,
+      ),
+    );
+
+    // aLCbc tool
+    registry.registerFromManager(
+      ToolType.alcbc,
+      (context) => _AlcbcTool(
+        dagManager: context.dagManager,
+        commandHistory: context.commandHistory,
+        onObjectCreated: context.onObjectCreated,
+        onObjectSelected: context.onObjectSelected,
+        onToolStateChanged: context.onToolStateChanged,
+        createFreePoint: context.createFreePoint!,
+      ),
+      const ToolCatalogEntry(
+        id: 'alcbc',
+        label: 'aLCbc',
+        icon: Icons.code,
+        command: 'alcbc[]',
+        toolType: ToolType.alcbc,
+        implemented: true,
+      ),
+    );
+
+    // Imaginary Circle tool
+    registry.registerFromManager(
+      ToolType.icircle,
+      (context) => _IcircleTool(
+        dagManager: context.dagManager,
+        commandHistory: context.commandHistory,
+        onObjectCreated: context.onObjectCreated,
+        onObjectSelected: context.onObjectSelected,
+        onToolStateChanged: context.onToolStateChanged,
+        createFreePoint: context.createFreePoint!,
+      ),
+      const ToolCatalogEntry(
+        id: 'icircle',
+        label: 'Imaginary Circle',
+        icon: Icons.circle_outlined,
+        assetIcon: 'assets/tool_icons/circle2.svg',
+        command: 'icircle[]',
+        toolType: ToolType.icircle,
+        implemented: true,
+      ),
+    );
+
     // Parallel Flex tool
     registry.registerFromManager(
       ToolType.parallelFlex,
@@ -761,9 +1024,17 @@ class ToolManager with ToolCallbacksMixin {
   }
 
   GeoPointer _createFreePoint(Offset position) {
+    // Use LabelManager to get unique label that checks global namespace
+    // This ensures free points created during polygon/polyline creation
+    // are aware of intersection points and other existing labels
+    final label = LabelManager.getNextAvailableLabel(
+      dagManager,
+      GeometryObjectType.point,
+    );
+    
     final point = GeoPointer(
-      id: dagManager.generateId('point'),
-      label: _pointLabelGenerator.next(),
+      id: label, // In new system: ID = label
+      label: label,
       x: position.dx,
       y: position.dy,
     );
@@ -786,17 +1057,14 @@ class ToolManager with ToolCallbacksMixin {
 // Inline Tool Implementations (merged from unified_*_tool.dart files)
 // ============================================================================
 
-/// Point tool - creates points immediately on click
+/// Point tool - creates points immediately on click or glider points on objects
 class _PointTool extends UnifiedTool {
-  final _PointLabelGenerator labelGenerator;
-
   _PointTool({
     required super.dagManager,
     super.commandHistory,
     super.onObjectCreated,
     super.onObjectSelected,
     super.onToolStateChanged,
-    required this.labelGenerator,
   });
 
   @override
@@ -812,7 +1080,7 @@ class _PointTool extends UnifiedTool {
   IconData get icon => Icons.circle;
 
   @override
-  String get tooltip => 'Create a free point';
+  String get tooltip => 'Create a free point or glider point on an object';
 
   @override
   void handleInput(PointerEvent event) {
@@ -821,9 +1089,22 @@ class _PointTool extends UnifiedTool {
     }
   }
 
+  @override
+  void selectObject(GeometryObject object) {
+    // Use base class implementation which will validate against schema
+    // The point command has Pattern 1 that accepts GeoLine, GeoCircle, GeoSegment, GeoArc, etc.
+    // This will automatically route to the glider point pattern
+    super.selectObject(object);
+  }
+
   Future<void> _createPointAt(Offset position) async {
     try {
-      final label = labelGenerator.next();
+      // Use LabelManager to get unique label that checks global namespace
+      // This ensures points are aware of intersection points and other existing labels
+      final label = LabelManager.getNextAvailableLabel(
+        dagManager,
+        GeometryObjectType.point,
+      );
       final result = await executor.execute(
         commandName: commandName,
         arguments: [position.dx, position.dy],
@@ -847,14 +1128,14 @@ class _PointTool extends UnifiedTool {
 
   @override
   void reset() {
-    notifyStateChanged('Click to create a point');
+    notifyStateChanged('Click to create a point, or click on a line/circle/arc/segment to create a glider point');
   }
 
   @override
   bool get isComplete => true;
 
   @override
-  String get stateDescription => 'Click to create a point';
+  String get stateDescription => 'Click to create a point, or click on a line/circle/arc/segment to create a glider point';
 }
 
 /// Segment tool - creates segments between two points
@@ -1225,17 +1506,26 @@ class _PolyArcTool extends IncrementalUnionTool<GeoPolyArc> {
 }
 
 /// Polygon tool - incrementally builds polygon via point selection
-class _PolygonTool extends IncrementalUnionTool<GeoPolygon> {
+/// During construction, creates a polyline. When first point is selected again, completes the polygon.
+class _PolygonTool extends Tool {
   _PolygonTool({
-    required super.dagManager,
-    super.commandHistory,
-    super.onObjectCreated,
-    super.onObjectSelected,
-    super.onToolStateChanged,
+    required this.dagManager,
+    this.commandHistory,
+    this.onObjectCreated,
+    this.onObjectSelected,
+    this.onToolStateChanged,
     required this.createFreePoint,
   });
 
+  final DAGManager dagManager;
+  final CommandHistory? commandHistory;
+  final OnObjectCreated? onObjectCreated;
+  final OnObjectSelected? onObjectSelected;
+  final OnToolStateChanged? onToolStateChanged;
   final GeoPointer Function(Offset position) createFreePoint;
+  
+  GeoPoint? _firstPoint;
+  final List<GeoPoint> _trackedInputs = [];
 
   @override
   ToolType get type => ToolType.polygon;
@@ -1250,73 +1540,21 @@ class _PolygonTool extends IncrementalUnionTool<GeoPolygon> {
   String get tooltip => 'Build a polygon incrementally';
 
   @override
-  String get createCommandName => 'polygon';
+  bool get isComplete => false; // Polygon tool is never "complete" until reset
 
   @override
-  String? get extendCommandName => 'extendPolygon';
-
-  @override
-  String get creatingMessage => 'Creating polygon...';
-
-  @override
-  String get extendingMessage => 'Extending polygon...';
-
-  @override
-  String creationSuccessMessage(GeoPolygon object) =>
-      'Polygon created with ${object.vertexCount} vertices. Select another point to extend';
-
-  @override
-  String extensionSuccessMessage(GeoPolygon object) =>
-      'Polygon extended to ${object.vertexCount} vertices. Select another point to continue';
-
-  @override
-  String formatCreationFailure(String reason) =>
-      'Unable to create polygon: $reason';
-
-  @override
-  String formatExtensionFailure(String reason) =>
-      'Unable to extend polygon: $reason';
-
-  @override
-  String get unresolvedInputMessage =>
-      'Unable to resolve a point at that location';
-
-  @override
-  bool isInitialInputComplete(List<dynamic> inputs) => inputs.length >= 3;
-
-  @override
-  int extensionBatchSize(GeoPolygon object) => 1;
-
-  @override
-  List<dynamic> buildCreateArguments(List<dynamic> inputs) =>
-      List<dynamic>.from(inputs);
-
-  @override
-  List<dynamic> buildExtendArguments(
-    GeoPolygon object,
-    List<dynamic> newInputs,
-  ) {
-    if (newInputs.isEmpty) {
-      return <dynamic>[object];
+  String get stateDescription {
+    if (_trackedInputs.isEmpty) {
+      return 'Select first vertex for polygon';
+    } else if (_trackedInputs.length == 1) {
+      return 'Select second vertex for polygon';
+    } else {
+      return 'Select vertices for polygon (${_trackedInputs.length} so far). Click first point to complete';
     }
-    return <dynamic>[object, newInputs.last];
   }
 
-  @override
-  List<dynamic>? resolveDependencies(List<String> dependencyIds) {
-    final resolved = <GeoPoint>[];
-    for (final id in dependencyIds) {
-      final candidate = dagManager.getObject(id);
-      if (candidate is GeoPoint) {
-        resolved.add(candidate);
-        continue;
-      }
-      return null;
-    }
-    return resolved;
-  }
+  static const double selectionThreshold = 10.0;
 
-  @override
   dynamic resolveInput(Offset position) {
     final nearby = dagManager.proximitySearch(
       position,
@@ -1330,37 +1568,163 @@ class _PolygonTool extends IncrementalUnionTool<GeoPolygon> {
     return createFreePoint(position);
   }
 
-  @override
-  String initialPrompt(int inputCount) {
-    switch (inputCount) {
-      case 0:
-        return 'Select first vertex for polygon';
-      case 1:
-        return 'Select second vertex for polygon';
-      case 2:
-        return 'Select third vertex to create polygon';
-      default:
-        return 'Select vertices for polygon ($inputCount so far)';
-    }
-  }
-
-  @override
-  String extensionPrompt(int newInputCount) {
-    return 'Select another vertex to extend polygon';
-  }
-
-  @override
-  String? validateNextInput(List<dynamic> currentInputs, dynamic candidate) {
-    if (candidate is! GeoPoint) {
-      return 'Select a point to continue';
-    }
-    if (currentInputs.isNotEmpty) {
-      final last = currentInputs.last;
-      if (last is GeoPoint && last.id == candidate.id) {
+  String? _validateNextInput(GeoPoint candidate) {
+    // Prevent selecting the same point twice in a row
+    if (_trackedInputs.isNotEmpty) {
+      if (_trackedInputs.last.id == candidate.id) {
         return 'Select a distinct point to continue';
       }
     }
+    
+    // Track first point on first input
+    if (_trackedInputs.isEmpty) {
+      _firstPoint = candidate;
+      return null;
+    }
+    
+    // Check if candidate is the first point (completion)
+    if (_firstPoint != null && candidate.id == _firstPoint!.id) {
+      // This is completion - will be handled in handleInput
+      return null;
+    }
+    
+    // Prevent reselecting interior points (p2, p3... pn-1)
+    // Allow: p1 (to complete), pn (current end), or new point
+    if (_trackedInputs.length >= 3) {
+      // Check if this is an interior point (not first, not last)
+      for (var i = 1; i < _trackedInputs.length - 1; i++) {
+        if (_trackedInputs[i].id == candidate.id) {
+          return 'Cannot reselect interior points. Select first point to complete, or add a new point';
+        }
+      }
+    }
+    
     return null;
+  }
+
+  /// Get temporary polygon for preview rendering (with colored interior)
+  /// This should be called by the canvas to render the preview
+  /// Returns null now - use getTemporaryPolygonData() instead
+  GeoPolygon? getTemporaryPolygon() {
+    return null; // No longer using polyline-based preview
+  }
+
+  /// Get temporary polygon construction data for preview rendering
+  TemporaryPolygonData? getTemporaryPolygonData() {
+    if (_trackedInputs.length < 2) return null;
+    
+    // Determine which segment should be light/thin
+    // - If 2 points: no light segment (just one segment)
+    // - If 3+ points: the closing segment (from last point back to first) should be light
+    // Use points.length as the indicator for the closing segment
+    int lightSegmentIndex = -1;
+    if (_trackedInputs.length >= 3) {
+      // The closing segment (from last point back to first) should be light
+      lightSegmentIndex = _trackedInputs.length; // Use length to indicate closing segment
+    }
+    
+    return TemporaryPolygonData(
+      points: List<GeoPoint>.from(_trackedInputs),
+      lightSegmentIndex: lightSegmentIndex,
+    );
+  }
+
+  @override
+  void handleInput(PointerEvent event) {
+    if (event is! PointerDownEvent) {
+      return;
+    }
+
+    // Resolve input first
+    dynamic candidate;
+    try {
+      candidate = resolveInput(event.position);
+    } catch (error) {
+      onToolStateChanged?.call('Unable to create polygon: $error');
+      return;
+    }
+
+    if (candidate == null || candidate is! GeoPoint) {
+      onToolStateChanged?.call('Unable to resolve a point at that location');
+      return;
+    }
+
+    // Validate input
+    final message = _validateNextInput(candidate);
+    if (message != null) {
+      onToolStateChanged?.call(message);
+      return;
+    }
+
+    // Check if this is completion (selecting first point again)
+    if (_trackedInputs.length >= 2 && 
+        _firstPoint != null && 
+        candidate.id == _firstPoint!.id) {
+      // Complete the polygon
+      _completePolygon();
+      return;
+    }
+
+    // Add the point
+    if (_trackedInputs.isEmpty) {
+      _trackedInputs.add(candidate);
+    } else {
+      // Only add if it's not already the last point
+      if (_trackedInputs.last.id != candidate.id) {
+        _trackedInputs.add(candidate);
+      }
+    }
+
+    // Notify state change
+    onToolStateChanged?.call(stateDescription);
+  }
+
+  Future<void> _completePolygon() async {
+    if (_trackedInputs.length < 3) {
+      onToolStateChanged?.call('Polygon requires at least 3 vertices');
+      return;
+    }
+    
+    try {
+      final label = LabelManager.getNextAvailableLabel(
+        dagManager,
+        GeometryObjectType.polygon,
+      );
+      
+      // Create polygon from tracked points
+      final polygonPoints = List<GeoPoint>.from(_trackedInputs);
+      // Ensure it's closed (add first point at end)
+      if (polygonPoints.first.id != polygonPoints.last.id) {
+        polygonPoints.add(polygonPoints.first);
+      }
+      
+      // Create polygon without existing element labels (since we're not using polyline)
+      final polygon = GeoPolygon.fromDependencies(
+        id: label,
+        label: label,
+        points: polygonPoints,
+        dagManager: dagManager,
+      );
+      
+      // Add the final polygon
+      dagManager.addObject(polygon, polygon.dependencies);
+      
+      onObjectCreated?.call(polygon, polygon.dependencies);
+      onToolStateChanged?.call('Polygon completed with ${polygon.vertexCount} vertices');
+      
+      // Reset state
+      _firstPoint = null;
+      _trackedInputs.clear();
+      reset();
+    } catch (e) {
+      onToolStateChanged?.call('Failed to complete polygon: $e');
+    }
+  }
+
+  @override
+  void reset() {
+    _firstPoint = null;
+    _trackedInputs.clear();
   }
 }
 
@@ -1503,17 +1867,25 @@ class _PolyLineTool extends IncrementalUnionTool<GeoPolyLine> {
 }
 
 /// PolyArcGon tool - incrementally builds closed poly-arc via point selection
-class _PolyArcGonTool extends IncrementalUnionTool<GeoPolyArcGon<GeoArc>> {
+class _PolyArcGonTool extends Tool {
   _PolyArcGonTool({
-    required super.dagManager,
-    super.commandHistory,
-    super.onObjectCreated,
-    super.onObjectSelected,
-    super.onToolStateChanged,
+    required this.dagManager,
+    this.commandHistory,
+    this.onObjectCreated,
+    this.onObjectSelected,
+    this.onToolStateChanged,
     required this.createFreePoint,
   });
 
+  final DAGManager dagManager;
+  final CommandHistory? commandHistory;
+  final OnObjectCreated? onObjectCreated;
+  final OnObjectSelected? onObjectSelected;
+  final OnToolStateChanged? onToolStateChanged;
   final GeoPointer Function(Offset position) createFreePoint;
+  
+  GeoPoint? _firstPoint;
+  final List<GeoPoint> _trackedInputs = [];
 
   @override
   ToolType get type => ToolType.polyArcGon;
@@ -1528,74 +1900,29 @@ class _PolyArcGonTool extends IncrementalUnionTool<GeoPolyArcGon<GeoArc>> {
   String get tooltip => 'Build a closed poly-arc incrementally';
 
   @override
-  String get createCommandName => 'polyArcGon';
+  bool get isComplete => false; // Polyarcgon tool is never "complete" until reset
 
   @override
-  String? get extendCommandName => 'extendPolyArcGon';
-
-  @override
-  String get creatingMessage => 'Creating poly-arc-gon...';
-
-  @override
-  String get extendingMessage => 'Extending poly-arc-gon...';
-
-  @override
-  String creationSuccessMessage(GeoPolyArcGon<GeoArc> object) =>
-      'Poly-arc-gon created. Select two more points to extend';
-
-  @override
-  String extensionSuccessMessage(GeoPolyArcGon<GeoArc> object) =>
-      'Poly-arc-gon extended. Select two more points to continue';
-
-  @override
-  String formatCreationFailure(String reason) =>
-      'Unable to create poly-arc-gon: $reason';
-
-  @override
-  String formatExtensionFailure(String reason) =>
-      'Unable to extend poly-arc-gon: $reason';
-
-  @override
-  String get unresolvedInputMessage =>
-      'Unable to resolve a point at that location';
-
-  @override
-  bool isInitialInputComplete(List<dynamic> inputs) =>
-      inputs.length >= 4 && inputs.length.isOdd;
-
-  @override
-  int extensionBatchSize(GeoPolyArcGon<GeoArc> object) => 2;
-
-  @override
-  List<dynamic> buildCreateArguments(List<dynamic> inputs) =>
-      List<dynamic>.from(inputs);
-
-  @override
-  List<dynamic> buildExtendArguments(
-    GeoPolyArcGon<GeoArc> object,
-    List<dynamic> newInputs,
-  ) {
-    if (newInputs.length < 2) {
-      return <dynamic>[object];
+  String get stateDescription {
+    if (_trackedInputs.isEmpty) {
+      return 'Select first point for poly-arc-gon';
+    } else if (_trackedInputs.length == 1) {
+      return 'Select second point for poly-arc-gon';
+    } else if (_trackedInputs.length == 2) {
+      return 'Select third point for poly-arc-gon (first arc)';
+    } else if (_trackedInputs.length == 3) {
+      return 'Select fourth point, or select first point to close';
+    } else if (_trackedInputs.length.isEven) {
+      // Even number: 4, 6, 8... - can close with p1 (will be odd-numbered: 5th, 7th, 9th)
+      return 'Select next point to complete arc, or select first point to close';
+    } else {
+      // Odd number: 5, 7, 9... - have complete arcs, need even number to close
+      return 'Select two more points to extend (need even number to close)';
     }
-    return <dynamic>[object, newInputs[newInputs.length - 2], newInputs.last];
   }
 
-  @override
-  List<dynamic>? resolveDependencies(List<String> dependencyIds) {
-    final resolved = <GeoPoint>[];
-    for (final id in dependencyIds) {
-      final candidate = dagManager.getObject(id);
-      if (candidate is GeoPoint) {
-        resolved.add(candidate);
-        continue;
-      }
-      return null;
-    }
-    return resolved;
-  }
+  static const double selectionThreshold = 10.0;
 
-  @override
   dynamic resolveInput(Offset position) {
     final nearby = dagManager.proximitySearch(
       position,
@@ -1609,45 +1936,191 @@ class _PolyArcGonTool extends IncrementalUnionTool<GeoPolyArcGon<GeoArc>> {
     return createFreePoint(position);
   }
 
-  @override
-  String initialPrompt(int inputCount) {
-    switch (inputCount) {
-      case 0:
-        return 'Select first point for poly-arc-gon';
-      case 1:
-        return 'Select second point for poly-arc-gon';
-      case 2:
-        return 'Select third point for poly-arc-gon';
-      case 3:
-        return 'Select fourth point to complete first arc and close';
-      default:
-        return 'Select points for poly-arc-gon';
-    }
-  }
-
-  @override
-  String extensionPrompt(int newInputCount) {
-    if (newInputCount <= 0) {
-      return 'Select control point to extend poly-arc-gon';
-    }
-    if (newInputCount == 1) {
-      return 'Select end point to complete the new arc';
-    }
-    return 'Select control point to extend poly-arc-gon';
-  }
-
-  @override
-  String? validateNextInput(List<dynamic> currentInputs, dynamic candidate) {
-    if (candidate is! GeoPoint) {
-      return 'Select a point to continue';
-    }
-    if (currentInputs.isNotEmpty) {
-      final last = currentInputs.last;
-      if (last is GeoPoint && last.id == candidate.id) {
+  String? _validateNextInput(GeoPoint candidate) {
+    // Prevent selecting the same point twice in a row
+    if (_trackedInputs.isNotEmpty) {
+      if (_trackedInputs.last.id == candidate.id) {
         return 'Select a distinct point to continue';
       }
     }
+    
+    // Track first point on first input
+    if (_trackedInputs.isEmpty) {
+      _firstPoint = candidate;
+      return null;
+    }
+    
+    // Check if candidate is the first point (completion)
+    // Also check if candidate matches the first point in tracked inputs (in case _firstPoint is null)
+    final isFirstPoint = (_firstPoint != null && candidate.id == _firstPoint!.id) ||
+        (_trackedInputs.isNotEmpty && candidate.id == _trackedInputs.first.id);
+    
+    if (isFirstPoint) {
+      // p1 can only be added when we have even number of points (2*n where n >= 2)
+      // p1 will be the (2*n+1)th point (odd-numbered position)
+      // Examples: 4 points → p1 as 5th (close), 6 points → p1 as 7th (close)
+      if (_trackedInputs.length >= 4 && _trackedInputs.length.isEven) {
+        // Ensure _firstPoint is set
+        if (_firstPoint == null && _trackedInputs.isNotEmpty) {
+          _firstPoint = _trackedInputs.first;
+        }
+        return null; // Allow completion - p1 will be odd-numbered (2*n+1)
+      }
+      // If we have odd number of points, p1 cannot be added (would be even-numbered)
+      if (_trackedInputs.length >= 3 && _trackedInputs.length.isOdd) {
+        return 'Cannot add p1 now - need even number of points (4, 6, 8...) to close';
+      }
+      return 'Need at least 4 points (even number) to close poly-arc-gon';
+    }
+    
+    // Prevent reselecting any interior points (p2, p3, p4... pn-1)
+    // p1 is already handled above for closing, so if we reach here, p1 cannot be used
+    // Only allow: new points
+    if (_trackedInputs.length >= 2) {
+      // Check if this is any previously selected point (excluding p1 which is handled above)
+      for (var i = 0; i < _trackedInputs.length; i++) {
+        if (_trackedInputs[i].id == candidate.id) {
+          // p1 should have been handled above, so if we're here, it's not p1 or can't close
+          return 'Cannot reselect points. Only p1 can be reselected to close (when you have even number of points)';
+        }
+      }
+    }
+    
+    // Allow adding new points
     return null;
+  }
+
+  /// Get temporary polyarcgon construction data for preview rendering
+  TemporaryPolyArcGonData? getTemporaryPolyArcGonData() {
+    if (_trackedInputs.length < 3) return null;
+    
+    // No preview arc - closing requires adding p1 when we have even number of points
+    // The closing arc will be: (second_to_last, last, p1)
+    
+    return TemporaryPolyArcGonData(
+      points: List<GeoPoint>.from(_trackedInputs),
+      lightArcIndex: -1, // No preview arc
+    );
+  }
+
+  @override
+  void handleInput(PointerEvent event) {
+    if (event is! PointerDownEvent) {
+      return;
+    }
+
+    // Resolve input first
+    dynamic candidate;
+    try {
+      candidate = resolveInput(event.position);
+    } catch (error) {
+      onToolStateChanged?.call('Unable to create poly-arc-gon: $error');
+      return;
+    }
+
+    if (candidate == null || candidate is! GeoPoint) {
+      onToolStateChanged?.call('Unable to resolve a point at that location');
+      return;
+    }
+
+    // Validate input
+    final message = _validateNextInput(candidate);
+    if (message != null) {
+      onToolStateChanged?.call(message);
+      return;
+    }
+
+    // Check if this is completion (selecting first point again)
+    // We can complete if:
+    // - We have at least 4 points (even number: 2*n where n >= 2)
+    // - The candidate is the first point (p1)
+    // - p1 will be the (2*n+1)th point (odd-numbered position)
+    final isFirstPointForCompletion = (_firstPoint != null && candidate.id == _firstPoint!.id) ||
+        (_trackedInputs.isNotEmpty && candidate.id == _trackedInputs.first.id);
+    
+    if (_trackedInputs.length >= 4 && 
+        isFirstPointForCompletion &&
+        _trackedInputs.length.isEven) {
+      // Add p1 to complete the sequence
+      // When p1 is added, the closing arc will be: (second_to_last, last, p1)
+      // Example: [p1,p2,p3,p4] + p1 → [p1,p2,p3,p4,p1] → closing arc (p3,p4,p1)
+      _trackedInputs.add(candidate);
+      _completePolyArcGon();
+      return;
+    }
+
+    // Add the point
+    if (_trackedInputs.isEmpty) {
+      _trackedInputs.add(candidate);
+    } else {
+      // Only add if it's not already the last point
+      if (_trackedInputs.last.id != candidate.id) {
+        _trackedInputs.add(candidate);
+      }
+    }
+
+    // Notify state change
+    onToolStateChanged?.call(stateDescription);
+  }
+
+  Future<void> _completePolyArcGon() async {
+    // When p1 is added to even number of points, we have odd total (2*n+1)
+    // The closing arc is: (second_to_last, last, p1)
+    // Example: [p1,p2,p3,p4] + p1 → [p1,p2,p3,p4,p1] → closing arc (p3,p4,p1)
+    if (_trackedInputs.length < 5 || !_trackedInputs.length.isOdd) {
+      onToolStateChanged?.call('Poly-arc-gon requires at least 4 points (even number) before closing with p1');
+      return;
+    }
+    
+    try {
+      final label = LabelManager.getNextAvailableLabel(
+        dagManager,
+        GeometryObjectType.polyArcGon,
+      );
+      
+      // Create polyarcgon from tracked points
+      // The points form arcs:
+      // - First arc: p1, p2, p3
+      // - Subsequent arcs: p3,p4,p5, p5,p6,p7, etc.
+      // - Closing arc: (second_to_last, last, p1) - created by fromDependencies when p1 is last
+      final points = List<GeoPoint>.from(_trackedInputs);
+      
+      // p1 should already be the last point (added in handleInput before calling this)
+      // Verify it's closed for GeoPolyArcGon.fromDependencies
+      if (points.first.id != points.last.id) {
+        // This shouldn't happen, but add p1 if somehow missing
+        points.add(points.first);
+      }
+      
+      // Create polyarcgon - fromDependencies will create the closing arc correctly
+      // The closing arc uses: (points[length-3], points[length-2], points[length-1])
+      // which is (second_to_last, last, p1) - doesn't involve p2
+      final polyarcgon = GeoPolyArcGon.fromDependencies(
+        id: label,
+        label: label,
+        points: points,
+        dagManager: dagManager,
+      );
+      
+      // Add the final polyarcgon
+      dagManager.addObject(polyarcgon, polyarcgon.dependencies);
+      
+      onObjectCreated?.call(polyarcgon, polyarcgon.dependencies);
+      onToolStateChanged?.call('Poly-arc-gon completed with ${polyarcgon.elements.length} arcs');
+      
+      // Reset state
+      _firstPoint = null;
+      _trackedInputs.clear();
+      reset();
+    } catch (e) {
+      onToolStateChanged?.call('Failed to complete poly-arc-gon: $e');
+    }
+  }
+
+  @override
+  void reset() {
+    _firstPoint = null;
+    _trackedInputs.clear();
   }
 }
 
@@ -1906,7 +2379,12 @@ class _RotateTool extends StagedSelectionTool {
     List<GeometryObject> selectedObjects,
     Map<String, dynamic>? parameters,
   ) {
-    final angle = (parameters?['angle'] ?? 90.0) as double;
+    // UI sends angle in radians (already converted from degrees if user selected degrees)
+    // Default to 90 degrees = π/2 radians if not provided
+    final angleRadians = (parameters?['angle'] ?? (90.0 * math.pi / 180.0)) as double;
+    final angleDegrees = angleRadians * 180.0 / math.pi;
+    debugPrint('[RotateTool] buildArguments: Angle = ${angleRadians.toStringAsFixed(6)} radians (${angleDegrees.toStringAsFixed(2)}°)');
+    
     // If center is a circle, extract its center point
     final center = selectedObjects[1];
     GeometryObject centerPoint = center;
@@ -1920,7 +2398,8 @@ class _RotateTool extends StagedSelectionTool {
         y: centerMv.e2,
       );
     }
-    return [selectedObjects[0], centerPoint, angle];
+    // Convert radians back to degrees for the command (command expects degrees)
+    return [selectedObjects[0], centerPoint, angleDegrees];
   }
 
   @override
@@ -2126,6 +2605,44 @@ class _MidpointTool extends UnifiedTool {
   void reset() {
     super.reset();
     notifyStateChanged('Select two points for midpoint');
+  }
+}
+
+/// Center tool - finds and draws the center of a circle
+class _CenterTool extends UnifiedTool {
+  _CenterTool({
+    required super.dagManager,
+    super.commandHistory,
+    super.onObjectCreated,
+    super.onObjectSelected,
+    super.onToolStateChanged,
+  });
+
+  @override
+  ToolType get type => ToolType.center;
+
+  @override
+  String get commandName => 'center';
+
+  @override
+  String get name => 'Center';
+
+  @override
+  IconData get icon => Icons.center_focus_strong;
+
+  @override
+  String get tooltip => 'Find and draw the center of a circle';
+
+  @override
+  GeometryObject? createObjectAtPosition(Offset position) {
+    // Center tool doesn't create objects at arbitrary positions
+    return null;
+  }
+
+  @override
+  void reset() {
+    super.reset();
+    notifyStateChanged('Select a circle to find its center');
   }
 }
 
@@ -2439,10 +2956,10 @@ class _CircleFlexTool extends UnifiedTool {
 }
 
 /// Circle 3 Flex tool - creates circles through three flexible objects
-class _Circle3FlexTool extends UnifiedTool {
+class _Geo3FlexTool extends UnifiedTool {
   final GeoPointer Function(Offset position) createFreePoint;
 
-  _Circle3FlexTool({
+  _Geo3FlexTool({
     required super.dagManager,
     super.commandHistory,
     super.onObjectCreated,
@@ -2455,16 +2972,16 @@ class _Circle3FlexTool extends UnifiedTool {
   ToolType get type => ToolType.circle3Flex;
 
   @override
-  String get commandName => 'circle3Flex';
+  String get commandName => 'geo3Flex';
 
   @override
-  String get name => 'Circle 3 (Flex)';
+  String get name => 'Geo 3 (Flex)';
 
   @override
   IconData get icon => Icons.circle;
 
   @override
-  String get tooltip => 'Create a circle through three flexible objects';
+  String get tooltip => 'Create geometry through three flexible objects (point, line, or circle)';
 
   @override
   GeometryObject? createObjectAtPosition(Offset position) {
@@ -2478,7 +2995,7 @@ class _Circle3FlexTool extends UnifiedTool {
   @override
   void reset() {
     super.reset();
-    notifyStateChanged('Select three objects for circle');
+    notifyStateChanged('Select three objects for geometry');
   }
 }
 
@@ -2660,14 +3177,321 @@ class _ParallelFlexTool extends UnifiedTool {
   }
 }
 
-class _PointLabelGenerator {
-  int _counter = 0;
+/// Incircle tool - constructs incircle from three vertices
+class _IncircleTool extends UnifiedTool {
+  final GeoPointer Function(Offset position) createFreePoint;
 
-  String next() {
-    const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-    if (_counter < letters.length) {
-      return letters[_counter++];
+  _IncircleTool({
+    required super.dagManager,
+    super.commandHistory,
+    super.onObjectCreated,
+    super.onObjectSelected,
+    super.onToolStateChanged,
+    required this.createFreePoint,
+  });
+
+  @override
+  ToolType get type => ToolType.incircle;
+
+  @override
+  String get commandName => 'incircle';
+
+  @override
+  String get name => 'Incircle';
+
+  @override
+  IconData get icon => Icons.circle;
+
+  @override
+  String get tooltip => 'Construct incircle from three vertices';
+
+  @override
+  GeometryObject? createObjectAtPosition(Offset position) {
+    final nextConstraint = verifier.schema.nextConstraint(verifier.arguments);
+    if (nextConstraint?.accepts(GeoPointer) ?? false) {
+      return createFreePoint(position);
     }
-    return 'P${_counter++}';
+    return null;
+  }
+
+  @override
+  void reset() {
+    super.reset();
+    notifyStateChanged('Select three vertices for incircle');
   }
 }
+
+/// Excircle tool - constructs excircle from three vertices and a side
+class _ExcircleTool extends UnifiedTool {
+  final GeoPointer Function(Offset position) createFreePoint;
+
+  _ExcircleTool({
+    required super.dagManager,
+    super.commandHistory,
+    super.onObjectCreated,
+    super.onObjectSelected,
+    super.onToolStateChanged,
+    required this.createFreePoint,
+  });
+
+  @override
+  ToolType get type => ToolType.excircle;
+
+  @override
+  String get commandName => 'excircle';
+
+  @override
+  String get name => 'Excircle';
+
+  @override
+  IconData get icon => Icons.circle_outlined;
+
+  @override
+  String get tooltip => 'Construct excircle from three vertices and a side';
+
+  @override
+  GeometryObject? createObjectAtPosition(Offset position) {
+    final nextConstraint = verifier.schema.nextConstraint(verifier.arguments);
+    if (nextConstraint?.accepts(GeoPointer) ?? false) {
+      return createFreePoint(position);
+    }
+    return null;
+  }
+
+  @override
+  void reset() {
+    super.reset();
+    notifyStateChanged('Select three vertices and a side for excircle');
+  }
+}
+
+/// Orthocenter tool - constructs orthocenter from three vertices
+class _OrthocenterTool extends UnifiedTool {
+  final GeoPointer Function(Offset position) createFreePoint;
+
+  _OrthocenterTool({
+    required super.dagManager,
+    super.commandHistory,
+    super.onObjectCreated,
+    super.onObjectSelected,
+    super.onToolStateChanged,
+    required this.createFreePoint,
+  });
+
+  @override
+  ToolType get type => ToolType.orthocenter;
+
+  @override
+  String get commandName => 'orthocenter';
+
+  @override
+  String get name => 'Orthocenter';
+
+  @override
+  IconData get icon => Icons.center_focus_strong;
+
+  @override
+  String get tooltip => 'Construct orthocenter from three vertices';
+
+  @override
+  GeometryObject? createObjectAtPosition(Offset position) {
+    final nextConstraint = verifier.schema.nextConstraint(verifier.arguments);
+    if (nextConstraint?.accepts(GeoPointer) ?? false) {
+      return createFreePoint(position);
+    }
+    return null;
+  }
+
+  @override
+  void reset() {
+    super.reset();
+    notifyStateChanged('Select three vertices for orthocenter');
+  }
+}
+
+/// Tangents tool - constructs tangents between two objects
+class _TangentsTool extends UnifiedTool {
+  final GeoPointer Function(Offset position) createFreePoint;
+
+  _TangentsTool({
+    required super.dagManager,
+    super.commandHistory,
+    super.onObjectCreated,
+    super.onObjectSelected,
+    super.onToolStateChanged,
+    required this.createFreePoint,
+  });
+
+  @override
+  ToolType get type => ToolType.tangents;
+
+  @override
+  String get commandName => 'tangents';
+
+  @override
+  String get name => 'Tangents';
+
+  @override
+  IconData get icon => Icons.rotate_90_degrees_cw;
+
+  @override
+  String get tooltip => 'Construct tangents between two objects';
+
+  @override
+  GeometryObject? createObjectAtPosition(Offset position) {
+    final nextConstraint = verifier.schema.nextConstraint(verifier.arguments);
+    if (nextConstraint?.accepts(GeoPointer) ?? false) {
+      return createFreePoint(position);
+    }
+    if (nextConstraint?.accepts(GeoCircle) ?? false) {
+      // Could create a circle, but for tangents we typically select existing objects
+      return null;
+    }
+    return null;
+  }
+
+  @override
+  void reset() {
+    super.reset();
+    notifyStateChanged('Select two objects (point-point, point-circle, or circle-circle) for tangents');
+  }
+}
+
+/// Polar tool - constructs polar line of a point with respect to a circle
+class _PolarTool extends UnifiedTool {
+  final GeoPointer Function(Offset position) createFreePoint;
+
+  _PolarTool({
+    required super.dagManager,
+    super.commandHistory,
+    super.onObjectCreated,
+    super.onObjectSelected,
+    super.onToolStateChanged,
+    required this.createFreePoint,
+  });
+
+  @override
+  ToolType get type => ToolType.polar;
+
+  @override
+  String get commandName => 'polar';
+
+  @override
+  String get name => 'Polar';
+
+  @override
+  IconData get icon => Icons.straighten;
+
+  @override
+  String get tooltip => 'Construct polar line of a point with respect to a circle';
+
+  @override
+  GeometryObject? createObjectAtPosition(Offset position) {
+    final nextConstraint = verifier.schema.nextConstraint(verifier.arguments);
+    if (nextConstraint?.accepts(GeoPointer) ?? false) {
+      return createFreePoint(position);
+    }
+    return null;
+  }
+
+  @override
+  void reset() {
+    super.reset();
+    notifyStateChanged('Select point and circle for polar line');
+  }
+}
+
+/// aLCbc tool - applies aLCbc operation on three multivectors
+class _AlcbcTool extends UnifiedTool {
+  final GeoPointer Function(Offset position) createFreePoint;
+
+  _AlcbcTool({
+    required super.dagManager,
+    super.commandHistory,
+    super.onObjectCreated,
+    super.onObjectSelected,
+    super.onToolStateChanged,
+    required this.createFreePoint,
+  });
+
+  @override
+  ToolType get type => ToolType.alcbc;
+
+  @override
+  String get commandName => 'alcbc';
+
+  @override
+  String get name => 'aLCbc';
+
+  @override
+  IconData get icon => Icons.code;
+
+  @override
+  String get tooltip => 'Apply aLCbc operation on three objects';
+
+  @override
+  GeometryObject? createObjectAtPosition(Offset position) {
+    final nextConstraint = verifier.schema.nextConstraint(verifier.arguments);
+    if (nextConstraint?.accepts(GeoPointer) ?? false) {
+      return createFreePoint(position);
+    }
+    return null;
+  }
+
+  @override
+  void reset() {
+    super.reset();
+    notifyStateChanged('Select three objects for aLCbc operation');
+  }
+}
+
+/// Imaginary Circle tool - constructs imaginary circle from two points
+class _IcircleTool extends UnifiedTool {
+  final GeoPointer Function(Offset position) createFreePoint;
+
+  _IcircleTool({
+    required super.dagManager,
+    super.commandHistory,
+    super.onObjectCreated,
+    super.onObjectSelected,
+    super.onToolStateChanged,
+    required this.createFreePoint,
+  });
+
+  @override
+  ToolType get type => ToolType.icircle;
+
+  @override
+  String get commandName => 'icircle';
+
+  @override
+  String get name => 'Imaginary Circle';
+
+  @override
+  IconData get icon => Icons.circle_outlined;
+
+  @override
+  String get tooltip => 'Construct imaginary circle from two points';
+
+  @override
+  GeometryObject? createObjectAtPosition(Offset position) {
+    final nextConstraint = verifier.schema.nextConstraint(verifier.arguments);
+    if (nextConstraint?.accepts(GeoPointer) ?? false) {
+      return createFreePoint(position);
+    }
+    return null;
+  }
+
+  @override
+  void reset() {
+    super.reset();
+    notifyStateChanged('Select two points for imaginary circle');
+  }
+
+  @override
+  bool get isComplete => verifier.isComplete;
+
+  @override
+  String get stateDescription => 'Select two points for imaginary circle';
+}
+

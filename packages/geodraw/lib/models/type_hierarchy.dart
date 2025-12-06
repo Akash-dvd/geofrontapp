@@ -8,6 +8,8 @@ import 'geometry_object.dart';
 import 'simple/geo_circle.dart';
 import 'simple/geo_line.dart';
 import 'simple/geo_point.dart';
+import 'simple/geo_Inf.dart';
+import 'simple/geo_flex.dart';
 import 'simple/geo_transformed_simple.dart';
 import 'transforms/geo_trans.dart';
 import 'simple_lists/geo_intersection.dart';
@@ -50,8 +52,11 @@ class TypeHierarchy {
     _registerType(GeoPoint, {SimpleGeometryObject});
     _registerType(GeoPointer, {GeoPoint});
     _registerType(GeoMidpoint, {GeoPoint});
+    _registerType(GeoOrthocenter, {GeoPoint});
+    _registerType(GeoConstructedPoint, {GeoPoint});
     _registerType(GeoGliderPoint, {GeoPoint});
     _registerType(GeoTransPoint, {GeoPoint});
+    _registerType(GeoInf, {SimpleGeometryObject});
 
     // Line family
     _registerType(GeoLine, {SimpleGeometryObject});
@@ -63,18 +68,29 @@ class TypeHierarchy {
     _registerType(GeoPerpendicularLineFlex, {GeoLine});
     _registerType(GeoParallelLine, {GeoLine});
     _registerType(GeoParallelLineFlex, {GeoLine});
+    _registerType(GeoAngleBisector3P, {GeoLine});
+    _registerType(GeoPolarLine, {GeoLine});
+    _registerType(GeoTangentLine, {GeoLine});
 
     // Circle family
     _registerType(GeoCircle, {SimpleGeometryObject});
     _registerType(GeoCircle2P, {GeoCircle});
     _registerType(GeoCircle3P, {GeoCircle});
     _registerType(GeoCircleFlex, {GeoCircle});
-    _registerType(GeoCircle3Flex, {GeoCircle});
     _registerType(GeoTransCircle, {GeoCircle});
+    _registerType(GeoIncircle, {GeoCircle});
+    _registerType(GeoExcircle, {GeoCircle});
+    _registerType(GeoIcircle, {GeoCircle});
+    
+    // Generic flexible geometry
+    _registerType(Geo3Flex, {SimpleGeometryObject});
+    _registerType(GeoALCbc, {SimpleGeometryObject});
 
     // Transformation family
     _registerType(GeoTrans, {SimpleGeometryObject});
-    _registerType(GeoInverse, {GeoTrans});
+    _registerType(GeoLineInverse, {GeoTrans});
+    _registerType(GeoCircleInverse, {GeoTrans});
+    _registerType(GeoPointInverse, {GeoTrans});
     _registerType(GeoRotate, {GeoTrans});
     _registerType(GeoDilate, {GeoTrans});
     _registerType(GeoTranslate, {GeoTrans});
@@ -85,7 +101,7 @@ class TypeHierarchy {
 
     // Simple geometry lists
     _registerType(GeoIntersection, {GenSimpleGeometryObjectList});
-    _registerType(GeoTangent, {GenSimpleGeometryObjectList});
+    _registerType(GeoTangentList, {GenSimpleGeometryObjectList});
 
     // Complex geometry
     _registerType(GeoArc, {ComplexGeometryObject});

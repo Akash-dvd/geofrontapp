@@ -1,11 +1,13 @@
 // import 'dart:ffi';
 import 'dart:math' as math;
 import 'dart:typed_data';
+import 'package:flutter/foundation.dart';
 import 'package:equatable/equatable.dart';
 import 'package:dartz/dartz.dart';
 
 part 'util.dart';
 part 'definitions.dart';
+part 'definitions2.dart';
 
 /// Represents a Multivector for geometric algebra operations.
 class Multivector extends Equatable {

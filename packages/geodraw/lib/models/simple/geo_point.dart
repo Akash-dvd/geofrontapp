@@ -4,6 +4,7 @@ import 'package:geocalc/Multivector.dart';
 import '../canvas_style.dart';
 import '../canvas_style_defaults.dart';
 import '../geometry_object.dart';
+import '../../core/dag/dag_manager.dart';
 import 'geo_line.dart';
 import 'geo_circle.dart';
 import '../complex/geo_shapes.dart';
@@ -346,15 +347,26 @@ class GeoMidpoint extends GeoPoint {
 
   @override
   GeometryObject? rebuildFromParents(List<GeometryObject> parents, dynamic dagManager) {
-    final points = parents.whereType<GeoPoint>().toList(growable: false);
-    if (points.length != 2) {
+    if (dagManager is! DAGManager) {
+      return null;
+    }
+
+    if (dependencies.length != 2) {
+      return null;
+    }
+
+    // Use dagManager.getObject() - handles both regular objects and objects in containers
+    final point1Obj = dagManager.getObject(dependencies[0]);
+    final point2Obj = dagManager.getObject(dependencies[1]);
+    
+    if (point1Obj is! GeoPoint || point2Obj is! GeoPoint) {
       return null;
     }
 
     return GeoMidpoint.fromDependencies(
       id: id,
       label: label,
-      points: points,
+      points: [point1Obj, point2Obj],
       visible: visible,
       styleOverrides: styleOverrides,
     );
@@ -466,11 +478,16 @@ class GeoGliderPoint extends GeoPoint {
 
   @override
   GeometryObject? rebuildFromParents(List<GeometryObject> parents, dynamic dagManager) {
-    // Find the object this point glides on
-    final object = parents.firstWhere(
-      (obj) => obj.id == objectId,
-      orElse: () => throw StateError('Object $objectId not found in parents'),
-    );
+    if (dagManager is! DAGManager) {
+      return null;
+    }
+
+    // Use dagManager.getObject() - handles both regular objects and objects in containers
+    final objectObj = dagManager.getObject(objectId);
+    if (objectObj is! GeometryObject) {
+      return null;
+    }
+    final object = objectObj;
 
     // Create a point multivector from the initial position
     final initialPoint = constructFreePoint(_initialX, _initialY);
@@ -506,16 +523,244 @@ class GeoGliderPoint extends GeoPoint {
       if (projectedPoint == null) {
         return null;
       }
-    } else {
-      // Unsupported object type
+    }
+
+    if (projectedPoint == null) {
       return null;
     }
 
-    return copyWith(multivector: projectedPoint);
+    return GeoGliderPoint(
+      id: id,
+      label: label,
+      objectId: objectId,
+      initialX: _initialX,
+      initialY: _initialY,
+      visible: visible,
+      styleOverrides: styleOverrides,
+    );
+  }
+}
+
+/// Orthocenter of a triangle (intersection of three altitudes)
+class GeoOrthocenter extends GeoPoint {
+  GeoOrthocenter({
+    required super.id,
+    required super.label,
+    required super.dependencies, // Should have exactly 3 dependencies
+    required super.multivector,
+    super.visible,
+    super.styleOverrides,
+  }) : assert(
+         dependencies.length == 3,
+         'GeoOrthocenter requires exactly 3 point dependencies',
+       );
+
+  /// Construct orthocenter from three vertices
+  static GeoOrthocenter fromDependencies({
+    required String id,
+    required String label,
+    required List<GeoPoint> vertices,
+    bool visible = true,
+    CanvasStyle? style,
+    Map<String, dynamic>? styleOverrides,
+    double fallbackRadius = 5.0,
+    Color fallbackColor = Colors.green,
+  }) {
+    if (vertices.length != 3) {
+      throw ArgumentError('GeoOrthocenter requires exactly 3 vertex dependencies');
+    }
+
+    final mv = constructOrthocenterFrom3Vertices(
+      vertices[0].multivector,
+      vertices[1].multivector,
+      vertices[2].multivector,
+    );
+    final normalizedOverrides = _pointStyleOverridesFromStyle(
+      type: GeoOrthocenter,
+      style: style,
+      overrides: styleOverrides,
+      fallbackColor: fallbackColor,
+      fallbackRadius: fallbackRadius,
+    );
+
+    return GeoOrthocenter(
+      id: id,
+      label: label,
+      dependencies: vertices.map((v) => v.id).toList(growable: false),
+      multivector: mv,
+      visible: visible,
+      styleOverrides: normalizedOverrides,
+    );
   }
 
-  /// Project a point onto a union object (finds nearest point across all elements)
-  Multivector? _projectPointToUnion(
+  @override
+  GeoOrthocenter copyWith({
+    String? id,
+    String? label,
+    List<String>? dependencies,
+    Multivector? multivector,
+    double? x,
+    double? y,
+    bool? visible,
+    CanvasStyle? style,
+    Map<String, dynamic>? styleOverrides,
+  }) {
+    final overrides =
+        styleOverrides ??
+        (style == null ? this.styleOverrides : resolveStyleOverrides(style));
+    return GeoOrthocenter(
+      id: id ?? this.id,
+      label: label ?? this.label,
+      dependencies: dependencies ?? this.dependencies,
+      multivector: multivector ?? this.multivector,
+      visible: visible ?? this.visible,
+      styleOverrides: overrides,
+    );
+  }
+
+  @override
+  String get type => 'GeoOrthocenter';
+
+  @override
+  Map<String, dynamic> toJson() {
+    final json = super.toJson();
+    json['properties'] = {'x': x, 'y': y};
+    return json;
+  }
+
+  static GeoOrthocenter fromJson(Map<String, dynamic> json) {
+    final props = json['properties'] as Map<String, dynamic>;
+    final mv = SimpleGeometryObject.decodeMultivector(
+      json[SimpleGeometryObject.multivectorKey],
+    );
+    final deps = (json['dependencies'] as List).cast<String>();
+    final defaults = CanvasStyleDefaults.instance.resolveForType(GeoOrthocenter);
+    final styleOverrides = _pointStyleOverridesFromJson(
+      json,
+      legacyProps: props,
+      fallbackColor: defaults.strokeColor,
+    );
+
+    return GeoOrthocenter(
+      id: json['id'] as String,
+      label: json['label'] as String,
+      dependencies: deps,
+      multivector: mv,
+      visible: json['visible'] as bool? ?? true,
+      styleOverrides: styleOverrides,
+    );
+  }
+
+  @override
+  GeometryObject? rebuildFromParents(List<GeometryObject> parents, dynamic dagManager) {
+    if (dagManager is! DAGManager) {
+      return null;
+    }
+
+    if (dependencies.length != 3) {
+      return null;
+    }
+
+    // Use dagManager.getObject() - handles both regular objects and objects in containers
+    final v1Obj = dagManager.getObject(dependencies[0]);
+    final v2Obj = dagManager.getObject(dependencies[1]);
+    final v3Obj = dagManager.getObject(dependencies[2]);
+    
+    if (v1Obj is! GeoPoint || v2Obj is! GeoPoint || v3Obj is! GeoPoint) {
+      return null;
+    }
+
+    return GeoOrthocenter.fromDependencies(
+      id: id,
+      label: label,
+      vertices: [v1Obj, v2Obj, v3Obj],
+      visible: visible,
+      styleOverrides: styleOverrides,
+    );
+  }
+}
+
+/// Generic constructed point with dependencies (for aLCbc results, etc.)
+class GeoConstructedPoint extends GeoPoint {
+  GeoConstructedPoint({
+    required super.id,
+    required super.label,
+    required super.dependencies,
+    required super.multivector,
+    super.visible,
+    super.styleOverrides,
+  });
+
+  @override
+  GeoConstructedPoint copyWith({
+    String? id,
+    String? label,
+    List<String>? dependencies,
+    Multivector? multivector,
+    bool? visible,
+    CanvasStyle? style,
+    Map<String, dynamic>? styleOverrides,
+  }) {
+    final overrides =
+        styleOverrides ??
+        (style == null ? this.styleOverrides : resolveStyleOverrides(style));
+    return GeoConstructedPoint(
+      id: id ?? this.id,
+      label: label ?? this.label,
+      dependencies: dependencies ?? this.dependencies,
+      multivector: multivector ?? this.multivector,
+      visible: visible ?? this.visible,
+      styleOverrides: overrides,
+    );
+  }
+
+  @override
+  String get type => 'GeoConstructedPoint';
+
+  @override
+  Map<String, dynamic> toJson() {
+    final json = super.toJson();
+    json['properties'] = {
+      'x': x,
+      'y': y,
+    };
+    return json;
+  }
+
+  static GeoConstructedPoint fromJson(Map<String, dynamic> json) {
+    final props = (json['properties'] as Map<String, dynamic>?) ?? const {};
+    final mv = SimpleGeometryObject.decodeMultivector(
+      json[SimpleGeometryObject.multivectorKey],
+    );
+    final styleOverrides = _pointStyleOverridesFromJson(
+      json,
+      legacyProps: props,
+      fallbackColor: CanvasStyleDefaults.instance
+          .resolveForType(GeoConstructedPoint)
+          .strokeColor,
+    );
+    final deps = (json['dependencies'] as List).cast<String>();
+
+    return GeoConstructedPoint(
+      id: json['id'] as String,
+      label: json['label'] as String,
+      dependencies: deps,
+      multivector: mv,
+      visible: json['visible'] as bool? ?? true,
+      styleOverrides: styleOverrides,
+    );
+  }
+
+  @override
+  GeometryObject? rebuildFromParents(List<GeometryObject> parents, dynamic dagManager) {
+    // Constructed points typically don't rebuild from parents automatically
+    // They are usually created directly from multivector calculations
+    return null;
+  }
+}
+
+/// Helper function to project a point onto a union object (finds nearest point across all elements)
+Multivector? _projectPointToUnion(
     Multivector point,
     UnionGeometryObjectList union,
   ) {
@@ -555,9 +800,9 @@ class GeoGliderPoint extends GeoPoint {
     }
 
     return bestProjection;
-  }
 }
 
+/// Helper functions for point style overrides
 Map<String, dynamic>? _pointStyleOverridesFromStyle({
   required Type type,
   CanvasStyle? style,

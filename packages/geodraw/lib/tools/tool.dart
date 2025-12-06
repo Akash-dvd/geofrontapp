@@ -16,6 +16,7 @@ enum ToolType {
   polyLine,
   polyArcGon,
   midpoint,
+  center,
   perpendicular,
   parallel,
   perpBisector,
@@ -36,6 +37,15 @@ enum ToolType {
   perpbisectorFlex,
   perpendicularFlex,
   parallelFlex,
+  // Triangle construction tools
+  incircle,
+  excircle,
+  orthocenter,
+  tangents,
+  polar,
+  alcbc,
+  // Imaginary circle
+  icircle,
 }
 
 /// Abstract base class for all construction tools
