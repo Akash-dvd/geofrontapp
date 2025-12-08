@@ -3,6 +3,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:geocalc/Multivector.dart' show 
+    Multivector,
+    constructFreePoint,
+    projectPointToLine,
+    projectPointToCircle,
+    projectPointToSegment,
+    projectPointToArc;
 import '../core/dag/dag_manager.dart' hide Viewport;
 import '../core/dag/dag_manager.dart' as dag show Viewport;
 import '../core/dag/dag_node.dart';
@@ -13,8 +20,7 @@ import '../models/simple/geo_point.dart';
 import '../models/simple/geo_line.dart';
 import '../models/simple/geo_circle.dart';
 import '../models/simple/geo_Inf.dart';
-import '../models/complex/complex_geometry_object.dart';
-import '../models/complex/geo_shapes.dart' show GeoArc3P;
+import '../models/complex/geo_shapes.dart' show GeoArc3P, GeoArc, GeoSegment;
 import '../tools/tool_manager.dart';
 import '../tools/tool.dart';
 import 'object_toolbar.dart';
@@ -147,32 +153,42 @@ class _GeoDrawCanvasState extends State<GeoDrawCanvas> {
   }
 
   Widget _buildCanvasContent() {
-    return Listener(
-      key: _canvasKey,
-      onPointerDown: _handlePointerDown,
-      behavior: HitTestBehavior.opaque,
-      child: GestureDetector(
-        onTapDown: _handleTapDown,
-        onSecondaryTapDown: _handleSecondaryTapDown,
-        onLongPress: _handleLongPress,
-        onPanStart: _handlePanStart,
-        onPanUpdate: _handlePanUpdate,
-        onPanEnd: _handlePanEnd,
-        child: Listener(
-          onPointerSignal: _handlePointerSignal,
-          child: ClipRect(
-            child: CustomPaint(
-              painter: GeoDrawCanvasPainter(
-                toolManager: widget.toolManager,
-                dagManager: widget.dagManager,
-                viewport: _viewport!,
-                selectedIds: widget.selectedIds,
-                showGrid: _showGrid,
-                showAxes: _showAxes,
-                backgroundColor: widget.backgroundColor,
-                gridColor: widget.gridColor,
+    // Determine cursor based on active tool
+    // Using noDrop cursor for delete tool (closest to trash bin/delete icon)
+    // For a true custom trash bin cursor, a cursor asset file would be needed
+    final cursor = widget.toolManager.activeToolType == ToolType.delete
+        ? SystemMouseCursors.noDrop // Delete cursor (no-drop icon, appropriate for delete operations)
+        : SystemMouseCursors.click; // Default click cursor
+    
+    return MouseRegion(
+      cursor: cursor,
+      child: Listener(
+        key: _canvasKey,
+        onPointerDown: _handlePointerDown,
+        behavior: HitTestBehavior.opaque,
+        child: GestureDetector(
+          onTapDown: _handleTapDown,
+          onSecondaryTapDown: _handleSecondaryTapDown,
+          onLongPress: _handleLongPress,
+          onPanStart: _handlePanStart,
+          onPanUpdate: _handlePanUpdate,
+          onPanEnd: _handlePanEnd,
+          child: Listener(
+            onPointerSignal: _handlePointerSignal,
+            child: ClipRect(
+              child: CustomPaint(
+                painter: GeoDrawCanvasPainter(
+                  toolManager: widget.toolManager,
+                  dagManager: widget.dagManager,
+                  viewport: _viewport!,
+                  selectedIds: widget.selectedIds,
+                  showGrid: _showGrid,
+                  showAxes: _showAxes,
+                  backgroundColor: widget.backgroundColor,
+                  gridColor: widget.gridColor,
+                ),
+                child: const SizedBox.expand(),
               ),
-              child: const SizedBox.expand(),
             ),
           ),
         ),
@@ -273,64 +289,98 @@ class _GeoDrawCanvasState extends State<GeoDrawCanvas> {
     // Select innermost element (first in list, which is prioritized)
     final selectedObject = nearby.first;
 
+    // Check if the clicked object itself is a container (union or simple list)
+    // Note: GenSimpleGeometryObjectList extends UnionGeometryObjectList, so this check covers both
+    final isContainer = selectedObject is UnionGeometryObjectList;
+
+    // Handle delete tool
+    if (widget.toolManager.activeToolType == ToolType.delete) {
+      // For containers, show dropdown to choose what to delete
+      if (isContainer) {
+        _showDeleteContainerMenu(details.globalPosition, selectedObject);
+        return;
+      }
+      
+      // Check if this element is part of a container
+      final containers = widget.dagManager.findContainers(selectedObject);
+      if (containers.isNotEmpty) {
+        // Show dropdown to choose child or parent container
+        _showDeleteChildParentMenu(details.globalPosition, selectedObject, containers);
+        return;
+      }
+      
+      // Direct deletion for non-container objects
+      try {
+        widget.dagManager.deleteObject(selectedObject.id, cascade: true);
+        widget.onSelectionChanged?.call({});
+        setState(() {});
+        return;
+      } catch (e) {
+        // If deletion fails, show error or do nothing
+        debugPrint('Failed to delete object: $e');
+        return;
+      }
+    }
+
+    // Handle union tool
+    if (widget.toolManager.activeToolType == ToolType.union) {
+      // For containers, show dropdown to choose what to add to union
+      if (isContainer) {
+        _showUnionContainerMenu(details.globalPosition, selectedObject);
+        return;
+      }
+      
+      // Check if this element is part of a container
+      final containers = widget.dagManager.findContainers(selectedObject);
+      if (containers.isNotEmpty) {
+        // Show dropdown to choose child or parent container
+        _showUnionChildParentMenu(details.globalPosition, selectedObject, containers);
+        return;
+      }
+      
+      // Direct selection for non-container objects
+      widget.toolManager.selectObject(selectedObject);
+      setState(() {});
+      return;
+    }
+
+    if (isContainer) {
+      // Left click on container: show dropdown with container and its children
+      _showContainerMenu(details.globalPosition, selectedObject);
+      return;
+    }
+
     // Check if this element is part of a container
     final containers = widget.dagManager.findContainers(selectedObject);
     final isPartOfContainer = containers.isNotEmpty;
 
     if (widget.toolManager.activeToolType == ToolType.select) {
-      // Direct selection mode
+      // Direct selection mode - select the normal object or child
       final newSelection = {selectedObject.id};
-      final objectName = selectedObject.label.isNotEmpty
-          ? selectedObject.label
-          : selectedObject.id;
-      final objectType = selectedObject.runtimeType.toString();
-      debugPrint('Selected object - Label: $objectName, Type: $objectType');
       widget.onSelectionChanged?.call(newSelection);
       setState(() {});
     } else {
       // Tool is active - need to pass object as argument
       if (isPartOfContainer) {
-        // Left click on container child: select the child directly
-        // The tool will receive the child element
-        widget.toolManager.selectObject(selectedObject);
+        // Left click on container child: show dropdown to choose child or parent
+        // This allows the user to qualify whether they want the child or the container
+        _showChildParentMenu(details.globalPosition, selectedObject, containers);
       } else {
-        // Element is not part of container: forward event normally
-        // The tool will handle proximity search internally
-        final pointerEvent = PointerDownEvent(
-          position: worldPos, // Use world coordinates for tool
-        );
-        widget.toolManager.handleInput(pointerEvent);
+        // Element is not part of container: select it directly
+        try {
+          widget.toolManager.selectObject(selectedObject);
+          setState(() {});
+        } catch (e) {
+          // Error selecting object - silently handle
+          setState(() {});
+        }
       }
-      setState(() {});
     }
   }
 
   void _handleSecondaryTapDown(TapDownDetails details) {
-    final worldPos = _viewport!.screenToWorld(details.localPosition);
-    final nearby = widget.dagManager.proximitySearch(worldPos, threshold: 10);
-
-    if (nearby.isEmpty) {
-      return;
-    }
-
-    final selectedObject = nearby.first;
-
-    // Right-click: show hierarchy menu if element is part of container
-    final containers = widget.dagManager.findContainers(selectedObject);
-    final isPartOfContainer = containers.isNotEmpty;
-
-    if (isPartOfContainer) {
-      // Show hierarchy menu with child and container(s)
-      // This shows the clicked element (arc) first, then the container(s)
-      _showHierarchyMenu(details.globalPosition, selectedObject);
-    } else {
-      // Element is not part of container: right click does nothing for tools
-      // (or could show menu with just the element for selection tool)
-      if (widget.toolManager.activeToolType == ToolType.select) {
-        widget.onSelectionChanged?.call({selectedObject.id});
-        setState(() {});
-      }
-    }
+    // Right click does nothing - user requested this behavior
+    return;
   }
 
   void _handleLongPress() {
@@ -369,12 +419,15 @@ class _GeoDrawCanvasState extends State<GeoDrawCanvas> {
     });
   }
 
-  void _showHierarchyMenu(Offset position, GeometryObject element) {
-    // Find all containers containing this element
-    final containers = widget.dagManager.findContainers(element);
-
-    // Build hierarchy list: element first, then containers (innermost to outermost)
-    final hierarchy = <GeometryObject>[element, ...containers];
+  void _showContainerMenu(Offset position, GeometryObject container) {
+    // Build menu with container first, then its children
+    final menuItems = <GeometryObject>[container];
+    
+    // Add children based on container type
+    // Note: GenSimpleGeometryObjectList extends UnionGeometryObjectList, so this covers both
+    if (container is UnionGeometryObjectList) {
+      menuItems.addAll(container.elements);
+    }
 
     showMenu(
       context: context,
@@ -384,23 +437,23 @@ class _GeoDrawCanvasState extends State<GeoDrawCanvas> {
         position.dx,
         position.dy,
       ),
-      items: hierarchy.map((obj) {
+      items: menuItems.map((obj) {
         final label = obj.label.isNotEmpty ? obj.label : obj.id;
         // Clean up type name: remove 'Geo' prefix and handle generic types
         String typeName = obj.runtimeType.toString();
         typeName = typeName.replaceAll('Geo', '');
-        // Remove generic type parameters (e.g., "PolyArcGon<Arc3P>" -> "PolyArcGon")
+        // Remove generic type parameters
         final genericIndex = typeName.indexOf('<');
         if (genericIndex > 0) {
           typeName = typeName.substring(0, genericIndex);
         }
-        final isElement = obj == element;
+        final isContainer = obj == container;
         return PopupMenuItem<GeometryObject>(
           value: obj,
           child: Row(
             children: [
-              if (isElement) const Icon(Icons.circle, size: 8),
-              if (!isElement) const Icon(Icons.folder, size: 16),
+              if (isContainer) const Icon(Icons.folder, size: 16),
+              if (!isContainer) const Icon(Icons.circle, size: 8),
               const SizedBox(width: 8),
               Text('$typeName: $label'),
             ],
@@ -409,22 +462,255 @@ class _GeoDrawCanvasState extends State<GeoDrawCanvas> {
       }).toList(),
     ).then((selected) {
       if (selected != null) {
-        debugPrint('[GeoDrawCanvas] _showHierarchyMenu: Selected ${selected.runtimeType} (${selected.id}, label: ${selected.label})');
         if (widget.toolManager.activeToolType == ToolType.select) {
           widget.onSelectionChanged?.call({selected.id});
         } else {
           // For tools: pass the selected object directly to the tool
-          // This allows selecting either the child or the container
-          debugPrint('[GeoDrawCanvas] _showHierarchyMenu: Calling selectObject on tool manager');
           widget.toolManager.selectObject(selected);
         }
         setState(() {});
-      } else {
-        debugPrint('[GeoDrawCanvas] _showHierarchyMenu: No selection made (null)');
       }
     });
   }
 
+  void _showDeleteContainerMenu(Offset position, GeometryObject container) {
+    // Build menu with container first, then its children
+    final menuItems = <GeometryObject>[container];
+    
+    // Add children based on container type
+    // Note: GenSimpleGeometryObjectList extends UnionGeometryObjectList, so this covers both
+    if (container is UnionGeometryObjectList) {
+      menuItems.addAll(container.elements);
+    }
+
+    showMenu(
+      context: context,
+      position: RelativeRect.fromLTRB(
+        position.dx,
+        position.dy,
+        position.dx,
+        position.dy,
+      ),
+      items: menuItems.map((obj) {
+        final label = obj.label.isNotEmpty ? obj.label : obj.id;
+        // Clean up type name: remove 'Geo' prefix and handle generic types
+        String typeName = obj.runtimeType.toString();
+        typeName = typeName.replaceAll('Geo', '');
+        // Remove generic type parameters
+        final genericIndex = typeName.indexOf('<');
+        if (genericIndex > 0) {
+          typeName = typeName.substring(0, genericIndex);
+        }
+        final isContainer = obj == container;
+        return PopupMenuItem<GeometryObject>(
+          value: obj,
+          child: Row(
+            children: [
+              if (isContainer) const Icon(Icons.folder, size: 16),
+              if (!isContainer) const Icon(Icons.circle, size: 8),
+              const SizedBox(width: 8),
+              Text('$typeName: $label'),
+            ],
+          ),
+        );
+      }).toList(),
+    ).then((selected) {
+      if (selected != null) {
+        try {
+          widget.dagManager.deleteObject(selected.id, cascade: true);
+          widget.onSelectionChanged?.call({});
+          setState(() {});
+        } catch (e) {
+          debugPrint('Failed to delete object: $e');
+        }
+      }
+    });
+  }
+
+  void _showDeleteChildParentMenu(Offset position, GeometryObject child, List<GeometryObject> containers) {
+    // Build menu with child first, then its container(s)
+    final menuItems = <GeometryObject>[child, ...containers];
+
+    showMenu(
+      context: context,
+      position: RelativeRect.fromLTRB(
+        position.dx,
+        position.dy,
+        position.dx,
+        position.dy,
+      ),
+      items: menuItems.map((obj) {
+        final label = obj.label.isNotEmpty ? obj.label : obj.id;
+        // Clean up type name: remove 'Geo' prefix and handle generic types
+        String typeName = obj.runtimeType.toString();
+        typeName = typeName.replaceAll('Geo', '');
+        // Remove generic type parameters
+        final genericIndex = typeName.indexOf('<');
+        if (genericIndex > 0) {
+          typeName = typeName.substring(0, genericIndex);
+        }
+        final isChild = obj == child;
+        return PopupMenuItem<GeometryObject>(
+          value: obj,
+          child: Row(
+            children: [
+              if (isChild) const Icon(Icons.circle, size: 8),
+              if (!isChild) const Icon(Icons.folder, size: 16),
+              const SizedBox(width: 8),
+              Text('$typeName: $label'),
+            ],
+          ),
+        );
+      }).toList(),
+    ).then((selected) {
+      if (selected != null) {
+        try {
+          widget.dagManager.deleteObject(selected.id, cascade: true);
+          widget.onSelectionChanged?.call({});
+          setState(() {});
+        } catch (e) {
+          debugPrint('Failed to delete object: $e');
+        }
+      }
+    });
+  }
+
+  void _showUnionContainerMenu(Offset position, GeometryObject container) {
+    // Build menu with container first, then its children
+    final menuItems = <GeometryObject>[container];
+    
+    // Add children based on container type
+    if (container is UnionGeometryObjectList) {
+      menuItems.addAll(container.elements);
+    }
+
+    showMenu(
+      context: context,
+      position: RelativeRect.fromLTRB(
+        position.dx,
+        position.dy,
+        position.dx,
+        position.dy,
+      ),
+      items: menuItems.map((obj) {
+        final label = obj.label.isNotEmpty ? obj.label : obj.id;
+        String typeName = obj.runtimeType.toString();
+        typeName = typeName.replaceAll('Geo', '');
+        final genericIndex = typeName.indexOf('<');
+        if (genericIndex > 0) {
+          typeName = typeName.substring(0, genericIndex);
+        }
+        final isContainer = obj == container;
+        return PopupMenuItem<GeometryObject>(
+          value: obj,
+          child: Row(
+            children: [
+              if (isContainer) const Icon(Icons.folder, size: 16),
+              if (!isContainer) const Icon(Icons.circle, size: 8),
+              const SizedBox(width: 8),
+              Text('$typeName: $label'),
+            ],
+          ),
+        );
+      }).toList(),
+    ).then((selected) {
+      if (selected != null) {
+        // If container itself is selected, add all children
+        // If child is selected, add that child
+        widget.toolManager.selectObject(selected);
+        setState(() {});
+      }
+    });
+  }
+
+  void _showUnionChildParentMenu(Offset position, GeometryObject child, List<GeometryObject> containers) {
+    // Build menu with child first, then its container(s)
+    final menuItems = <GeometryObject>[child, ...containers];
+
+    showMenu(
+      context: context,
+      position: RelativeRect.fromLTRB(
+        position.dx,
+        position.dy,
+        position.dx,
+        position.dy,
+      ),
+      items: menuItems.map((obj) {
+        final label = obj.label.isNotEmpty ? obj.label : obj.id;
+        String typeName = obj.runtimeType.toString();
+        typeName = typeName.replaceAll('Geo', '');
+        final genericIndex = typeName.indexOf('<');
+        if (genericIndex > 0) {
+          typeName = typeName.substring(0, genericIndex);
+        }
+        final isChild = obj == child;
+        return PopupMenuItem<GeometryObject>(
+          value: obj,
+          child: Row(
+            children: [
+              if (isChild) const Icon(Icons.circle, size: 8),
+              if (!isChild) const Icon(Icons.folder, size: 16),
+              const SizedBox(width: 8),
+              Text('$typeName: $label'),
+            ],
+          ),
+        );
+      }).toList(),
+    ).then((selected) {
+      if (selected != null) {
+        // If container is selected, union tool will add all its children
+        // If child is selected, add that child
+        widget.toolManager.selectObject(selected);
+        setState(() {});
+      }
+    });
+  }
+
+  void _showChildParentMenu(Offset position, GeometryObject child, List<GeometryObject> containers) {
+    // Build menu with child first, then its container(s)
+    // This allows user to choose between the child or the parent container
+    final menuItems = <GeometryObject>[child, ...containers];
+
+    showMenu(
+      context: context,
+      position: RelativeRect.fromLTRB(
+        position.dx,
+        position.dy,
+        position.dx,
+        position.dy,
+      ),
+      items: menuItems.map((obj) {
+        final label = obj.label.isNotEmpty ? obj.label : obj.id;
+        // Clean up type name: remove 'Geo' prefix and handle generic types
+        String typeName = obj.runtimeType.toString();
+        typeName = typeName.replaceAll('Geo', '');
+        // Remove generic type parameters
+        final genericIndex = typeName.indexOf('<');
+        if (genericIndex > 0) {
+          typeName = typeName.substring(0, genericIndex);
+        }
+        final isChild = obj == child;
+        return PopupMenuItem<GeometryObject>(
+          value: obj,
+          child: Row(
+            children: [
+              if (isChild) const Icon(Icons.circle, size: 8),
+              if (!isChild) const Icon(Icons.folder, size: 16),
+              const SizedBox(width: 8),
+              Text('$typeName: $label'),
+            ],
+          ),
+        );
+      }).toList(),
+    ).then((selected) {
+      if (selected != null) {
+        // For tools: pass the selected object directly to the tool
+        // User can choose either the child or the parent container
+        widget.toolManager.selectObject(selected);
+        setState(() {});
+      }
+    });
+  }
 
   void _handlePanStart(DragStartDetails details) {
     final worldPos = _viewport!.screenToWorld(details.localPosition);
@@ -449,16 +735,62 @@ class _GeoDrawCanvasState extends State<GeoDrawCanvas> {
       _lastPanPosition = details.localPosition;
       setState(() {});
     } else if (_draggedObjectId != null) {
-      // Drag object (only free points can be dragged)
+      // Drag object (free points and glider points can be dragged)
       final node = widget.dagManager.getNode(_draggedObjectId!);
-      if (node != null && node.isFree && node.object is GeoPointer) {
+      if (node != null) {
         // Convert screen position to world coordinates
         final worldPos = _viewport!.screenToWorld(details.localPosition);
 
-        // Update the point position
-        final point = node.object as GeoPointer;
-        final updatedPoint = point.copyWith(x: worldPos.dx, y: worldPos.dy);
-        widget.dagManager.updateObject(_draggedObjectId!, updatedPoint);
+        if (node.isFree && node.object is GeoPointer) {
+          // Free point - update position directly
+          final point = node.object as GeoPointer;
+          final updatedPoint = point.copyWith(x: worldPos.dx, y: worldPos.dy);
+          widget.dagManager.updateObject(_draggedObjectId!, updatedPoint);
+        } else if (node.object is GeoGliderPoint) {
+          // Glider point - project new position onto the object
+          final gliderPoint = node.object as GeoGliderPoint;
+          final object = widget.dagManager.getObject(gliderPoint.objectId);
+          if (object != null) {
+            // Project the new click position onto the object
+            final clickPoint = constructFreePoint(worldPos.dx, worldPos.dy);
+            Multivector? projectedPoint;
+            
+            if (object is GeoLine) {
+              projectedPoint = projectPointToLine(clickPoint, object.multivector);
+            } else if (object is GeoCircle) {
+              projectedPoint = projectPointToCircle(clickPoint, object.multivector);
+            } else if (object is GeoSegment) {
+              projectedPoint = projectPointToSegment(clickPoint, object.boundary.boundary);
+            } else if (object is GeoArc) {
+              final counterClockwise = object.boundary.multivector.o >= 0;
+              projectedPoint = projectPointToArc(
+                clickPoint,
+                object.boundary.multivector,
+                object.startPoint.multivector,
+                object.endPoint.multivector,
+                counterClockwise,
+              );
+            } else if (object is UnionGeometryObjectList) {
+              projectedPoint = _projectPointToUnionForDrag(clickPoint, object);
+            }
+            
+            if (projectedPoint != null) {
+              // Update glider point with new initial position (projected)
+              final updatedGlider = gliderPoint.copyWith(
+                initialX: projectedPoint.e1,
+                initialY: projectedPoint.e2,
+                multivector: projectedPoint,
+              );
+              widget.dagManager.updateObject(_draggedObjectId!, updatedGlider);
+            } else {
+              // Projection failed - don't update
+              return;
+            }
+          }
+        } else {
+          // Other object types - don't drag
+          return;
+        }
 
         // Propagate updates to dependent objects (lines, circles, etc.)
         widget.dagManager.propagateUpdates();
@@ -471,6 +803,45 @@ class _GeoDrawCanvasState extends State<GeoDrawCanvas> {
   void _handlePanEnd(DragEndDetails details) {
     _lastPanPosition = null;
     _draggedObjectId = null;
+  }
+  
+  /// Helper function to project a point onto a union object (for dragging glider points)
+  Multivector? _projectPointToUnionForDrag(Multivector point, UnionGeometryObjectList union) {
+    Multivector? bestProjection;
+    double bestDistance = double.infinity;
+
+    for (final element in union.elements) {
+      Multivector? projection;
+      
+      if (element is GeoLine) {
+        projection = projectPointToLine(point, element.multivector);
+      } else if (element is GeoCircle) {
+        projection = projectPointToCircle(point, element.multivector);
+      } else if (element is GeoSegment) {
+        projection = projectPointToSegment(point, element.boundary.boundary);
+      } else if (element is GeoArc) {
+        final counterClockwise = element.boundary.multivector.o >= 0;
+        projection = projectPointToArc(
+          point,
+          element.boundary.multivector,
+          element.startPoint.multivector,
+          element.endPoint.multivector,
+          counterClockwise,
+        );
+      }
+
+      if (projection != null) {
+        // Calculate distance using multivector operations
+        final diff = point - projection;
+        final distSq = (diff | diff).s;
+        if (distSq < bestDistance) {
+          bestDistance = distSq;
+          bestProjection = projection;
+        }
+      }
+    }
+
+    return bestProjection;
   }
 
   void _handlePointerSignal(PointerSignalEvent event) {
@@ -788,7 +1159,8 @@ class GeoDrawCanvasPainter extends CustomPainter {
         
         // Check if this is a container - if so, skip calling draw() to avoid duplicate drawing
         // Containers will be handled by explicitly iterating through their elements below
-        final isContainer = geomObj is GenSimpleGeometryObjectList || geomObj is UnionGeometryObjectList;
+        // Note: GenSimpleGeometryObjectList extends UnionGeometryObjectList, so this check covers both
+        final isContainer = geomObj is UnionGeometryObjectList;
         
         // Only draw non-container objects directly
         // Containers are handled by explicitly drawing their elements below
@@ -834,8 +1206,9 @@ class GeoDrawCanvasPainter extends CustomPainter {
         // Collect labels for elements within containers
         // Elements use display labels as IDs (e.g., "A", "B", "a", "b")
         // Note: Point elements will be drawn separately in screen space later (via _drawPointZoomInvariant which collects labels)
-        if (geomObj is GenSimpleGeometryObjectList) {
-          for (final element in geomObj.objects) {
+        // Note: GenSimpleGeometryObjectList extends UnionGeometryObjectList, so this covers both
+        if (geomObj is UnionGeometryObjectList) {
+          for (final element in geomObj.elements) {
             if (!element.visible) continue;
             
             // Skip point elements - they'll be drawn in screen space separately via _drawPointZoomInvariant
@@ -1099,14 +1472,8 @@ class GeoDrawCanvasPainter extends CustomPainter {
       
       final geomObj = node.object as GeometryObject;
       
-      if (geomObj is GenSimpleGeometryObjectList) {
-        for (final element in geomObj.objects) {
-          if (element is GeoPoint && element.visible) {
-            final isSelected = selectedIds.contains(element.id);
-            _drawPointZoomInvariant(canvas, size, element, isSelected, labelsToDraw);
-          }
-        }
-      } else if (geomObj is UnionGeometryObjectList) {
+      // Note: GenSimpleGeometryObjectList extends UnionGeometryObjectList, so this covers both
+      if (geomObj is UnionGeometryObjectList) {
         for (final element in geomObj.elements) {
           if (element is GeoPoint && element.visible) {
             final isSelected = selectedIds.contains(element.id);

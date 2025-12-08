@@ -17,8 +17,15 @@ import '../models/geometry_object.dart';
 import '../models/simple/geo_point.dart';
 import '../models/simple/geo_line.dart';
 import '../models/simple/geo_circle.dart';
-import '../models/simple/geo_flex.dart';
-import 'package:geocalc/Multivector.dart' show getCircleCenter;
+import 'package:geocalc/Multivector.dart' show 
+    Multivector,
+    getCircleCenter,
+    constructFreePoint,
+    projectPointToLine,
+    projectPointToCircle,
+    projectPointToSegment,
+    projectPointToArc,
+    distancePointToPoint;
 
 /// Data class for temporary polygon construction preview
 class TemporaryPolygonData {
@@ -151,6 +158,14 @@ class ToolManager with ToolCallbacksMixin {
       (_activeTool as UnifiedTool).selectObject(object);
     } else if (_activeTool is StagedSelectionTool) {
       (_activeTool as StagedSelectionTool).selectObject(object);
+    } else if (_activeTool is _PolygonTool) {
+      (_activeTool as _PolygonTool).selectObject(object);
+    } else if (_activeTool is _PolyArcGonTool) {
+      (_activeTool as _PolyArcGonTool).selectObject(object);
+    } else if (_activeTool is IncrementalUnionTool) {
+      (_activeTool as IncrementalUnionTool).selectObject(object);
+    } else if (_activeTool is _UnionTool) {
+      (_activeTool as _UnionTool).selectObject(object);
     }
   }
 
@@ -729,6 +744,47 @@ class ToolManager with ToolCallbacksMixin {
       ),
     );
 
+    // Delete tool
+    registry.registerFromManager(
+      ToolType.delete,
+      (context) => _DeleteTool(
+        dagManager: context.dagManager,
+        onObjectCreated: context.onObjectCreated,
+        onObjectSelected: context.onObjectSelected,
+        onToolStateChanged: context.onToolStateChanged,
+      ),
+      const ToolCatalogEntry(
+        id: 'delete',
+        label: 'Delete',
+        icon: Icons.delete,
+        assetIcon: 'assets/tool_icons/delete.svg',
+        command: 'Delete[]',
+        toolType: ToolType.delete,
+        implemented: true,
+      ),
+    );
+
+    // Union tool
+    registry.registerFromManager(
+      ToolType.union,
+      (context) => _UnionTool(
+        dagManager: context.dagManager,
+        commandHistory: context.commandHistory,
+        onObjectCreated: context.onObjectCreated,
+        onObjectSelected: context.onObjectSelected,
+        onToolStateChanged: context.onToolStateChanged,
+      ),
+      const ToolCatalogEntry(
+        id: 'union',
+        label: 'Union',
+        icon: Icons.merge_type,
+        assetIcon: 'assets/tool_icons/point_on_object.svg',
+        command: 'Union[]',
+        toolType: ToolType.union,
+        implemented: true,
+      ),
+    );
+
     // ========================================================================
     // L3 FLEXIBLE COMMANDS - Relaxed type constraints
     // ========================================================================
@@ -1067,6 +1123,9 @@ class _PointTool extends UnifiedTool {
     super.onToolStateChanged,
   });
 
+  // Store the last click position for glider point creation
+  Offset? _lastClickPosition;
+
   @override
   ToolType get type => ToolType.point;
 
@@ -1085,16 +1144,147 @@ class _PointTool extends UnifiedTool {
   @override
   void handleInput(PointerEvent event) {
     if (event is PointerDownEvent) {
+      // Store click position for potential glider point creation
+      _lastClickPosition = event.position;
+      
+      // Check for nearby objects that could be used for glider points
+      final nearby = dagManager.proximitySearch(event.position, threshold: 15.0);
+      
+      // Check if any nearby object matches the glider point pattern (Pattern 1)
+      // Pattern 1 accepts: GeoLine, GeoCircle, GeoSegment, GeoArc, UnionGeometryObjectList
+      final nextConstraint = verifier.schema.nextConstraint(verifier.arguments);
+      if (nextConstraint != null) {
+        for (final obj in nearby) {
+          if (nextConstraint.accepts(obj)) {
+            // Found a valid object for glider point - use selectObject instead
+            selectObject(obj);
+            return;
+          }
+        }
+      }
+      
+      // No valid object found - create a free point
       _createPointAt(event.position);
     }
   }
 
   @override
   void selectObject(GeometryObject object) {
+    // Check if this is for a glider point (Pattern 1)
+    final nextConstraint = verifier.schema.nextConstraint(verifier.arguments);
+    if (nextConstraint != null && nextConstraint.accepts(object)) {
+      // This is a glider point creation - use the stored click position
+      if (_lastClickPosition != null) {
+        _createGliderPointAtPosition(object, _lastClickPosition!);
+        _lastClickPosition = null; // Clear after use
+        return;
+      }
+    }
+    
     // Use base class implementation which will validate against schema
     // The point command has Pattern 1 that accepts GeoLine, GeoCircle, GeoSegment, GeoArc, etc.
     // This will automatically route to the glider point pattern
     super.selectObject(object);
+  }
+  
+  Future<void> _createGliderPointAtPosition(GeometryObject object, Offset clickPosition) async {
+    try {
+      // Project the click position onto the object to get the initial position
+      final clickPoint = constructFreePoint(clickPosition.dx, clickPosition.dy);
+      Offset initialPosition;
+      
+      if (object is GeoLine) {
+        final projected = projectPointToLine(clickPoint, object.multivector);
+        initialPosition = Offset(projected.e1, projected.e2);
+      } else if (object is GeoCircle) {
+        final projected = projectPointToCircle(clickPoint, object.multivector);
+        initialPosition = Offset(projected.e1, projected.e2);
+      } else if (object is GeoSegment) {
+        final projected = projectPointToSegment(clickPoint, object.boundary.boundary);
+        initialPosition = Offset(projected.e1, projected.e2);
+      } else if (object is GeoArc) {
+        final counterClockwise = object.boundary.multivector.o >= 0;
+        final projected = projectPointToArc(
+          clickPoint,
+          object.boundary.multivector,
+          object.startPoint.multivector,
+          object.endPoint.multivector,
+          counterClockwise,
+        );
+        if (projected == null) {
+          notifyStateChanged('Error: Could not project point onto arc');
+          return;
+        }
+        initialPosition = Offset(projected.e1, projected.e2);
+      } else if (object is UnionGeometryObjectList) {
+        // For union objects, find the nearest point across all elements
+        final projected = _projectPointToUnion(clickPoint, object);
+        if (projected == null) {
+          notifyStateChanged('Error: Could not project point onto union object');
+          return;
+        }
+        initialPosition = Offset(projected.e1, projected.e2);
+      } else {
+        // Fallback to click position
+        initialPosition = clickPosition;
+      }
+      
+      final label = LabelManager.getNextAvailableLabel(
+        dagManager,
+        GeometryObjectType.point,
+      );
+      
+      final gliderPoint = GeoGliderPoint(
+        id: label,
+        label: label,
+        objectId: object.id,
+        initialX: initialPosition.dx,
+        initialY: initialPosition.dy,
+      );
+      
+      dagManager.addObject(gliderPoint, [object.id]);
+      onObjectCreated?.call(gliderPoint, gliderPoint.dependencies);
+      notifyStateChanged('Created glider point ${gliderPoint.label} on ${object.runtimeType}');
+    } catch (e) {
+      notifyStateChanged('Error: $e');
+    }
+  }
+  
+  // Helper function to project a point onto a union object
+  Multivector? _projectPointToUnion(Multivector point, UnionGeometryObjectList union) {
+    Multivector? bestProjection;
+    double bestDistance = double.infinity;
+
+    for (final element in union.elements) {
+      Multivector? projection;
+      
+      if (element is GeoLine) {
+        projection = projectPointToLine(point, element.multivector);
+      } else if (element is GeoCircle) {
+        projection = projectPointToCircle(point, element.multivector);
+      } else if (element is GeoSegment) {
+        projection = projectPointToSegment(point, element.boundary.boundary);
+      } else if (element is GeoArc) {
+        final counterClockwise = element.boundary.multivector.o >= 0;
+        projection = projectPointToArc(
+          point,
+          element.boundary.multivector,
+          element.startPoint.multivector,
+          element.endPoint.multivector,
+          counterClockwise,
+        );
+      }
+
+      if (projection != null) {
+        final dist = distancePointToPoint(point, projection);
+        if (dist < bestDistance) {
+          bestDistance = dist;
+          bestProjection = projection;
+        }
+      }
+    }
+
+    return bestProjection;
   }
 
   Future<void> _createPointAt(Offset position) async {
@@ -1721,6 +1911,45 @@ class _PolygonTool extends Tool {
     }
   }
 
+  /// Select an object directly (used when object is selected from menu/dropdown)
+  /// This allows selecting pre-existing points for polygon construction
+  void selectObject(GeometryObject object) {
+    if (object is! GeoPoint) {
+      onToolStateChanged?.call('Polygon tool requires point selection');
+      return;
+    }
+
+    // Validate input
+    final message = _validateNextInput(object);
+    if (message != null) {
+      onToolStateChanged?.call(message);
+      return;
+    }
+
+    // Check if this is completion (selecting first point again)
+    if (_trackedInputs.length >= 2 && 
+        _firstPoint != null && 
+        object.id == _firstPoint!.id) {
+      // Complete the polygon
+      _completePolygon();
+      return;
+    }
+
+    // Add the point
+    if (_trackedInputs.isEmpty) {
+      _firstPoint = object;
+      _trackedInputs.add(object);
+    } else {
+      // Only add if it's not already the last point
+      if (_trackedInputs.last.id != object.id) {
+        _trackedInputs.add(object);
+      }
+    }
+
+    // Notify state change
+    onToolStateChanged?.call(stateDescription);
+  }
+
   @override
   void reset() {
     _firstPoint = null;
@@ -2115,6 +2344,53 @@ class _PolyArcGonTool extends Tool {
     } catch (e) {
       onToolStateChanged?.call('Failed to complete poly-arc-gon: $e');
     }
+  }
+
+  /// Select an object directly (used when object is selected from menu/dropdown)
+  /// This allows selecting pre-existing points for poly-arc-gon construction
+  void selectObject(GeometryObject object) {
+    if (object is! GeoPoint) {
+      onToolStateChanged?.call('Poly-arc-gon tool requires point selection');
+      return;
+    }
+
+    // Validate input
+    final message = _validateNextInput(object);
+    if (message != null) {
+      onToolStateChanged?.call(message);
+      return;
+    }
+
+    // Check if this is completion (selecting first point again)
+    // We can complete if:
+    // - We have at least 4 points (even number: 2*n where n >= 2)
+    // - The candidate is the first point (p1)
+    // - p1 will be the (2*n+1)th point (odd-numbered position)
+    final isFirstPointForCompletion = (_firstPoint != null && object.id == _firstPoint!.id) ||
+        (_trackedInputs.isNotEmpty && object.id == _trackedInputs.first.id);
+    
+    if (_trackedInputs.length >= 4 && 
+        isFirstPointForCompletion &&
+        _trackedInputs.length.isEven) {
+      // Add p1 to complete the sequence
+      _trackedInputs.add(object);
+      _completePolyArcGon();
+      return;
+    }
+
+    // Add the point
+    if (_trackedInputs.isEmpty) {
+      _firstPoint = object;
+      _trackedInputs.add(object);
+    } else {
+      // Only add if it's not already the last point
+      if (_trackedInputs.last.id != object.id) {
+        _trackedInputs.add(object);
+      }
+    }
+
+    // Notify state change
+    onToolStateChanged?.call(stateDescription);
   }
 
   @override
@@ -3493,5 +3769,223 @@ class _IcircleTool extends UnifiedTool {
 
   @override
   String get stateDescription => 'Select two points for imaginary circle';
+}
+
+/// Delete tool - deletes selected objects when clicked
+class _DeleteTool with ToolCallbacksMixin implements Tool {
+  final DAGManager dagManager;
+
+  _DeleteTool({
+    required this.dagManager,
+    OnObjectCreated? onObjectCreated,
+    OnObjectSelected? onObjectSelected,
+    OnToolStateChanged? onToolStateChanged,
+  }) {
+    this.onObjectCreated = onObjectCreated;
+    this.onObjectSelected = onObjectSelected;
+    this.onToolStateChanged = onToolStateChanged;
+  }
+
+  @override
+  ToolType get type => ToolType.delete;
+
+  @override
+  String get name => 'Delete';
+
+  @override
+  IconData get icon => Icons.delete;
+
+  @override
+  String get tooltip => 'Delete selected objects';
+
+  @override
+  bool get isComplete => true;
+
+  @override
+  String get stateDescription => 'Click on an object to delete it';
+
+  @override
+  void handleInput(PointerEvent event) {
+    if (event is PointerDownEvent) {
+      // The canvas will handle object selection and deletion
+      // This tool just needs to be active
+      notifyStateChanged('Click on an object to delete it');
+    }
+  }
+
+  @override
+  void reset() {
+    notifyStateChanged('Click on an object to delete it');
+  }
+}
+
+/// Union tool - creates a union of simple or complex geometry objects
+class _UnionTool with ToolCallbacksMixin implements Tool {
+  final DAGManager dagManager;
+  final CommandHistory? commandHistory;
+  
+  final List<GeometryObject> _collectedObjects = [];
+  GeoUnion? _currentUnion;
+  String? _currentUnionId;
+  HistoryMarker? _historyMarker;
+
+  _UnionTool({
+    required this.dagManager,
+    this.commandHistory,
+    OnObjectCreated? onObjectCreated,
+    OnObjectSelected? onObjectSelected,
+    OnToolStateChanged? onToolStateChanged,
+  }) {
+    this.onObjectCreated = onObjectCreated;
+    this.onObjectSelected = onObjectSelected;
+    this.onToolStateChanged = onToolStateChanged;
+  }
+
+  @override
+  ToolType get type => ToolType.union;
+
+  @override
+  String get name => 'Union';
+
+  @override
+  IconData get icon => Icons.merge_type;
+
+  @override
+  String get tooltip => 'Create a union of objects';
+
+  @override
+  bool get isComplete => false; // Always allows adding more objects
+
+  @override
+  String get stateDescription {
+    if (_collectedObjects.isEmpty) {
+      return 'Click objects to add to union';
+    }
+    return 'Union: ${_collectedObjects.length} object(s). Click more objects to add';
+  }
+
+  /// Select an object directly (used when object is selected from menu/dropdown)
+  void selectObject(GeometryObject object) {
+    _startTransactionIfNeeded();
+    _addObjectToUnion(object);
+  }
+
+  void _addObjectToUnion(GeometryObject object) {
+    // If object is a UnionGeometryObjectList and the list itself was selected,
+    // add all its children. Otherwise, add the object itself.
+    final collectedIds = _collectedObjects.map((obj) => obj.id).toSet();
+    
+    if (object is UnionGeometryObjectList) {
+      // When a list is selected, add all its children (not the list itself)
+      for (final child in object.elements) {
+        if (!collectedIds.contains(child.id)) {
+          _collectedObjects.add(child);
+          collectedIds.add(child.id);
+        }
+      }
+    } else {
+      // Add the object itself if not already in the collection
+      if (!collectedIds.contains(object.id)) {
+        _collectedObjects.add(object);
+      }
+    }
+
+    _updateUnion();
+    notifyStateChanged(stateDescription);
+  }
+
+  void _updateUnion() {
+    if (_collectedObjects.isEmpty) {
+      // Remove existing union if no objects
+      if (_currentUnionId != null) {
+        try {
+          dagManager.deleteObject(_currentUnionId!, cascade: false);
+        } catch (e) {
+          // Ignore errors
+        }
+        _currentUnion = null;
+        _currentUnionId = null;
+      }
+      return;
+    }
+
+    // Get dependencies (all IDs of collected objects)
+    final dependencies = _collectedObjects.map((obj) => obj.id).toList();
+    
+    // Generate label
+    final label = LabelManager.getNextAvailableLabel(
+      dagManager,
+      GeometryObjectType.union,
+    );
+
+    // Create or update union
+    if (_currentUnion == null) {
+      // Create new union
+      _currentUnion = GeoUnion(
+        id: label,
+        label: label,
+        dependencies: dependencies,
+        elements: List<GeometryObject>.from(_collectedObjects),
+      );
+      
+      dagManager.addObject(_currentUnion!, dependencies);
+      _currentUnionId = _currentUnion!.id;
+      
+      notifyObjectCreated(_currentUnion!, dependencies);
+    } else {
+      // Update existing union
+      final updatedUnion = GeoUnion(
+        id: _currentUnion!.id,
+        label: _currentUnion!.label,
+        dependencies: dependencies,
+        elements: List<GeometryObject>.from(_collectedObjects),
+        visible: _currentUnion!.visible,
+        styleOverrides: _currentUnion!.styleOverrides,
+      );
+      
+      dagManager.updateObject(_currentUnionId!, updatedUnion);
+      _currentUnion = updatedUnion;
+      
+      notifyObjectSelected(_currentUnion!.id);
+    }
+  }
+
+  void _startTransactionIfNeeded() {
+    if (_historyMarker == null) {
+      _historyMarker = dagManager.markHistory();
+    }
+  }
+
+  @override
+  void handleInput(PointerEvent event) {
+    // The canvas will handle object selection and call selectObject
+    // This tool just needs to be active
+    if (event is PointerDownEvent) {
+      notifyStateChanged(stateDescription);
+    }
+  }
+
+  @override
+  void reset() {
+    if (_historyMarker != null) {
+      dagManager.rollbackToMarker(_historyMarker!);
+      _historyMarker = null;
+    }
+    
+    if (_currentUnionId != null) {
+      try {
+        dagManager.deleteObject(_currentUnionId!, cascade: false);
+      } catch (e) {
+        // Ignore errors
+      }
+    }
+    
+    _collectedObjects.clear();
+    _currentUnion = null;
+    _currentUnionId = null;
+    _historyMarker = null;
+    
+    notifyStateChanged('Click objects to add to union');
+  }
 }
 
