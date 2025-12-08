@@ -13,16 +13,18 @@ import '../complex/complex_geometry_object.dart';
 import 'simple_list_utils.dart';
 import '../../core/dag/dag_manager.dart';
 import '../../core/label_manager.dart';
+import '../transforms/geo_trans.dart';
+import '../transforms/transformation_engine.dart';
 
 /// List of intersection points between two objects
 class GeoIntersection extends GenSimpleGeometryObjectList<GeoPoint> {
   GeoIntersection({
-    required super.id,
-    required super.label,
-    required super.dependencies, // Should have exactly 2 dependencies
-    required super.objects,
+    required String id,
+    required String label,
+    required List<String> dependencies, // Should have exactly 2 dependencies
+    required List<GeoPoint> objects,
     Color color = Colors.orange,
-    super.visible,
+    bool? visible,
     CanvasStyle? style,
     Map<String, dynamic>? styleOverrides,
   }) : assert(
@@ -30,6 +32,11 @@ class GeoIntersection extends GenSimpleGeometryObjectList<GeoPoint> {
          'Intersection requires exactly 2 object dependencies',
        ),
        super(
+         id: id,
+         label: label,
+         dependencies: dependencies,
+         objects: objects,
+         visible: visible,
          styleOverrides: styleOverridesForType(
            type: GeoIntersection,
            style: style,
@@ -53,7 +60,8 @@ class GeoIntersection extends GenSimpleGeometryObjectList<GeoPoint> {
     DAGManager? dagManager,
   }) {
     final deps = (json['dependencies'] as List?)?.cast<String>() ?? const [];
-    final objectsJson = (json['objects'] as List?) ?? const [];
+    // Support both 'objects' (backward compatibility) and 'elements' (new format)
+    final objectsJson = (json['objects'] as List?) ?? (json['elements'] as List?) ?? const [];
     final points = <GeoPoint>[];
 
     // Migration: Detect pattern IDs (e.g., intersection_6_0) and convert to display labels
@@ -1101,12 +1109,199 @@ class GeoIntersection extends GenSimpleGeometryObjectList<GeoPoint> {
     );
   }
 
+  /// Calculate intersection between a GenSimpleGeometryObjectList and any object
+  /// Computes intersections between all objects in the list and the other object
+  /// Works for any GenSimpleGeometryObjectList (GeoTangentList, GeoAngleBisector2L, etc.)
+  static GeoIntersection simpleListWithObject({
+    required String id,
+    required String label,
+    required GenSimpleGeometryObjectList simpleList,
+    required GeometryObject other,
+    required DAGManager dagManager,
+    Color color = Colors.orange,
+    bool visible = true,
+    Set<String>? reservedLabels,
+    Set<String>? usedReservedLabels,
+  }) {
+    final allPoints = <GeoPoint>[];
+    
+    // Create tracking set if not provided
+    final trackingSet = usedReservedLabels ?? <String>{};
+    
+    // Iterate through all elements in the simple list
+    // Compute intersections directly without creating temporary containers
+    for (final element in simpleList.elements) {
+      final intersectionMvs = _computeIntersectionMultivectors(element, other);
+      
+      // Convert multivectors to points and register with main container ID
+      for (final mv in intersectionMvs) {
+        if (!_isFinitePoint(mv)) continue;
+        
+        // Check if point is valid for the geometry types (e.g., on segment/arc)
+        if (!_isValidIntersectionPoint(mv, element, other)) continue;
+        
+        // Check for duplicates before adding
+        if (_containsPoint(allPoints, mv)) continue;
+        
+        // Create point directly with main container ID (no temporary containers)
+        final point = _pointFromMultivector(
+          dagManager: dagManager,
+          containerId: id, // Use main container ID directly
+          multivector: mv,
+          preferredLabel: null, // Let LabelManager assign unique label
+          color: color,
+          visible: visible,
+          reservedLabels: reservedLabels,
+          usedReservedLabels: trackingSet, // Use tracking set to track labels used in this operation
+        );
+        
+        allPoints.add(point);
+      }
+    }
+    
+    return GeoIntersection(
+      id: id,
+      label: label,
+      dependencies: [simpleList.id, other.id],
+      objects: allPoints,
+      color: color,
+      visible: visible,
+    );
+  }
+
+  /// Calculate intersection between two GenSimpleGeometryObjectLists
+  /// Iterates through all objects in both lists and finds intersections
+  /// Computes intersections directly without creating temporary containers
+  /// Works for any GenSimpleGeometryObjectList (GeoTangentList, GeoAngleBisector2L, etc.)
+  static GeoIntersection simpleListWithSimpleList({
+    required String id,
+    required String label,
+    required GenSimpleGeometryObjectList simpleList1,
+    required GenSimpleGeometryObjectList simpleList2,
+    required DAGManager dagManager,
+    Color color = Colors.orange,
+    bool visible = true,
+    Set<String>? reservedLabels,
+    Set<String>? usedReservedLabels,
+  }) {
+    final allPoints = <GeoPoint>[];
+    
+    // Create tracking set if not provided
+    final trackingSet = usedReservedLabels ?? <String>{};
+    
+    // Iterate through all pairs of objects
+    // Compute intersections directly without creating temporary containers
+    for (final element1 in simpleList1.elements) {
+      for (final element2 in simpleList2.elements) {
+        final intersectionMvs = _computeIntersectionMultivectors(element1, element2);
+        
+        // Convert multivectors to points and register with main container ID
+        for (final mv in intersectionMvs) {
+          if (!_isFinitePoint(mv)) continue;
+          
+          // Check if point is valid for the geometry types (e.g., on segment/arc)
+          if (!_isValidIntersectionPoint(mv, element1, element2)) continue;
+          
+          // Check for duplicates before adding
+          if (_containsPoint(allPoints, mv)) continue;
+          
+          // Create point directly with main container ID (no temporary containers)
+          final point = _pointFromMultivector(
+            dagManager: dagManager,
+            containerId: id, // Use main container ID directly
+            multivector: mv,
+            preferredLabel: null, // Let LabelManager assign unique label
+            color: color,
+            visible: visible,
+            reservedLabels: reservedLabels,
+            usedReservedLabels: trackingSet, // Use tracking set to track labels used in this operation
+          );
+          
+          allPoints.add(point);
+        }
+      }
+    }
+    
+    return GeoIntersection(
+      id: id,
+      label: label,
+      dependencies: [simpleList1.id, simpleList2.id],
+      objects: allPoints,
+      color: color,
+      visible: visible,
+    );
+  }
+
+  /// Calculate intersection between a GenSimpleGeometryObjectList and a UnionGeometryObjectList
+  /// Iterates through all objects in the simple list and all elements in the union
+  /// Computes intersections directly without creating temporary containers
+  /// Works for any GenSimpleGeometryObjectList (GeoTangentList, GeoAngleBisector2L, etc.)
+  static GeoIntersection simpleListWithUnion({
+    required String id,
+    required String label,
+    required GenSimpleGeometryObjectList simpleList,
+    required UnionGeometryObjectList union,
+    required DAGManager dagManager,
+    Color color = Colors.orange,
+    bool visible = true,
+    Set<String>? reservedLabels,
+    Set<String>? usedReservedLabels,
+  }) {
+    final allPoints = <GeoPoint>[];
+    
+    // Create tracking set if not provided
+    final trackingSet = usedReservedLabels ?? <String>{};
+    
+    // Iterate through all pairs: elements in simpleList × elements in union
+    // Compute intersections directly without creating temporary containers
+    for (final element1 in simpleList.elements) {
+      for (final element2 in union.elements) {
+        final intersectionMvs = _computeIntersectionMultivectors(element1, element2);
+        
+        // Convert multivectors to points and register with main container ID
+        for (final mv in intersectionMvs) {
+          if (!_isFinitePoint(mv)) continue;
+          
+          // Check if point is valid for the geometry types (e.g., on segment/arc)
+          if (!_isValidIntersectionPoint(mv, element1, element2)) continue;
+          
+          // Check for duplicates before adding
+          if (_containsPoint(allPoints, mv)) continue;
+          
+          // Create point directly with main container ID (no temporary containers)
+          final point = _pointFromMultivector(
+            dagManager: dagManager,
+            containerId: id, // Use main container ID directly
+            multivector: mv,
+            preferredLabel: null, // Let LabelManager assign unique label
+            color: color,
+            visible: visible,
+            reservedLabels: reservedLabels,
+            usedReservedLabels: trackingSet, // Use tracking set to track labels used in this operation
+          );
+          
+          allPoints.add(point);
+        }
+      }
+    }
+    
+    return GeoIntersection(
+      id: id,
+      label: label,
+      dependencies: [simpleList.id, union.id],
+      objects: allPoints,
+      color: color,
+      visible: visible,
+    );
+  }
+
   @override
   GeoIntersection copyWith({
     String? id,
     String? label,
     List<String>? dependencies,
     List<GeoPoint>? objects,
+    List<GeometryObject>? elementsAny,
     Color? color,
     bool? visible,
     CanvasStyle? style,
@@ -1120,11 +1315,15 @@ class GeoIntersection extends GenSimpleGeometryObjectList<GeoPoint> {
             ? styleOverridesForType(type: GeoIntersection, fallbackColor: color)
             : null);
     final resolvedOverrides = candidateOverrides ?? this.styleOverrides;
+    
+    // Support both objects (backward compatibility) and elementsAny (unified API)
+    final updatedObjects = objects ?? (elementsAny?.cast<GeoPoint>());
+    
     return GeoIntersection(
       id: id ?? this.id,
       label: label ?? this.label,
       dependencies: dependencies ?? this.dependencies,
-      objects: objects ?? this.objects,
+      objects: updatedObjects ?? this.elements.cast<GeoPoint>(),
       visible: visible ?? this.visible,
       styleOverrides: resolvedOverrides,
     );
@@ -1153,11 +1352,57 @@ class GeoIntersection extends GenSimpleGeometryObjectList<GeoPoint> {
     
     final GeometryObject parentA = parentAObj;
     final GeometryObject parentB = parentBObj;
+    
+    // Check if this is a transformed intersection (one dependency is a transform)
+    // Transformed intersections have dependencies [originalIntersection.id, transform.id]
+    GeoTrans? transform;
+    GeometryObject? originalIntersection;
+    
+    if (parentA is GeoTrans && parentB is GeoIntersection) {
+      transform = parentA;
+      originalIntersection = parentB;
+    } else if (parentB is GeoTrans && parentA is GeoIntersection) {
+      transform = parentB;
+      originalIntersection = parentA;
+    }
+    
+    // If this is a transformed intersection, rebuild by transforming the original
+    if (transform != null && originalIntersection != null) {
+      // Get the current state of the original intersection from the DAG
+      // (it may have been rebuilt already by propagateUpdates)
+      final originalNode = dagManager.getNode(originalIntersection.id);
+      if (originalNode != null) {
+        final currentOriginal = originalNode.object;
+        if (currentOriginal is GeometryObject) {
+          originalIntersection = currentOriginal;
+        }
+      }
+      
+      // Transform the original intersection
+      final transformed = TransformationEngine.transform(
+        source: originalIntersection,
+        transform: transform,
+        id: id,
+        label: label,
+        dependencies: dependencies,
+        visible: visible,
+        styleOverrides: styleOverrides,
+      );
+      
+      if (transformed is GeoIntersection) {
+        return transformed;
+      }
+      
+      // If transformation failed, return null (will cause object to disappear)
+      debugPrint('[GeoIntersection] Failed to transform original intersection');
+      return null;
+    }
+    
     final color = style.strokeColor;
 
     // STEP 1: Reserve old labels for this rebuild (DON'T unregister yet)
     // This ensures they're only available for THIS container's rebuild, not others
-    final oldPointLabels = this.objects.map((p) => p.id).toSet();
+    final oldPointLabels = this.elements.map((p) => p.id).toSet();
     
     // Track which reserved labels have been consumed during rebuild
     // This prevents multiple points from getting the same label
@@ -1366,6 +1611,80 @@ class GeoIntersection extends GenSimpleGeometryObjectList<GeoPoint> {
           usedReservedLabels: usedReservedLabels,
         );
       }
+      // GenSimpleGeometryObjectList × Object cases
+      // Handles any GenSimpleGeometryObjectList (GeoTangentList, GeoAngleBisector2L, etc.) with any object
+      else if (parentA is GenSimpleGeometryObjectList) {
+        rebuilt = GeoIntersection.simpleListWithObject(
+          id: id,
+          label: label,
+          simpleList: parentA,
+          other: parentB,
+          dagManager: dagManager,
+          color: color,
+          visible: visible,
+          reservedLabels: oldPointLabels,
+          usedReservedLabels: usedReservedLabels,
+        );
+      } else if (parentB is GenSimpleGeometryObjectList) {
+        rebuilt = GeoIntersection.simpleListWithObject(
+          id: id,
+          label: label,
+          simpleList: parentB,
+          other: parentA,
+          dagManager: dagManager,
+          color: color,
+          visible: visible,
+          reservedLabels: oldPointLabels,
+          usedReservedLabels: usedReservedLabels,
+        );
+      }
+      // GenSimpleGeometryObjectList × GenSimpleGeometryObjectList cases
+      else if (parentA is GenSimpleGeometryObjectList && 
+               parentB is GenSimpleGeometryObjectList) {
+        rebuilt = GeoIntersection.simpleListWithSimpleList(
+          id: id,
+          label: label,
+          simpleList1: parentA,
+          simpleList2: parentB,
+          dagManager: dagManager,
+          color: color,
+          visible: visible,
+          reservedLabels: oldPointLabels,
+          usedReservedLabels: usedReservedLabels,
+        );
+      }
+      // GenSimpleGeometryObjectList × UnionGeometryObjectList cases
+      // Note: GenSimpleGeometryObjectList extends UnionGeometryObjectList, so we check for
+      // non-GenSimpleGeometryObjectList UnionGeometryObjectList (like GeoPolygon, GeoPolyLine)
+      else if (parentA is GenSimpleGeometryObjectList && 
+               parentB is UnionGeometryObjectList &&
+               !(parentB is GenSimpleGeometryObjectList)) {
+        rebuilt = GeoIntersection.simpleListWithUnion(
+          id: id,
+          label: label,
+          simpleList: parentA,
+          union: parentB,
+          dagManager: dagManager,
+          color: color,
+          visible: visible,
+          reservedLabels: oldPointLabels,
+          usedReservedLabels: usedReservedLabels,
+        );
+      } else if (parentA is UnionGeometryObjectList &&
+               !(parentA is GenSimpleGeometryObjectList) &&
+               parentB is GenSimpleGeometryObjectList) {
+        rebuilt = GeoIntersection.simpleListWithUnion(
+          id: id,
+          label: label,
+          simpleList: parentB,
+          union: parentA,
+          dagManager: dagManager,
+          color: color,
+          visible: visible,
+          reservedLabels: oldPointLabels,
+          usedReservedLabels: usedReservedLabels,
+        );
+      }
       // Union × Union case (check this first)
       else if (parentA is UnionGeometryObjectList && parentB is UnionGeometryObjectList) {
         rebuilt = GeoIntersection.unionWithUnion(
@@ -1432,7 +1751,7 @@ class GeoIntersection extends GenSimpleGeometryObjectList<GeoPoint> {
 
     // STEP 3: Unregister old labels that weren't reused
     // Only unregister labels that are no longer in the new intersection
-    final newPointLabels = rebuilt.objects.map((p) => p.id).toSet();
+    final newPointLabels = rebuilt.elements.map((p) => p.id).toSet();
     for (final oldLabel in oldPointLabels) {
       if (!newPointLabels.contains(oldLabel)) {
         // Old label not reused, unregister it (becomes available for future use)
@@ -1446,7 +1765,7 @@ class GeoIntersection extends GenSimpleGeometryObjectList<GeoPoint> {
       id: id,
       label: label,
       dependencies: [parentA.id, parentB.id],
-      objects: rebuilt.objects, // Labels preserved via reserved labels mechanism
+      objects: rebuilt.elements.cast<GeoPoint>(), // Labels preserved via reserved labels mechanism
       visible: visible,
       color: color,
       styleOverrides: styleOverrides,

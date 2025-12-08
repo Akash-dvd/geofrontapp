@@ -42,9 +42,9 @@ class TypeHierarchy {
     _registerType(GeometryObject, {CanvasObject});
     _registerType(CanvasText, {CanvasObject});
     _registerType(SimpleGeometryObject, {GeometryObject});
-    _registerType(GenSimpleGeometryObjectList, {GeometryObject});
     _registerType(ComplexGeometryObject, {GeometryObject});
     _registerType(UnionGeometryObjectList, {GeometryObject});
+    _registerType(GenSimpleGeometryObjectList, {UnionGeometryObjectList});
     _registerType(UnionComplexObjectList, {UnionGeometryObjectList});
     _registerType(RecursiveUnionGeo, {GeometryObject});
 
@@ -61,7 +61,7 @@ class TypeHierarchy {
     // Line family
     _registerType(GeoLine, {SimpleGeometryObject});
     _registerType(GeoLine2P, {GeoLine});
-    _registerType(GeoLineFlex, {GeoLine});
+    _registerType(GeoLine2Sim, {GeoLine});
     _registerType(GeoPerpendicularBisector, {GeoLine});
     _registerType(GeoPerpendicularBisectorFlex, {GeoLine});
     _registerType(GeoPerpendicularLine, {GeoLine});

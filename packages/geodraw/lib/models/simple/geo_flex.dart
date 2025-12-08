@@ -6,16 +6,122 @@ import '../canvas_style.dart';
 import '../canvas_style_defaults.dart';
 import '../geometry_object.dart';
 import '../../core/dag/dag_manager.dart';
-import 'geo_point.dart';
 import 'geo_line.dart';
 import 'geo_circle.dart';
 import 'geo_Inf.dart';
+import 'geo_flex_elements.dart' show GeoFlexPoint, GeoFlexLine, GeoFlexCircle, FlexConstructorType;
+import 'geo_flex_functions.dart'
+    show
+        styleOverridesFromStyle,
+        styleOverridesFromJson,
+        lineStyleOverridesFromStyle,
+        lineStyleOverridesFromJson;
 
 // ============================================================================
 // FLEXIBLE GEOMETRY CLASSES
 // ============================================================================
 // These classes accept flexible input types (point, line, or circle) and
 // automatically extract the appropriate multivector components.
+
+/// Shared helper to create flex elements from a multivector
+/// This reduces code duplication between Geo3Flex and GeoALCbc
+SimpleGeometryObject? _createFlexElementFromMultivector({
+  required String id,
+  required String label,
+  required Multivector multivector,
+  required List<SimpleGeometryObject> objects,
+  required FlexConstructorType constructorType,
+  bool visible = true,
+  CanvasStyle? style,
+  Map<String, dynamic>? styleOverrides,
+}) {
+  final depIds = objects.map((o) => o.id).toList(growable: false);
+  final dep1Id = depIds[0];
+  final dep2Id = depIds[1];
+  final dep3Id = depIds[2];
+
+  // Check multivector type and return appropriate class
+  // Use tolerance 1e-8 for type detection
+  const double typeTolerance = 1e-8;
+  
+  if (multivector.isInf(customTolerance: typeTolerance)) {
+    final normalizedOverrides = styleOverridesFromStyle(
+      type: GeoInf,
+      style: style,
+      overrides: styleOverrides,
+    );
+    return GeoInf.fromMultivector(
+      id: id,
+      label: label,
+      multivector: multivector,
+      dependencies: depIds,
+      visible: visible,
+      styleOverrides: normalizedOverrides,
+    );
+  }
+
+  if (multivector.isPoint(customTolerance: typeTolerance)) {
+    final normalizedOverrides = styleOverridesFromStyle(
+      type: GeoFlexPoint,
+      style: style,
+      overrides: styleOverrides,
+    );
+    return GeoFlexPoint(
+      id: id,
+      label: label,
+      dependencies: depIds,
+      multivector: multivector,
+      dependency1Id: dep1Id,
+      dependency2Id: dep2Id,
+      dependency3Id: dep3Id,
+      sourceConstructorType: constructorType,
+      visible: visible,
+      styleOverrides: normalizedOverrides,
+    );
+  }
+
+  if (multivector.isLine(customTolerance: typeTolerance)) {
+    final normalizedOverrides = lineStyleOverridesFromStyle(
+      type: GeoFlexLine,
+      style: style,
+      overrides: styleOverrides,
+    );
+    return GeoFlexLine(
+      id: id,
+      label: label,
+      dependencies: depIds,
+      multivector: multivector,
+      dependency1Id: dep1Id,
+      dependency2Id: dep2Id,
+      dependency3Id: dep3Id,
+      sourceConstructorType: constructorType,
+      visible: visible,
+      styleOverrides: normalizedOverrides,
+    );
+  }
+
+  if (multivector.isCircle(customTolerance: typeTolerance)) {
+    final normalizedOverrides = styleOverridesFromStyle(
+      type: GeoFlexCircle,
+      style: style,
+      overrides: styleOverrides,
+    );
+    return GeoFlexCircle(
+      id: id,
+      label: label,
+      dependencies: depIds,
+      multivector: multivector,
+      dependency1Id: dep1Id,
+      dependency2Id: dep2Id,
+      dependency3Id: dep3Id,
+      sourceConstructorType: constructorType,
+      visible: visible,
+      styleOverrides: normalizedOverrides,
+    );
+  }
+
+  return null; // Type unclear, let caller handle fallback
+}
 
 /// Circle with flexible center and point (accepts point or circle, not line)
 class GeoCircleFlex extends GeoCircle {
@@ -69,7 +175,7 @@ class GeoCircleFlex extends GeoCircle {
 
     final mv = constructCircleFromCenterAndPoint(centerMv, pointMv);
 
-    final normalizedOverrides = _styleOverridesFromStyle(
+    final normalizedOverrides = styleOverridesFromStyle(
       type: GeoCircleFlex,
       style: style,
       overrides: styleOverrides,
@@ -127,7 +233,7 @@ class GeoCircleFlex extends GeoCircle {
     final mv = SimpleGeometryObject.decodeMultivector(
       json[SimpleGeometryObject.multivectorKey],
     );
-    final styleOverrides = _styleOverridesFromJson(
+    final styleOverrides = styleOverridesFromJson(
       json,
       legacyProps: props,
       fallbackColor: CanvasStyleDefaults.instance
@@ -214,6 +320,7 @@ class Geo3Flex extends SimpleGeometryObject {
       label: label,
       multivector: mv,
       objects: objects,
+      constructorType: FlexConstructorType.geo3Flex,
       visible: visible,
       style: style,
       styleOverrides: styleOverrides,
@@ -241,6 +348,7 @@ class Geo3Flex extends SimpleGeometryObject {
       label: label,
       multivector: multivector,
       objects: objects,
+      constructorType: FlexConstructorType.geo3Flex,
       visible: visible,
       style: style,
       styleOverrides: styleOverrides,
@@ -253,91 +361,39 @@ class Geo3Flex extends SimpleGeometryObject {
     required String label,
     required Multivector multivector,
     required List<SimpleGeometryObject> objects,
+    required FlexConstructorType constructorType,
     bool visible = true,
     CanvasStyle? style,
     Map<String, dynamic>? styleOverrides,
   }) {
-    final mv = multivector;
+    // Use shared helper function
+    final result = _createFlexElementFromMultivector(
+      id: id,
+      label: label,
+      multivector: multivector,
+      objects: objects,
+      constructorType: constructorType,
+      visible: visible,
+      style: style,
+      styleOverrides: styleOverrides,
+    );
 
-    // Check multivector type and return appropriate class
-    if (mv.isInf()) {
-      final normalizedOverrides = _styleOverridesFromStyle(
-        type: GeoInf,
-        style: style,
-        overrides: styleOverrides,
-      );
-      return GeoInf.fromMultivector(
-        id: id,
-        label: label,
-        multivector: mv,
-        dependencies: objects.map((o) => o.id).toList(growable: false),
-        visible: visible,
-        styleOverrides: normalizedOverrides,
-      );
+    // If result is null or type is unclear, return Geo3Flex itself as fallback
+    if (result != null) {
+      return result;
     }
 
-    if (mv.isPoint()) {
-      // Create a temporary GeoPointer to use its resolveStyleOverrides method
-      final tempPoint = GeoPointer(id: id, label: label, x: mv.e1, y: mv.e2);
-      final normalizedOverrides = styleOverrides ?? 
-          (style != null ? tempPoint.resolveStyleOverrides(style) : null);
-      return GeoPointer(
-        id: id,
-        label: label,
-        x: mv.e1,
-        y: mv.e2,
-        visible: visible,
-        styleOverrides: normalizedOverrides,
-      );
-    }
-
-    if (mv.isLine()) {
-      // Create a temporary GeoLineFlex to use its resolveStyleOverrides method
-      final tempLine = GeoLineFlex(
-        id: id,
-        label: label,
-        dependencies: objects.map((o) => o.id).toList(growable: false),
-        multivector: mv,
-      );
-      final normalizedOverrides = styleOverrides ?? 
-          (style != null ? tempLine.resolveStyleOverrides(style) : null);
-      return GeoLineFlex(
-        id: id,
-        label: label,
-        dependencies: objects.map((o) => o.id).toList(growable: false),
-        multivector: mv,
-        visible: visible,
-        styleOverrides: normalizedOverrides,
-      );
-    }
-
-    if (mv.isCircle()) {
-      final normalizedOverrides = _styleOverridesFromStyle(
-        type: GeoCircle3P,
-        style: style,
-        overrides: styleOverrides,
-      );
-      return GeoCircle3P(
-        id: id,
-        label: label,
-        dependencies: objects.map((o) => o.id).toList(growable: false),
-        multivector: mv,
-        visible: visible,
-        styleOverrides: normalizedOverrides,
-      );
-    }
-
-    // Fallback: return Geo3Flex itself if type is unclear
-    final normalizedOverrides = _styleOverridesFromStyle(
+    final normalizedOverrides = styleOverridesFromStyle(
       type: Geo3Flex,
       style: style,
       overrides: styleOverrides,
     );
+    final depIds = objects.map((o) => o.id).toList(growable: false);
     return Geo3Flex(
       id: id,
       label: label,
-      dependencies: objects.map((o) => o.id).toList(growable: false),
-      multivector: mv,
+      dependencies: depIds,
+      multivector: multivector,
       visible: visible,
       styleOverrides: normalizedOverrides,
     );
@@ -371,35 +427,48 @@ class Geo3Flex extends SimpleGeometryObject {
 
   @override
   bool contains(Offset position) {
-    // Delegate to appropriate type
-    if (multivector.isPoint()) {
-      final point = GeoPointer(
+    // Delegate to appropriate type using element classes
+    final depIds = dependencies;
+    if (multivector.isPoint() && depIds.length == 3) {
+      final point = GeoFlexPoint(
         id: id,
         label: label,
-        x: multivector.e1,
-        y: multivector.e2,
+        dependencies: depIds,
+        multivector: multivector,
+        dependency1Id: depIds[0],
+        dependency2Id: depIds[1],
+        dependency3Id: depIds[2],
+        sourceConstructorType: FlexConstructorType.geo3Flex,
         visible: visible,
         styleOverrides: styleOverrides,
       );
       return point.contains(position);
     }
-    if (multivector.isLine()) {
-      final line = GeoLineFlex(
+    if (multivector.isLine() && depIds.length == 3) {
+      final line = GeoFlexLine(
         id: id,
         label: label,
-        dependencies: dependencies,
+        dependencies: depIds,
         multivector: multivector,
+        dependency1Id: depIds[0],
+        dependency2Id: depIds[1],
+        dependency3Id: depIds[2],
+        sourceConstructorType: FlexConstructorType.geo3Flex,
         visible: visible,
         styleOverrides: styleOverrides,
       );
       return line.contains(position);
     }
-    if (multivector.isCircle()) {
-      final circle = GeoCircle3P(
+    if (multivector.isCircle() && depIds.length == 3) {
+      final circle = GeoFlexCircle(
         id: id,
         label: label,
-        dependencies: dependencies,
+        dependencies: depIds,
         multivector: multivector,
+        dependency1Id: depIds[0],
+        dependency2Id: depIds[1],
+        dependency3Id: depIds[2],
+        sourceConstructorType: FlexConstructorType.geo3Flex,
         visible: visible,
         styleOverrides: styleOverrides,
       );
@@ -410,35 +479,48 @@ class Geo3Flex extends SimpleGeometryObject {
 
   @override
   Rect getBounds() {
-    // Delegate to appropriate type
-    if (multivector.isPoint()) {
-      final point = GeoPointer(
+    // Delegate to appropriate type using element classes
+    final depIds = dependencies;
+    if (multivector.isPoint() && depIds.length == 3) {
+      final point = GeoFlexPoint(
         id: id,
         label: label,
-        x: multivector.e1,
-        y: multivector.e2,
+        dependencies: depIds,
+        multivector: multivector,
+        dependency1Id: depIds[0],
+        dependency2Id: depIds[1],
+        dependency3Id: depIds[2],
+        sourceConstructorType: FlexConstructorType.geo3Flex,
         visible: visible,
         styleOverrides: styleOverrides,
       );
       return point.getBounds();
     }
-    if (multivector.isLine()) {
-      final line = GeoLineFlex(
+    if (multivector.isLine() && depIds.length == 3) {
+      final line = GeoFlexLine(
         id: id,
         label: label,
-        dependencies: dependencies,
+        dependencies: depIds,
         multivector: multivector,
+        dependency1Id: depIds[0],
+        dependency2Id: depIds[1],
+        dependency3Id: depIds[2],
+        sourceConstructorType: FlexConstructorType.geo3Flex,
         visible: visible,
         styleOverrides: styleOverrides,
       );
       return line.getBounds();
     }
-    if (multivector.isCircle()) {
-      final circle = GeoCircle3P(
+    if (multivector.isCircle() && depIds.length == 3) {
+      final circle = GeoFlexCircle(
         id: id,
         label: label,
-        dependencies: dependencies,
+        dependencies: depIds,
         multivector: multivector,
+        dependency1Id: depIds[0],
+        dependency2Id: depIds[1],
+        dependency3Id: depIds[2],
+        sourceConstructorType: FlexConstructorType.geo3Flex,
         visible: visible,
         styleOverrides: styleOverrides,
       );
@@ -449,35 +531,48 @@ class Geo3Flex extends SimpleGeometryObject {
 
   @override
   double distanceTo(Offset point) {
-    // Delegate to appropriate type
-    if (multivector.isPoint()) {
-      final pointObj = GeoPointer(
+    // Delegate to appropriate type using element classes
+    final depIds = dependencies;
+    if (multivector.isPoint() && depIds.length == 3) {
+      final pointObj = GeoFlexPoint(
         id: id,
         label: label,
-        x: multivector.e1,
-        y: multivector.e2,
+        dependencies: depIds,
+        multivector: multivector,
+        dependency1Id: depIds[0],
+        dependency2Id: depIds[1],
+        dependency3Id: depIds[2],
+        sourceConstructorType: FlexConstructorType.geo3Flex,
         visible: visible,
         styleOverrides: styleOverrides,
       );
       return pointObj.distanceTo(point);
     }
-    if (multivector.isLine()) {
-      final line = GeoLineFlex(
+    if (multivector.isLine() && depIds.length == 3) {
+      final line = GeoFlexLine(
         id: id,
         label: label,
-        dependencies: dependencies,
+        dependencies: depIds,
         multivector: multivector,
+        dependency1Id: depIds[0],
+        dependency2Id: depIds[1],
+        dependency3Id: depIds[2],
+        sourceConstructorType: FlexConstructorType.geo3Flex,
         visible: visible,
         styleOverrides: styleOverrides,
       );
       return line.distanceTo(point);
     }
-    if (multivector.isCircle()) {
-      final circle = GeoCircle3P(
+    if (multivector.isCircle() && depIds.length == 3) {
+      final circle = GeoFlexCircle(
         id: id,
         label: label,
-        dependencies: dependencies,
+        dependencies: depIds,
         multivector: multivector,
+        dependency1Id: depIds[0],
+        dependency2Id: depIds[1],
+        dependency3Id: depIds[2],
+        sourceConstructorType: FlexConstructorType.geo3Flex,
         visible: visible,
         styleOverrides: styleOverrides,
       );
@@ -488,35 +583,48 @@ class Geo3Flex extends SimpleGeometryObject {
 
   @override
   bool intersects(SimpleGeometryObject other) {
-    // Create temporary object of appropriate type for intersection check
-    if (multivector.isPoint()) {
-      final point = GeoPointer(
+    // Delegate to appropriate type using element classes
+    final depIds = dependencies;
+    if (multivector.isPoint() && depIds.length == 3) {
+      final point = GeoFlexPoint(
         id: id,
         label: label,
-        x: multivector.e1,
-        y: multivector.e2,
+        dependencies: depIds,
+        multivector: multivector,
+        dependency1Id: depIds[0],
+        dependency2Id: depIds[1],
+        dependency3Id: depIds[2],
+        sourceConstructorType: FlexConstructorType.geo3Flex,
         visible: visible,
         styleOverrides: styleOverrides,
       );
       return point.intersects(other);
     }
-    if (multivector.isLine()) {
-      final line = GeoLineFlex(
+    if (multivector.isLine() && depIds.length == 3) {
+      final line = GeoFlexLine(
         id: id,
         label: label,
-        dependencies: dependencies,
+        dependencies: depIds,
         multivector: multivector,
+        dependency1Id: depIds[0],
+        dependency2Id: depIds[1],
+        dependency3Id: depIds[2],
+        sourceConstructorType: FlexConstructorType.geo3Flex,
         visible: visible,
         styleOverrides: styleOverrides,
       );
       return line.intersects(other);
     }
-    if (multivector.isCircle()) {
-      final circle = GeoCircle3P(
+    if (multivector.isCircle() && depIds.length == 3) {
+      final circle = GeoFlexCircle(
         id: id,
         label: label,
-        dependencies: dependencies,
+        dependencies: depIds,
         multivector: multivector,
+        dependency1Id: depIds[0],
+        dependency2Id: depIds[1],
+        dependency3Id: depIds[2],
+        sourceConstructorType: FlexConstructorType.geo3Flex,
         visible: visible,
         styleOverrides: styleOverrides,
       );
@@ -527,36 +635,46 @@ class Geo3Flex extends SimpleGeometryObject {
 
   @override
   void draw(Canvas canvas, Paint paint) {
-    // Delegate drawing based on type
-    if (multivector.isPoint()) {
-      // Create temporary point for drawing
-      final point = GeoPointer(
+    // Delegate drawing based on type using element classes
+    final depIds = dependencies;
+    if (multivector.isPoint() && depIds.length == 3) {
+      final point = GeoFlexPoint(
         id: id,
         label: label,
-        x: multivector.e1,
-        y: multivector.e2,
+        dependencies: depIds,
+        multivector: multivector,
+        dependency1Id: depIds[0],
+        dependency2Id: depIds[1],
+        dependency3Id: depIds[2],
+        sourceConstructorType: FlexConstructorType.geo3Flex,
         visible: visible,
         styleOverrides: styleOverrides,
       );
       point.draw(canvas, paint);
-    } else if (multivector.isLine()) {
-      // Create temporary line for drawing
-      final line = GeoLineFlex(
+    } else if (multivector.isLine() && depIds.length == 3) {
+      final line = GeoFlexLine(
         id: id,
         label: label,
-        dependencies: dependencies,
+        dependencies: depIds,
         multivector: multivector,
+        dependency1Id: depIds[0],
+        dependency2Id: depIds[1],
+        dependency3Id: depIds[2],
+        sourceConstructorType: FlexConstructorType.geo3Flex,
         visible: visible,
         styleOverrides: styleOverrides,
       );
       line.draw(canvas, paint);
-    } else if (multivector.isCircle()) {
-      // Create temporary circle for drawing
-      final circle = GeoCircle3P(
+    } else if (multivector.isCircle() && depIds.length == 3) {
+      final circle = GeoFlexCircle(
         id: id,
         label: label,
-        dependencies: dependencies,
+        dependencies: depIds,
         multivector: multivector,
+        dependency1Id: depIds[0],
+        dependency2Id: depIds[1],
+        dependency3Id: depIds[2],
+        sourceConstructorType: FlexConstructorType.geo3Flex,
         visible: visible,
         styleOverrides: styleOverrides,
       );
@@ -587,7 +705,7 @@ class Geo3Flex extends SimpleGeometryObject {
     final mv = SimpleGeometryObject.decodeMultivector(
       json[SimpleGeometryObject.multivectorKey],
     );
-    final styleOverrides = _styleOverridesFromJson(
+    final styleOverrides = styleOverridesFromJson(
       json,
       legacyProps: props,
       fallbackColor: CanvasStyleDefaults.instance
@@ -689,6 +807,7 @@ class GeoALCbc extends SimpleGeometryObject {
       label: label,
       multivector: mv,
       objects: objects,
+      constructorType: FlexConstructorType.geoALCbc,
       visible: visible,
       style: style,
       styleOverrides: styleOverrides,
@@ -696,96 +815,45 @@ class GeoALCbc extends SimpleGeometryObject {
   }
 
   /// Internal helper to create the appropriate object from a multivector
+  /// Returns specialized flex classes (GeoFlexPoint, GeoFlexLine, GeoFlexCircle) based on multivector type
   static SimpleGeometryObject? _fromMultivector({
     required String id,
     required String label,
     required Multivector multivector,
     required List<SimpleGeometryObject> objects,
+    required FlexConstructorType constructorType,
     bool visible = true,
     CanvasStyle? style,
     Map<String, dynamic>? styleOverrides,
   }) {
-    final mv = multivector;
+    // Use shared helper function
+    final result = _createFlexElementFromMultivector(
+      id: id,
+      label: label,
+      multivector: multivector,
+      objects: objects,
+      constructorType: constructorType,
+      visible: visible,
+      style: style,
+      styleOverrides: styleOverrides,
+    );
 
-    // Check multivector type and return appropriate class
-    if (mv.isInf()) {
-      final normalizedOverrides = _styleOverridesFromStyle(
-        type: GeoInf,
-        style: style,
-        overrides: styleOverrides,
-      );
-      return GeoInf.fromMultivector(
-        id: id,
-        label: label,
-        multivector: mv,
-        dependencies: objects.map((o) => o.id).toList(growable: false),
-        visible: visible,
-        styleOverrides: normalizedOverrides,
-      );
+    // If result is null or type is unclear, return GeoALCbc itself as fallback
+    if (result != null) {
+      return result;
     }
 
-    if (mv.isPoint()) {
-      // Create a temporary GeoPointer to use its resolveStyleOverrides method
-      final tempPoint = GeoPointer(id: id, label: label, x: mv.e1, y: mv.e2);
-      final normalizedOverrides = styleOverrides ?? 
-          (style != null ? tempPoint.resolveStyleOverrides(style) : null);
-      return GeoPointer(
-        id: id,
-        label: label,
-        x: mv.e1,
-        y: mv.e2,
-        visible: visible,
-        styleOverrides: normalizedOverrides,
-      );
-    }
-
-    if (mv.isLine()) {
-      // Create a temporary GeoLineFlex to use its resolveStyleOverrides method
-      final tempLine = GeoLineFlex(
-        id: id,
-        label: label,
-        dependencies: objects.map((o) => o.id).toList(growable: false),
-        multivector: mv,
-      );
-      final normalizedOverrides = styleOverrides ?? 
-          (style != null ? tempLine.resolveStyleOverrides(style) : null);
-      return GeoLineFlex(
-        id: id,
-        label: label,
-        dependencies: objects.map((o) => o.id).toList(growable: false),
-        multivector: mv,
-        visible: visible,
-        styleOverrides: normalizedOverrides,
-      );
-    }
-
-    if (mv.isCircle()) {
-      final normalizedOverrides = _styleOverridesFromStyle(
-        type: GeoCircle3P,
-        style: style,
-        overrides: styleOverrides,
-      );
-      return GeoCircle3P(
-        id: id,
-        label: label,
-        dependencies: objects.map((o) => o.id).toList(growable: false),
-        multivector: mv,
-        visible: visible,
-        styleOverrides: normalizedOverrides,
-      );
-    }
-
-    // Fallback: return GeoALCbc itself if type is unclear
-    final normalizedOverrides = _styleOverridesFromStyle(
+    final normalizedOverrides = styleOverridesFromStyle(
       type: GeoALCbc,
       style: style,
       overrides: styleOverrides,
     );
+    final depIds = objects.map((o) => o.id).toList(growable: false);
     return GeoALCbc(
       id: id,
       label: label,
-      dependencies: objects.map((o) => o.id).toList(growable: false),
-      multivector: mv,
+      dependencies: depIds,
+      multivector: multivector,
       visible: visible,
       styleOverrides: normalizedOverrides,
     );
@@ -819,35 +887,49 @@ class GeoALCbc extends SimpleGeometryObject {
 
   @override
   bool contains(Offset position) {
-    // Delegate to appropriate type
+    // Delegate to appropriate type using element classes
+    // GeoALCbc always has 3 dependencies, so use element classes
+    final depIds = dependencies;
     if (multivector.isPoint()) {
-      final point = GeoPointer(
+      final point = GeoFlexPoint(
         id: id,
         label: label,
-        x: multivector.e1,
-        y: multivector.e2,
+        dependencies: depIds,
+        multivector: multivector,
+        dependency1Id: depIds[0],
+        dependency2Id: depIds[1],
+        dependency3Id: depIds[2],
+        sourceConstructorType: FlexConstructorType.geoALCbc,
         visible: visible,
         styleOverrides: styleOverrides,
       );
       return point.contains(position);
     }
     if (multivector.isLine()) {
-      final line = GeoLineFlex(
+      final line = GeoFlexLine(
         id: id,
         label: label,
-        dependencies: dependencies,
+        dependencies: depIds,
         multivector: multivector,
+        dependency1Id: depIds[0],
+        dependency2Id: depIds[1],
+        dependency3Id: depIds[2],
+        sourceConstructorType: FlexConstructorType.geoALCbc,
         visible: visible,
         styleOverrides: styleOverrides,
       );
       return line.contains(position);
     }
     if (multivector.isCircle()) {
-      final circle = GeoCircle3P(
+      final circle = GeoFlexCircle(
         id: id,
         label: label,
-        dependencies: dependencies,
+        dependencies: depIds,
         multivector: multivector,
+        dependency1Id: depIds[0],
+        dependency2Id: depIds[1],
+        dependency3Id: depIds[2],
+        sourceConstructorType: FlexConstructorType.geoALCbc,
         visible: visible,
         styleOverrides: styleOverrides,
       );
@@ -858,35 +940,49 @@ class GeoALCbc extends SimpleGeometryObject {
 
   @override
   Rect getBounds() {
-    // Delegate to appropriate type
+    // Delegate to appropriate type using element classes
+    // GeoALCbc always has 3 dependencies, so use element classes
+    final depIds = dependencies;
     if (multivector.isPoint()) {
-      final point = GeoPointer(
+      final point = GeoFlexPoint(
         id: id,
         label: label,
-        x: multivector.e1,
-        y: multivector.e2,
+        dependencies: depIds,
+        multivector: multivector,
+        dependency1Id: depIds[0],
+        dependency2Id: depIds[1],
+        dependency3Id: depIds[2],
+        sourceConstructorType: FlexConstructorType.geoALCbc,
         visible: visible,
         styleOverrides: styleOverrides,
       );
       return point.getBounds();
     }
     if (multivector.isLine()) {
-      final line = GeoLineFlex(
+      final line = GeoFlexLine(
         id: id,
         label: label,
-        dependencies: dependencies,
+        dependencies: depIds,
         multivector: multivector,
+        dependency1Id: depIds[0],
+        dependency2Id: depIds[1],
+        dependency3Id: depIds[2],
+        sourceConstructorType: FlexConstructorType.geoALCbc,
         visible: visible,
         styleOverrides: styleOverrides,
       );
       return line.getBounds();
     }
     if (multivector.isCircle()) {
-      final circle = GeoCircle3P(
+      final circle = GeoFlexCircle(
         id: id,
         label: label,
-        dependencies: dependencies,
+        dependencies: depIds,
         multivector: multivector,
+        dependency1Id: depIds[0],
+        dependency2Id: depIds[1],
+        dependency3Id: depIds[2],
+        sourceConstructorType: FlexConstructorType.geoALCbc,
         visible: visible,
         styleOverrides: styleOverrides,
       );
@@ -897,35 +993,49 @@ class GeoALCbc extends SimpleGeometryObject {
 
   @override
   double distanceTo(Offset point) {
-    // Delegate to appropriate type
+    // Delegate to appropriate type using element classes
+    // GeoALCbc always has 3 dependencies, so use element classes
+    final depIds = dependencies;
     if (multivector.isPoint()) {
-      final pointObj = GeoPointer(
+      final pointObj = GeoFlexPoint(
         id: id,
         label: label,
-        x: multivector.e1,
-        y: multivector.e2,
+        dependencies: depIds,
+        multivector: multivector,
+        dependency1Id: depIds[0],
+        dependency2Id: depIds[1],
+        dependency3Id: depIds[2],
+        sourceConstructorType: FlexConstructorType.geoALCbc,
         visible: visible,
         styleOverrides: styleOverrides,
       );
       return pointObj.distanceTo(point);
     }
     if (multivector.isLine()) {
-      final line = GeoLineFlex(
+      final line = GeoFlexLine(
         id: id,
         label: label,
-        dependencies: dependencies,
+        dependencies: depIds,
         multivector: multivector,
+        dependency1Id: depIds[0],
+        dependency2Id: depIds[1],
+        dependency3Id: depIds[2],
+        sourceConstructorType: FlexConstructorType.geoALCbc,
         visible: visible,
         styleOverrides: styleOverrides,
       );
       return line.distanceTo(point);
     }
     if (multivector.isCircle()) {
-      final circle = GeoCircle3P(
+      final circle = GeoFlexCircle(
         id: id,
         label: label,
-        dependencies: dependencies,
+        dependencies: depIds,
         multivector: multivector,
+        dependency1Id: depIds[0],
+        dependency2Id: depIds[1],
+        dependency3Id: depIds[2],
+        sourceConstructorType: FlexConstructorType.geoALCbc,
         visible: visible,
         styleOverrides: styleOverrides,
       );
@@ -936,35 +1046,49 @@ class GeoALCbc extends SimpleGeometryObject {
 
   @override
   bool intersects(SimpleGeometryObject other) {
-    // Create temporary object of appropriate type for intersection check
+    // Delegate to appropriate type using element classes
+    // GeoALCbc always has 3 dependencies, so use element classes
+    final depIds = dependencies;
     if (multivector.isPoint()) {
-      final point = GeoPointer(
+      final point = GeoFlexPoint(
         id: id,
         label: label,
-        x: multivector.e1,
-        y: multivector.e2,
+        dependencies: depIds,
+        multivector: multivector,
+        dependency1Id: depIds[0],
+        dependency2Id: depIds[1],
+        dependency3Id: depIds[2],
+        sourceConstructorType: FlexConstructorType.geoALCbc,
         visible: visible,
         styleOverrides: styleOverrides,
       );
       return point.intersects(other);
     }
     if (multivector.isLine()) {
-      final line = GeoLineFlex(
+      final line = GeoFlexLine(
         id: id,
         label: label,
-        dependencies: dependencies,
+        dependencies: depIds,
         multivector: multivector,
+        dependency1Id: depIds[0],
+        dependency2Id: depIds[1],
+        dependency3Id: depIds[2],
+        sourceConstructorType: FlexConstructorType.geoALCbc,
         visible: visible,
         styleOverrides: styleOverrides,
       );
       return line.intersects(other);
     }
     if (multivector.isCircle()) {
-      final circle = GeoCircle3P(
+      final circle = GeoFlexCircle(
         id: id,
         label: label,
-        dependencies: dependencies,
+        dependencies: depIds,
         multivector: multivector,
+        dependency1Id: depIds[0],
+        dependency2Id: depIds[1],
+        dependency3Id: depIds[2],
+        sourceConstructorType: FlexConstructorType.geoALCbc,
         visible: visible,
         styleOverrides: styleOverrides,
       );
@@ -975,36 +1099,47 @@ class GeoALCbc extends SimpleGeometryObject {
 
   @override
   void draw(Canvas canvas, Paint paint) {
-    // Delegate drawing based on type
+    // Delegate drawing based on type using element classes
+    // GeoALCbc always has 3 dependencies, so use element classes
+    final depIds = dependencies;
     if (multivector.isPoint()) {
-      // Create temporary point for drawing
-      final point = GeoPointer(
+      final point = GeoFlexPoint(
         id: id,
         label: label,
-        x: multivector.e1,
-        y: multivector.e2,
+        dependencies: depIds,
+        multivector: multivector,
+        dependency1Id: depIds[0],
+        dependency2Id: depIds[1],
+        dependency3Id: depIds[2],
+        sourceConstructorType: FlexConstructorType.geoALCbc,
         visible: visible,
         styleOverrides: styleOverrides,
       );
       point.draw(canvas, paint);
     } else if (multivector.isLine()) {
-      // Create temporary line for drawing
-      final line = GeoLineFlex(
+      final line = GeoFlexLine(
         id: id,
         label: label,
-        dependencies: dependencies,
+        dependencies: depIds,
         multivector: multivector,
+        dependency1Id: depIds[0],
+        dependency2Id: depIds[1],
+        dependency3Id: depIds[2],
+        sourceConstructorType: FlexConstructorType.geoALCbc,
         visible: visible,
         styleOverrides: styleOverrides,
       );
       line.draw(canvas, paint);
     } else if (multivector.isCircle()) {
-      // Create temporary circle for drawing
-      final circle = GeoCircle3P(
+      final circle = GeoFlexCircle(
         id: id,
         label: label,
-        dependencies: dependencies,
+        dependencies: depIds,
         multivector: multivector,
+        dependency1Id: depIds[0],
+        dependency2Id: depIds[1],
+        dependency3Id: depIds[2],
+        sourceConstructorType: FlexConstructorType.geoALCbc,
         visible: visible,
         styleOverrides: styleOverrides,
       );
@@ -1035,7 +1170,7 @@ class GeoALCbc extends SimpleGeometryObject {
     final mv = SimpleGeometryObject.decodeMultivector(
       json[SimpleGeometryObject.multivectorKey],
     );
-    final styleOverrides = _styleOverridesFromJson(
+    final styleOverrides = styleOverridesFromJson(
       json,
       legacyProps: props,
       fallbackColor: CanvasStyleDefaults.instance
@@ -1097,8 +1232,8 @@ class GeoALCbc extends SimpleGeometryObject {
 }
 
 /// Line through two flexible objects (accepts any SimpleGeometryObject)
-class GeoLineFlex extends GeoLine {
-  GeoLineFlex({
+class GeoLine2Sim extends GeoLine {
+  GeoLine2Sim({
     required super.id,
     required super.label,
     required super.dependencies,
@@ -1107,11 +1242,11 @@ class GeoLineFlex extends GeoLine {
     super.styleOverrides,
   }) : assert(
          dependencies.length == 2,
-         'GeoLineFlex requires exactly 2 dependencies',
+         'GeoLine2Sim requires exactly 2 dependencies',
        );
 
   /// Construct a line from flexible dependencies (SimpleGeometryObject)
-  static GeoLineFlex fromDependencies({
+  static GeoLine2Sim fromDependencies({
     required String id,
     required String label,
     required List<SimpleGeometryObject> objects,
@@ -1123,7 +1258,7 @@ class GeoLineFlex extends GeoLine {
     Color fallbackColor = Colors.blue,
   }) {
     if (objects.length != 2) {
-      throw ArgumentError('GeoLineFlex requires exactly 2 dependencies');
+      throw ArgumentError('GeoLine2Sim requires exactly 2 dependencies');
     }
 
     // Extract multivectors (point or circle center)
@@ -1136,8 +1271,8 @@ class GeoLineFlex extends GeoLine {
 
     final mv = constructLineFrom2Points(mv1, mv2);
 
-    final normalizedOverrides = _lineStyleOverridesFromStyle(
-      type: GeoLineFlex,
+    final normalizedOverrides = lineStyleOverridesFromStyle(
+      type: GeoLine2Sim,
       style: style,
       overrides: styleOverrides,
       fallbackColor: fallbackColor,
@@ -1145,7 +1280,7 @@ class GeoLineFlex extends GeoLine {
       fallbackLineStyle: fallbackLineStyle,
     );
 
-    return GeoLineFlex(
+    return GeoLine2Sim(
       id: id,
       label: label,
       dependencies: objects.map((o) => o.id).toList(growable: false),
@@ -1156,7 +1291,7 @@ class GeoLineFlex extends GeoLine {
   }
 
   @override
-  GeoLineFlex copyWith({
+  GeoLine2Sim copyWith({
     String? id,
     String? label,
     List<String>? dependencies,
@@ -1168,7 +1303,7 @@ class GeoLineFlex extends GeoLine {
     final overrides =
         styleOverrides ??
         (style == null ? this.styleOverrides : resolveStyleOverrides(style));
-    return GeoLineFlex(
+    return GeoLine2Sim(
       id: id ?? this.id,
       label: label ?? this.label,
       dependencies: dependencies ?? this.dependencies,
@@ -1179,7 +1314,7 @@ class GeoLineFlex extends GeoLine {
   }
 
   @override
-  String get type => 'GeoLineFlex';
+  String get type => 'GeoLine2Sim';
 
   @override
   Map<String, dynamic> toJson() {
@@ -1196,20 +1331,20 @@ class GeoLineFlex extends GeoLine {
     return json;
   }
 
-  static GeoLineFlex fromJson(Map<String, dynamic> json) {
+  static GeoLine2Sim fromJson(Map<String, dynamic> json) {
     final props = (json['properties'] as Map<String, dynamic>?) ?? const {};
     final mv = SimpleGeometryObject.decodeMultivector(
       json[SimpleGeometryObject.multivectorKey],
     );
     final deps = (json['dependencies'] as List).cast<String>();
-    final defaults = CanvasStyleDefaults.instance.resolveForType(GeoLineFlex);
-    final styleOverrides = _lineStyleOverridesFromJson(
+    final defaults = CanvasStyleDefaults.instance.resolveForType(GeoLine2Sim);
+    final styleOverrides = lineStyleOverridesFromJson(
       json,
       legacyProps: props,
       fallbackColor: defaults.strokeColor,
     );
 
-    return GeoLineFlex(
+    return GeoLine2Sim(
       id: json['id'] as String,
       label: json['label'] as String,
       dependencies: deps,
@@ -1233,7 +1368,7 @@ class GeoLineFlex extends GeoLine {
       return null;
     }
 
-    return GeoLineFlex.fromDependencies(
+    return GeoLine2Sim.fromDependencies(
       id: id,
       label: label,
       objects: [obj1, obj2],
@@ -1292,7 +1427,7 @@ class GeoPerpendicularBisectorFlex extends GeoLine {
 
     final mv = constructPerpendicularBisector(mv1, mv2);
 
-    final normalizedOverrides = _lineStyleOverridesFromStyle(
+    final normalizedOverrides = lineStyleOverridesFromStyle(
       type: GeoPerpendicularBisectorFlex,
       style: style,
       overrides: styleOverrides,
@@ -1360,7 +1495,7 @@ class GeoPerpendicularBisectorFlex extends GeoLine {
     final deps = (json['dependencies'] as List).cast<String>();
     final defaults = CanvasStyleDefaults.instance
         .resolveForType(GeoPerpendicularBisectorFlex);
-    final styleOverrides = _lineStyleOverridesFromJson(
+    final styleOverrides = lineStyleOverridesFromJson(
       json,
       legacyProps: props,
       fallbackColor: defaults.strokeColor,
@@ -1458,7 +1593,7 @@ class GeoPerpendicularLineFlex extends GeoLine {
 
     final mv = constructPerpendicularLine(reference.multivector, pointMv);
 
-    final normalizedOverrides = _lineStyleOverridesFromStyle(
+    final normalizedOverrides = lineStyleOverridesFromStyle(
       type: GeoPerpendicularLineFlex,
       style: style,
       overrides: styleOverrides,
@@ -1526,7 +1661,7 @@ class GeoPerpendicularLineFlex extends GeoLine {
     final deps = (json['dependencies'] as List).cast<String>();
     final defaults =
         CanvasStyleDefaults.instance.resolveForType(GeoPerpendicularLineFlex);
-    final styleOverrides = _lineStyleOverridesFromJson(
+    final styleOverrides = lineStyleOverridesFromJson(
       json,
       legacyProps: props,
       fallbackColor: defaults.strokeColor,
@@ -1624,7 +1759,7 @@ class GeoParallelLineFlex extends GeoLine {
 
     final mv = constructParallelLine(reference.multivector, pointMv);
 
-    final normalizedOverrides = _lineStyleOverridesFromStyle(
+    final normalizedOverrides = lineStyleOverridesFromStyle(
       type: GeoParallelLineFlex,
       style: style,
       overrides: styleOverrides,
@@ -1692,7 +1827,7 @@ class GeoParallelLineFlex extends GeoLine {
     final deps = (json['dependencies'] as List).cast<String>();
     final defaults =
         CanvasStyleDefaults.instance.resolveForType(GeoParallelLineFlex);
-    final styleOverrides = _lineStyleOverridesFromJson(
+    final styleOverrides = lineStyleOverridesFromJson(
       json,
       legacyProps: props,
       fallbackColor: defaults.strokeColor,
@@ -1734,165 +1869,4 @@ class GeoParallelLineFlex extends GeoLine {
       return null;
     }
   }
-}
-
-// ============================================================================
-// HELPER FUNCTIONS FOR STYLE OVERRIDES
-// ============================================================================
-
-Map<String, dynamic>? _styleOverridesFromStyle({
-  required Type type,
-  CanvasStyle? style,
-  Map<String, dynamic>? overrides,
-}) {
-  if (overrides != null) {
-    return Map<String, dynamic>.unmodifiable(overrides);
-  }
-  if (style == null) {
-    return null;
-  }
-
-  final defaults = CanvasStyleDefaults.instance.resolveForType(type);
-  return Map<String, dynamic>.unmodifiable(style.diff(defaults));
-}
-
-Map<String, dynamic>? _styleOverridesFromJson(
-  Map<String, dynamic> json, {
-  Map<String, dynamic>? legacyProps,
-  Color? fallbackColor,
-}) {
-  final existing = GeometryObject.extractStyleOverrides(json);
-  if (existing != null) {
-    return Map<String, dynamic>.unmodifiable(existing);
-  }
-
-  final overrides = <String, dynamic>{};
-
-  final rawColor = json.containsKey('color') ? json['color'] : null;
-  final parsedColor = GeometryObject.parseColor(rawColor) ?? fallbackColor;
-  if (parsedColor != null) {
-    overrides['strokeColor'] = CanvasStyle.colorToHex(parsedColor);
-  }
-
-  if (legacyProps != null) {
-    final thickness = legacyProps['thickness'];
-    if (thickness is num) {
-      overrides['strokeWidth'] = thickness.toDouble();
-    }
-    final filled = legacyProps['filled'];
-    if (filled is bool) {
-      overrides['filled'] = filled;
-    }
-  }
-
-  if (overrides.isEmpty) {
-    return null;
-  }
-
-  return Map<String, dynamic>.unmodifiable(overrides);
-}
-
-Map<String, dynamic>? _lineStyleOverridesFromStyle({
-  required Type type,
-  CanvasStyle? style,
-  Map<String, dynamic>? overrides,
-  Color? fallbackColor,
-  double? fallbackStrokeWidth,
-  LineStyle? fallbackLineStyle,
-}) {
-  if (overrides != null) {
-    return Map<String, dynamic>.unmodifiable(overrides);
-  }
-
-  if (style != null) {
-    final defaults = CanvasStyleDefaults.instance.resolveForType(type);
-    return Map<String, dynamic>.unmodifiable(style.diff(defaults));
-  }
-
-  final defaults = CanvasStyleDefaults.instance.resolveForType(type);
-  final inferred = <String, dynamic>{};
-
-  if (fallbackColor != null &&
-      fallbackColor.value != defaults.strokeColor.value) {
-    inferred['strokeColor'] = CanvasStyle.colorToHex(fallbackColor);
-  }
-
-  if (fallbackStrokeWidth != null &&
-      !_almostEqual(fallbackStrokeWidth, defaults.strokeWidth)) {
-    inferred['strokeWidth'] = fallbackStrokeWidth;
-  }
-
-  if (fallbackLineStyle != null) {
-    final pattern = fallbackLineStyle.name;
-    if (pattern != defaults.linePattern) {
-      inferred['linePattern'] = pattern;
-    }
-  }
-
-  if (inferred.isEmpty) {
-    return null;
-  }
-
-  return Map<String, dynamic>.unmodifiable(inferred);
-}
-
-Map<String, dynamic>? _lineStyleOverridesFromJson(
-  Map<String, dynamic> json, {
-  Map<String, dynamic>? legacyProps,
-  Color? fallbackColor,
-}) {
-  final existing = GeometryObject.extractStyleOverrides(json);
-  if (existing != null) {
-    return Map<String, dynamic>.unmodifiable(existing);
-  }
-
-  final overrides = <String, dynamic>{};
-
-  final rawColor = json.containsKey('color') ? json['color'] : null;
-  final parsedColor = GeometryObject.parseColor(rawColor);
-  if (parsedColor != null) {
-    overrides['strokeColor'] = CanvasStyle.colorToHex(parsedColor);
-  }
-
-  if (legacyProps != null) {
-    final thickness = legacyProps['thickness'];
-    if (thickness is num) {
-      overrides['strokeWidth'] = thickness.toDouble();
-    }
-
-    final rawPattern = legacyProps['lineStyle'] ?? legacyProps['style'];
-    final pattern = _normalizeLinePattern(rawPattern);
-    if (pattern != null) {
-      overrides['linePattern'] = pattern;
-    }
-  }
-
-  if (overrides.isEmpty && fallbackColor != null) {
-    overrides['strokeColor'] = CanvasStyle.colorToHex(fallbackColor);
-  }
-
-  if (overrides.isEmpty) {
-    return null;
-  }
-
-  return Map<String, dynamic>.unmodifiable(overrides);
-}
-
-String? _normalizeLinePattern(dynamic raw) {
-  if (raw is String) {
-    final lower = raw.toLowerCase();
-    switch (lower) {
-      case 'solid':
-      case 'dashed':
-      case 'dotted':
-        return lower;
-    }
-  } else if (raw is LineStyle) {
-    return raw.name;
-  }
-  return null;
-}
-
-bool _almostEqual(double a, double b, [double epsilon = 0.0001]) {
-  return (a - b).abs() < epsilon;
 }

@@ -239,7 +239,28 @@ Multivector polar(Multivector point, Multivector circle) {
 /// Takes three multivectors
 /// Returns: Multivector (type not known beforehand - can be point, line, circle, or infinity)
 Multivector aLCbc(Multivector mv1, Multivector mv2, Multivector mv3) {
-  return uniForm(mv1 < (mv2 ^ mv3)).vectorize(1e-8);
+  final result = (mv1 < (mv2 ^ mv3)).vectorize(1e-8);
+  
+  // Normalize based on result type
+  // Check for infinity first
+  if (result.isInf()) {
+    return result; // Infinity doesn't need normalization
+  }
+  
+  if (result.isLine()) {
+    return uniForm(result);
+  }
+  
+  if (result.isCircle()) {
+    return infForm(result);
+  }
+  
+  if (result.isPoint()) {
+    return infForm(result);
+  }
+  
+  // Fallback: return as-is if type is unclear
+  return result;
 }
 
 /// Construct angle bisector of three points (vertex at point2)

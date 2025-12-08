@@ -264,15 +264,29 @@ List<Multivector> constructTangents(
     return [constructLineFrom2Points(mv1, mv2)];
   }
 
-  // Case 2: One point, one circle -> tangents from point to circle
+  // Case 2: One point, one circle -> external tangents (treat point as circle with radius 0)
   if (mv1.isPoint(customTolerance: tolerance) && mv2.isCircle(customTolerance: tolerance)) {
-    return _constructTangentsPointToCircle(mv1, mv2);
+    final pointInf = infForm(mv1);
+    final circleInf = infForm(mv2);
+    final center2 = getCircleCenter(circleInf);
+    final radius2 = measureCircleRadius(circleInf);
+    final p1 = pointInf;
+    final p2 = infForm(center2);
+    // Treat point as circle with radius 0, compute external tangents
+    return _computeOuterTangents(mv1, mv2, p1, p2, 0.0, radius2);
   }
   if (mv1.isCircle(customTolerance: tolerance) && mv2.isPoint(customTolerance: tolerance)) {
-    return _constructTangentsPointToCircle(mv2, mv1);
+    final circleInf = infForm(mv1);
+    final pointInf = infForm(mv2);
+    final center1 = getCircleCenter(circleInf);
+    final radius1 = measureCircleRadius(circleInf);
+    final p1 = infForm(center1);
+    final p2 = pointInf;
+    // Treat point as circle with radius 0, compute external tangents
+    return _computeOuterTangents(mv1, mv2, p1, p2, radius1, 0.0);
   }
 
-  // Case 3: Two circles -> common tangents
+  // Case 3: Two circles -> both internal and external tangents
   if (mv1.isCircle(customTolerance: tolerance) && mv2.isCircle(customTolerance: tolerance)) {
     return _constructCommonTangents(mv1, mv2);
   }
@@ -282,21 +296,6 @@ List<Multivector> constructTangents(
     'constructTangents: Invalid combination. '
     'Inputs must be: two points, one point and one circle, or two circles.'
   );
-}
-
-/// Construct tangents from a point to a circle
-/// Returns: 0, 1, or 2 tangent lines
-List<Multivector> _constructTangentsPointToCircle(
-  Multivector point,
-  Multivector circle,
-) {
-  // Normalize inputs to infForm for calculations
-  final pointInf = infForm(point);
-  final circleInf = infForm(circle);
-  
-  // Use the existing constructTangentLines function
-  // It already handles the cases: outside (2), on (1), inside (0)
-  return constructTangentLines(pointInf, circleInf);
 }
 
 /// Construct common tangents between two circles
@@ -319,70 +318,8 @@ List<Multivector> _constructCommonTangents(
   final p1 = infForm(center1);
   final p2 = infForm(center2);
 
-  // Calculate distance between centers
-  final centerDistance = distancePointToPoint(p1, p2);
-  final radiusSum = radius1 + radius2;
-  final radiusDiff = (radius1 - radius2).abs();
-
-  // Determine relative positions
-  final tangents = <Multivector>[];
-
-  // Check if circles intersect
-  final intersections = constructCircleCircleIntersection(c1, c2);
-  final numIntersections = intersections.length;
-
-  if (numIntersections == 0) {
-    // No intersections - could be separate or one inside another
-    if (centerDistance < radiusDiff - 1e-10) {
-      // One circle completely inside another -> 0 tangents
-      return [];
-    } else if (centerDistance > radiusSum) {
-      // Separate circles (non-intersecting) -> 4 common tangents
-      tangents.addAll(_computeAllCommonTangents(c1, c2, p1, p2, radius1, radius2));
-    } else {
-      // Circles are close but not intersecting (radiusDiff <= centerDistance <= radiusSum)
-      // This can happen when circles are very close but don't touch
-      // Still compute tangents (they exist as long as circles don't intersect)
-      tangents.addAll(_computeAllCommonTangents(c1, c2, p1, p2, radius1, radius2));
-    }
-  } else if (numIntersections == 1) {
-    // Tangent (touching) -> determine if outer or inner tangent
-    if ((centerDistance - radiusSum).abs() < 1e-10) {
-      // Outer tangent (touching externally)
-      // The tangent at the touch point is perpendicular to line connecting centers
-      final touchPoint = intersections[0];
-      final lineConnectingCenters = constructLineFrom2Points(p1, p2);
-      final tangentAtTouch = constructPerpendicularLine(lineConnectingCenters, touchPoint);
-      tangents.add(uniForm(tangentAtTouch));
-      // Add 2 other outer tangents
-      final outerTangents = _computeOuterTangents(c1, c2, p1, p2, radius1, radius2);
-      // Filter out duplicates and add the others
-      for (final tangent in outerTangents) {
-        final tan1 = uniForm(tangent);
-        final tan2 = uniForm(tangentAtTouch);
-        // Check if this tangent is different from the one at touch point
-        final diff = (tan1 - tan2).norm().fold(() => 0.0, (v) => v.abs());
-        if (diff > 1e-8) {
-          tangents.add(tan1);
-        }
-      }
-    } else if ((centerDistance - radiusDiff).abs() < 1e-10) {
-      // Inner tangent (one touches the other from inside)
-      // The tangent at the touch point is perpendicular to line connecting centers
-      final touchPoint = intersections[0];
-      final lineConnectingCenters = constructLineFrom2Points(p1, p2);
-      final tangentAtTouch = constructPerpendicularLine(lineConnectingCenters, touchPoint);
-      tangents.add(uniForm(tangentAtTouch));
-    } else {
-      // Should not happen, but handle gracefully
-      return [];
-    }
-  } else {
-    // 2 intersections -> circles intersect -> 2 outer tangents
-    tangents.addAll(_computeOuterTangents(c1, c2, p1, p2, radius1, radius2));
-  }
-
-  return tangents;
+  // Compute all common tangents - lower functions handle boundary conditions
+  return _computeAllCommonTangents(c1, c2, p1, p2, radius1, radius2);
 }
 
 /// Compute all 4 common tangents (2 outer, 2 inner) for two separate circles
@@ -406,6 +343,8 @@ List<Multivector> _computeAllCommonTangents(
 }
 
 /// Compute 2 outer common tangents for two circles
+/// Uses algebraic formulas from geometric algebra calculations
+/// Sl1 and Sl2 are the two external lines
 List<Multivector> _computeOuterTangents(
   Multivector circle1,
   Multivector circle2,
@@ -417,70 +356,78 @@ List<Multivector> _computeOuterTangents(
   final p1 = infForm(center1);
   final p2 = infForm(center2);
   
-  // Vector from center1 to center2
-  final dx = p2.e1 - p1.e1;
-  final dy = p2.e2 - p1.e2;
-  final d = math.sqrt(dx * dx + dy * dy);
+  // Extract circle parameters: g1, h1, r1 and g2, h2, r2
+  // Sc1 and Sc2 are the two circles or points
+  final g1 = p1.e1; // e_x is e1
+  final h1 = p1.e2; // e_y is e2
+  final r1 = radius1;
+  final g2 = p2.e1; // e_x is e1
+  final h2 = p2.e2; // e_y is e2
+  final r2 = radius2;
   
-  if (d < 1e-10) {
-    // Concentric circles - no common tangents
+  // Base expression for external tangents
+  // base = g1^2 - 2*g1*g2 + g2^2 + h1^2 - 2*h1*h2 + h2^2 - r1^2 + 2*r1*r2 - r2^2
+  final base = g1 * g1 - 2 * g1 * g2 + g2 * g2 +
+               h1 * h1 - 2 * h1 * h2 + h2 * h2 -
+               r1 * r1 + 2 * r1 * r2 - r2 * r2;
+  
+  // Boundary condition: square root must be greater than zero
+  if (base <= 0) {
+    // No external tangents (boundary condition not met)
     return [];
   }
   
-  // Angle of line connecting centers
-  final theta = math.atan2(dy, dx);
+  final sqrtExpr = math.sqrt(base);
   
-  // For outer tangents, use the correct formula from geometry:
-  // The radius angle is: theta ± beta where:
-  // - theta = angle of line connecting centers
-  // - beta = arcsin((r1 - r2) / d)
-  // Note: Using (r1 - r2) as per standard geometric formula
-  final rDiff = radius1 - radius2;
-  final sinBeta = rDiff / d;
-  
-  if (sinBeta.abs() >= 1.0) {
-    // No outer tangents (circles are too close or one inside another)
+  if (base.abs() < 1e-10) {
     return [];
   }
-  
-  final beta = math.asin(sinBeta);
   
   final tangents = <Multivector>[];
   
-  // For outer tangents, both radii are parallel
-  // The radius angle is: theta + beta and theta - beta
-  // where theta is the angle of the line connecting centers
+  // If sqrtExpr is zero, return one line with sqrtExpr replaced by zero
+  if (sqrtExpr.abs() < 1e-10) {
+    // When sqrtExpr = 0, the formulas simplify to just the constant terms
+    final sl1_e1 = (-g1 * r1 + g1 * r2 + g2 * r1 - g2 * r2);
+    final sl1_e2 = (-h1 * r1 + h1 * r2 + h2 * r1 - h2 * r2);
+    final sl1_O = (g1 * g1 * r2 - g1 * g2 * r1 - g1 * g2 * r2 + g2 * g2 * r1 +
+                  h1 * h1 * r2 - h1 * h2 * r1 - h1 * h2 * r2 + h2 * h2 * r1);
+    tangents.add(uniForm(Multivector(e1: sl1_e1, e2: sl1_e2, O: sl1_O)));
+    return tangents;
+  }
   
-  // Tangent 1: radius angle = theta + beta (both circles use same angle)
-  final tan1Angle = theta + beta;
+  // Sl1: First external tangent
+  final sl1_e1 = (h1 - h2) * sqrtExpr + (-g1 * r1 + g1 * r2 + g2 * r1 - g2 * r2);
+  final sl1_e2 = (-g1 + g2) * sqrtExpr + (-h1 * r1 + h1 * r2 + h2 * r1 - h2 * r2);
+  final sl1_O = (-g1 * h2 + g2 * h1) * sqrtExpr +
+                 (g1 * g1 * r2 - g1 * g2 * r1 - g1 * g2 * r2 + g2 * g2 * r1 +
+                  h1 * h1 * r2 - h1 * h2 * r1 - h1 * h2 * r2 + h2 * h2 * r1);
+
+
+  tangents.add(uniForm(Multivector(e1: sl1_e1, e2: sl1_e2, O: sl1_O)));
   
-  final tan1Point1 = constructFreePoint(
-    p1.e1 + radius1 * math.cos(tan1Angle),
-    p1.e2 + radius1 * math.sin(tan1Angle),
-  );
-  final tan1Point2 = constructFreePoint(
-    p2.e1 + radius2 * math.cos(tan1Angle),
-    p2.e2 + radius2 * math.sin(tan1Angle),
-  );
-  tangents.add(uniForm(constructLineFrom2Points(tan1Point1, tan1Point2)));
+  // Sl2: Second external tangent
+  // Simplified: (A*base + B*sqrtExpr) / (base*sqrtExpr) = A/sqrtExpr + B/base
+  // final sl2_e1 = (h1 - h2) * invSqrtExpr + (-g1 * r1 + g1 * r2 + g2 * r1 - g2 * r2) * invBase;
+  // final sl2_e2 = (-g1 + g2) * invSqrtExpr + (-h1 * r1 + h1 * r2 + h2 * r1 - h2 * r2) * invBase;
+  // final sl2_O = (-g1 * h2 + g2 * h1) * invSqrtExpr +
+  //                (g1 * g1 * r2 - g1 * g2 * r1 - g1 * g2 * r2 + g2 * g2 * r1 +
+  //                 h1 * h1 * r2 - h1 * h2 * r1 - h1 * h2 * r2 + h2 * h2 * r1) * invBase;
+
+  final sl2_e1 = (h1 - h2) * sqrtExpr - (-g1 * r1 + g1 * r2 + g2 * r1 - g2 * r2) ;
+  final sl2_e2 = (-g1 + g2) * sqrtExpr - (-h1 * r1 + h1 * r2 + h2 * r1 - h2 * r2) ;
+  final sl2_O = (-g1 * h2 + g2 * h1) * sqrtExpr -
+                 (g1 * g1 * r2 - g1 * g2 * r1 - g1 * g2 * r2 + g2 * g2 * r1 +
+                  h1 * h1 * r2 - h1 * h2 * r1 - h1 * h2 * r2 + h2 * h2 * r1);
   
-  // Tangent 2: radius angle = theta - beta (both circles use same angle)
-  final tan2Angle = theta - beta;
-  
-  final tan2Point1 = constructFreePoint(
-    p1.e1 + radius1 * math.cos(tan2Angle),
-    p1.e2 + radius1 * math.sin(tan2Angle),
-  );
-  final tan2Point2 = constructFreePoint(
-    p2.e1 + radius2 * math.cos(tan2Angle),
-    p2.e2 + radius2 * math.sin(tan2Angle),
-  );
-  tangents.add(uniForm(constructLineFrom2Points(tan2Point1, tan2Point2)));
+  tangents.add(uniForm(Multivector(e1: sl2_e1, e2: sl2_e2, O: sl2_O)));
   
   return tangents;
 }
 
 /// Compute 2 inner common tangents for two circles
+/// Uses algebraic formulas from geometric algebra calculations
+/// Sl3 and Sl4 are the two internal lines
 List<Multivector> _computeInnerTangents(
   Multivector circle1,
   Multivector circle2,
@@ -492,61 +439,64 @@ List<Multivector> _computeInnerTangents(
   final p1 = infForm(center1);
   final p2 = infForm(center2);
   
-  // Vector from center1 to center2
-  final dx = p2.e1 - p1.e1;
-  final dy = p2.e2 - p1.e2;
-  final d = math.sqrt(dx * dx + dy * dy);
+  // Extract circle parameters: g1, h1, r1 and g2, h2, r2
+  // Sc1 and Sc2 are the two circles or points
+  final g1 = p1.e1; // e_x is e1
+  final h1 = p1.e2; // e_y is e2
+  final r1 = radius1;
+  final g2 = p2.e1; // e_x is e1
+  final h2 = p2.e2; // e_y is e2
+  final r2 = radius2;
   
-  if (d < 1e-10) {
-    // Concentric circles - no common tangents
+  // Base expression for internal tangents
+  // base = g1^2 - 2*g1*g2 + g2^2 + h1^2 - 2*h1*h2 + h2^2 - r1^2 - 2*r1*r2 - r2^2
+  final base = g1 * g1 - 2 * g1 * g2 + g2 * g2 +
+               h1 * h1 - 2 * h1 * h2 + h2 * h2 -
+               r1 * r1 - 2 * r1 * r2 - r2 * r2;
+  
+  // Boundary condition: square root must be greater than zero
+  if (base <= 0) {
+    // No internal tangents (boundary condition not met)
     return [];
   }
   
-  // Angle of line connecting centers
-  final alpha = math.atan2(dy, dx);
+  final sqrtExpr = math.sqrt(base);
   
-  // For inner tangents, the tangent lines cross between the circles
-  final rSum = radius1 + radius2;
-  final sinTheta = rSum / d;
-  
-  if (sinTheta >= 1.0) {
-    // No inner tangents (circles are too close)
+  if (base.abs() < 1e-10) {
     return [];
   }
-  
-  final theta = math.asin(sinTheta);
-  
-  // Two inner tangent directions
-  final angle1 = alpha + (math.pi / 2 - theta);
-  final angle2 = alpha - (math.pi / 2 - theta);
   
   final tangents = <Multivector>[];
   
-  // Tangent 1
-  final tan1DirX = math.cos(angle1);
-  final tan1DirY = math.sin(angle1);
-  final tan1Point1 = constructFreePoint(
-    p1.e1 + radius1 * tan1DirX,
-    p1.e2 + radius1 * tan1DirY,
-  );
-  final tan1Point2 = constructFreePoint(
-    p2.e1 - radius2 * tan1DirX,
-    p2.e2 - radius2 * tan1DirY,
-  );
-  tangents.add(constructLineFrom2Points(tan1Point1, tan1Point2));
+  // If sqrtExpr is zero, return one line with sqrtExpr replaced by zero
+  if (sqrtExpr.abs() < 1e-10) {
+    // When sqrtExpr = 0, the formulas simplify to just the constant terms
+    final sl3_e1 = - (g1 * r1 + g1 * r2 - g2 * r1 - g2 * r2);
+    final sl3_e2 = - (h1 * r1 + h1 * r2 - h2 * r1 - h2 * r2);
+    final sl3_O = -(g1 * g1 * r2 + g1 * g2 * r1 - g1 * g2 * r2 - g2 * g2 * r1 +
+                  h1 * h1 * r2 + h1 * h2 * r1 - h1 * h2 * r2 - h2 * h2 * r1);
+    tangents.add(uniForm(Multivector(e1: sl3_e1, e2: sl3_e2, O: sl3_O)));
+    return tangents;
+  }
   
-  // Tangent 2
-  final tan2DirX = math.cos(angle2);
-  final tan2DirY = math.sin(angle2);
-  final tan2Point1 = constructFreePoint(
-    p1.e1 + radius1 * tan2DirX,
-    p1.e2 + radius1 * tan2DirY,
-  );
-  final tan2Point2 = constructFreePoint(
-    p2.e1 - radius2 * tan2DirX,
-    p2.e2 - radius2 * tan2DirY,
-  );
-  tangents.add(constructLineFrom2Points(tan2Point1, tan2Point2));
+  // Sl3: First internal tangent
+  final sl3_e1 = (h1 - h2) * sqrtExpr - (g1 * r1 + g1 * r2 - g2 * r1 - g2 * r2);
+  final sl3_e2 = (-g1 + g2) * sqrtExpr - (h1 * r1 + h1 * r2 - h2 * r1 - h2 * r2);
+  final sl3_O = (-g1 * h2 + g2 * h1) * sqrtExpr -
+                 (g1 * g1 * r2 + g1 * g2 * r1 - g1 * g2 * r2 - g2 * g2 * r1 +
+                  h1 * h1 * r2 + h1 * h2 * r1 - h1 * h2 * r2 - h2 * h2 * r1);
+  
+  tangents.add(uniForm(Multivector(e1: sl3_e1, e2: sl3_e2, O: sl3_O)));
+  
+  // Sl4: Second internal tangent
+  // Simplified: (-A*baseNeg + B*sqrtExpr) / (base*sqrtExpr) = -A*baseNegOverDenom + B/base
+  final sl4_e1 = (-h1 + h2) * sqrtExpr + (-g1 * r1 - g1 * r2 + g2 * r1 + g2 * r2) ;
+  final sl4_e2 = (g1 - g2) * sqrtExpr + (-h1 * r1 - h1 * r2 + h2 * r1 + h2 * r2) ;
+  final sl4_O = (g1 * h2 - g2 * h1) * sqrtExpr +
+                 (-g1 * g1 * r2 - g1 * g2 * r1 + g1 * g2 * r2 + g2 * g2 * r1 -
+                  h1 * h1 * r2 - h1 * h2 * r1 + h1 * h2 * r2 + h2 * h2 * r1) ;
+  
+  tangents.add(uniForm(Multivector(e1: sl4_e1, e2: sl4_e2, O: sl4_O)));
   
   return tangents;
 }

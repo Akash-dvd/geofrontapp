@@ -198,6 +198,14 @@ class TypeConstraint {
               return true;
             }
           }
+          // For GenSimpleGeometryObjectList, also check using 'is' operator
+          // This handles generic types like GeoTangentList, GeoAngleBisector2L correctly
+          // Check if GenSimpleGeometryObjectList is in the allowed types
+          if (allowedTypes.any((type) => type == GenSimpleGeometryObjectList)) {
+            if (value is GenSimpleGeometryObjectList) {
+              return true;
+            }
+          }
           return _matchesGeometryType(value.runtimeType, value.type);
         }
         if (value is Type) {

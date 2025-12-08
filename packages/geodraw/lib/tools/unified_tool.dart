@@ -197,10 +197,13 @@ abstract class UnifiedTool with ToolCallbacksMixin implements Tool {
     final marker = _historyMarker;
 
     try {
+      debugPrint('[UnifiedTool] _executeCommand: Executing $commandName with ${verifier.arguments.length} arguments');
       final result = await executor.execute(
         commandName: commandName,
         arguments: verifier.arguments,
       );
+
+      debugPrint('[UnifiedTool] _executeCommand: Result - success=${result.success}, message="${result.message}", object=${result.object?.runtimeType}');
 
       final entry = _buildHistoryEntry(
         arguments: argsSnapshot,
@@ -211,7 +214,10 @@ abstract class UnifiedTool with ToolCallbacksMixin implements Tool {
       if (result.success) {
         if (result.object is GeometryObject) {
           final geometry = result.object as GeometryObject;
+          debugPrint('[UnifiedTool] _executeCommand: Notifying object created: ${geometry.id}');
           notifyObjectCreated(geometry, geometry.dependencies);
+        } else {
+          debugPrint('[UnifiedTool] _executeCommand: Result object is not a GeometryObject: ${result.object?.runtimeType}');
         }
         notifyStateChanged(result.message);
         _recordHistory(entry, result);
@@ -219,6 +225,7 @@ abstract class UnifiedTool with ToolCallbacksMixin implements Tool {
         notifyObjectSelected('');
         _resetInternal(rollback: false);
       } else {
+        debugPrint('[UnifiedTool] _executeCommand: ❌ Execution failed: ${result.message}');
         _recordHistory(entry, result);
         // Clear selection highlights on error
         notifyObjectSelected('');

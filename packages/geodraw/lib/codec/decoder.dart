@@ -40,7 +40,8 @@ class GeoDrawDecoder {
 
     // Lines
     'GeoLine2P': (json, _) => GeoLine2P.fromJson(json),
-    'GeoLineFlex': (json, _) => GeoLineFlex.fromJson(json),
+    'GeoLineFlex': (json, _) => GeoLine2Sim.fromJson(json),
+    'GeoLine2Sim': (json, _) => GeoLine2Sim.fromJson(json),
     'GeoPerpendicularBisector': (json, _) =>
         GeoPerpendicularBisector.fromJson(json),
     'GeoPerpendicularBisectorFlex': (json, _) =>

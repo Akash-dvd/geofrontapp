@@ -11,6 +11,9 @@ import '../simple/geo_transformed_simple.dart';
 import '../complex/complex_geometry_object.dart';
 import '../complex/geo_shapes.dart';
 import '../complex/geo_transformed_complex.dart';
+import '../simple_lists/geo_tangent.dart';
+import '../simple_lists/geo_angle_bisector.dart';
+import '../simple_lists/geo_intersection.dart';
 
 /// Classification of the transformed simple object.
 enum SimpleTransformKind { point, line, circle }
@@ -200,6 +203,287 @@ class TransformationEngine {
     }
 
     return null;
+  }
+
+  /// Transform all objects in a GenSimpleGeometryObjectList
+  /// Returns a list of transformed geometry objects
+  static List<GeometryObject> transformSimpleList({
+    required GenSimpleGeometryObjectList source,
+    required GeoTrans transform,
+  }) {
+    final transformedObjects = <GeometryObject>[];
+    
+    for (final element in source.elements) {
+      final transformed = transformSimple(
+        source: element,
+        transform: transform,
+        id: '${element.id}_${transform.id}',
+        label: element.label,
+        dependencies: element.dependencies,
+        visible: element.visible,
+        styleOverrides: element.styleOverrides,
+      );
+      
+      if (transformed != null) {
+        transformedObjects.add(transformed);
+      } else {
+        // If transformation failed, keep original
+        transformedObjects.add(element);
+      }
+    }
+    
+    return transformedObjects;
+  }
+
+  /// Transform any GeometryObject with a GeoTrans transform
+  /// Returns the transformed geometry object, or null if transformation is not supported
+  static GeometryObject? transform({
+    required GeometryObject source,
+    required GeoTrans transform,
+    required String id,
+    required String label,
+    required List<String> dependencies,
+    bool? visible,
+    Map<String, dynamic>? styleOverrides,
+  }) {
+    // Simple geometry objects
+    if (source is SimpleGeometryObject) {
+      return transformSimple(
+        source: source,
+        transform: transform,
+        id: id,
+        label: label,
+        dependencies: dependencies,
+        visible: visible,
+        styleOverrides: styleOverrides,
+      );
+    }
+
+    // Complex geometry objects
+    if (source is ComplexGeometryObject) {
+      return transformComplex(
+        source: source,
+        transform: transform,
+        id: id,
+        label: label,
+        dependencies: dependencies,
+        visible: visible,
+        styleOverrides: styleOverrides,
+      );
+    }
+
+    // GenSimpleGeometryObjectList (now extends UnionGeometryObjectList)
+    // Check this first since it's more specific
+    if (source is GenSimpleGeometryObjectList) {
+      return transformGenSimpleList(
+        source: source,
+        transform: transform,
+        id: id,
+        label: label,
+        dependencies: dependencies,
+        visible: visible,
+        styleOverrides: styleOverrides,
+      );
+    }
+
+    // Union geometry object list (general case, after GenSimpleGeometryObjectList)
+    if (source is UnionGeometryObjectList) {
+      final elements = transformUnionElements(source, transform);
+      return GeoTransUnionGeometryObjectList(
+        id: id,
+        label: label,
+        dependencies: dependencies,
+        elements: elements,
+        sourceObjectId: source.id,
+        transformId: transform.id,
+        vertexCountValue: source.vertexCount,
+        areaValue: source.area(),
+        perimeterValue: source.perimeter(),
+        visible: visible ?? source.visible,
+        styleOverrides: styleOverrides ?? source.styleOverrides,
+      );
+    }
+
+    return null;
+  }
+
+  /// Transform a GenSimpleGeometryObjectList, preserving structure for specific types
+  /// Since GenSimpleGeometryObjectList now extends UnionGeometryObjectList,
+  /// we can use the same transformation logic but need to check type compatibility
+  static GeometryObject? transformGenSimpleList({
+    required GenSimpleGeometryObjectList source,
+    required GeoTrans transform,
+    required String id,
+    required String label,
+    required List<String> dependencies,
+    bool? visible,
+    Map<String, dynamic>? styleOverrides,
+  }) {
+    // Transform all objects in the list
+    final transformedObjects = transformSimpleList(
+      source: source,
+      transform: transform,
+    );
+
+    // Check if all transformed objects match the expected type for the container
+    // If not, convert to UnionGeometryObjectList (which GenSimpleGeometryObjectList already is)
+    bool allMatchExpectedType = true;
+    Type? expectedType;
+    
+    if (source is GeoTangentList || source is GeoAngleBisector2L) {
+      expectedType = GeoLine;
+      allMatchExpectedType = transformedObjects.every((obj) => obj is GeoLine);
+    } else if (source is GeoIntersection) {
+      expectedType = GeoPoint;
+      allMatchExpectedType = transformedObjects.every((obj) => obj is GeoPoint);
+    }
+    
+    // If types don't match, return as UnionGeometryObjectList (which GenSimpleGeometryObjectList extends)
+    // This preserves all transformed objects regardless of type
+    if (!allMatchExpectedType) {
+      debugPrint('[TransformationEngine] Transformed objects don\'t all match expected type $expectedType, returning as UnionGeometryObjectList');
+      return GeoTransUnionGeometryObjectList(
+        id: id,
+        label: label,
+        dependencies: dependencies,
+        elements: transformedObjects,
+        sourceObjectId: source.id,
+        transformId: transform.id,
+        vertexCountValue: source.elements.length,
+        areaValue: 0.0, // Union doesn't have area
+        perimeterValue: 0.0, // Union doesn't have perimeter
+        visible: visible ?? source.visible,
+        styleOverrides: styleOverrides ?? source.styleOverrides,
+      );
+    }
+    
+    // For GeoTangentList and GeoAngleBisector2L, use unified objects array approach
+    // The transformedObjects array already preserves the structure:
+    // - GeoTangentList: objects[0,1] = external, objects[2,3] = internal
+    // - GeoAngleBisector2L: objects[0,1] = internal, objects[2,3] = external
+    // Just pass the transformed objects array directly
+    if (source is GeoTangentList || source is GeoAngleBisector2L) {
+      return (source as dynamic).copyWith(
+        id: id,
+        label: label,
+        dependencies: dependencies,
+        objects: transformedObjects.cast<GeoLine>(),
+        visible: visible ?? source.visible,
+        styleOverrides: styleOverrides ?? source.styleOverrides,
+      ) as GeometryObject;
+    }
+
+    // For GeoIntersection, transform all points in the intersection list
+    if (source is GeoIntersection) {
+      return source.copyWith(
+        id: id,
+        label: label,
+        dependencies: dependencies,
+        objects: transformedObjects.cast<GeoPoint>(),
+        visible: visible ?? source.visible,
+        styleOverrides: styleOverrides ?? source.styleOverrides,
+      );
+    }
+
+    // For other GenSimpleGeometryObjectList types, return null
+    // They should handle transformation through rebuildFromParents or have specific handlers above
+    debugPrint('[TransformationEngine] No specific handler for GenSimpleGeometryObjectList type: ${source.runtimeType}');
+    return null;
+  }
+
+  /// Transform all elements in a UnionGeometryObjectList
+  /// Handles simple, complex, GenSimpleGeometryObjectList, and nested union elements
+  static List<GeometryObject> transformUnionElements(
+    UnionGeometryObjectList source,
+    GeoTrans transform,
+  ) {
+    final transformedElements = <GeometryObject>[];
+
+    for (final element in source.elements.cast<GeometryObject>()) {
+      if (element is SimpleGeometryObject) {
+        final simpleResult = transformSimple(
+          source: element,
+          transform: transform,
+          id: '${element.id}_${transform.id}_point',
+          label: element.label,
+          dependencies: element.dependencies,
+          visible: element.visible,
+          styleOverrides: element.styleOverrides,
+        );
+
+        if (simpleResult != null) {
+          transformedElements.add(simpleResult);
+        } else {
+          transformedElements.add(element);
+        }
+        continue;
+      }
+
+      if (element is GeoSegment || element is GeoArc) {
+        final transformedId = '${element.id}_${transform.id}_trans';
+        final complexResult = transformComplex(
+          source: element as ComplexGeometryObject,
+          transform: transform,
+          id: transformedId,
+          label: element.label,
+          dependencies: element.dependencies,
+          visible: element.visible,
+          styleOverrides: element.styleOverrides,
+        );
+
+        if (complexResult != null) {
+          transformedElements.add(complexResult);
+        } else {
+          transformedElements.add(element);
+        }
+        continue;
+      }
+
+      // Handle GenSimpleGeometryObjectList elements in union
+      if (element is GenSimpleGeometryObjectList) {
+        final transformed = transformGenSimpleList(
+          source: element,
+          transform: transform,
+          id: '${element.id}_${transform.id}',
+          label: element.label,
+          dependencies: element.dependencies,
+          visible: element.visible,
+          styleOverrides: element.styleOverrides,
+        );
+
+        if (transformed != null) {
+          transformedElements.add(transformed);
+        } else {
+          transformedElements.add(element);
+        }
+        continue;
+      }
+
+      // Handle nested UnionGeometryObjectList elements
+      if (element is UnionGeometryObjectList) {
+        final nestedElements = transformUnionElements(element, transform);
+        final label = '${element.id}_${transform.id}';
+        transformedElements.add(GeoTransUnionGeometryObjectList(
+          id: label,
+          label: element.label,
+          dependencies: element.dependencies,
+          elements: nestedElements,
+          sourceObjectId: element.id,
+          transformId: transform.id,
+          vertexCountValue: element.vertexCount,
+          areaValue: element.area(),
+          perimeterValue: element.perimeter(),
+          visible: element.visible,
+          styleOverrides: element.styleOverrides,
+        ));
+        continue;
+      }
+
+      // Fallback: add element unchanged
+      transformedElements.add(element);
+    }
+
+    return transformedElements;
   }
 
   static GeometryObject? _transformSegment({

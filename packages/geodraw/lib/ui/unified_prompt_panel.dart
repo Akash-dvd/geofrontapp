@@ -443,8 +443,10 @@ class _UnifiedPromptPanelState extends State<UnifiedPromptPanel> {
     });
 
     try {
-      final response = await widget.aiService!.generateCommands(
+      // Use context-aware method to include existing objects, labels, and canvas info
+      final response = await widget.aiService!.generateCommandsWithContext(
         prompt,
+        widget.dagManager,
       );
 
       if (!response.isSuccess) {

@@ -7,6 +7,8 @@ import '../core/command/command_history_entry.dart';
 import '../core/command/simple_executor.dart';
 import '../core/dag/dag_manager.dart';
 import '../models/complex/complex_geometry_object.dart';
+import '../models/geometry_object.dart';
+import '../models/simple/geo_point.dart';
 import 'tool.dart';
 import 'tool_verifier.dart';
 
@@ -57,6 +59,26 @@ abstract class IncrementalUnionTool<T extends UnionGeometryObjectList>
   String extensionPrompt(int newInputCount);
   String? validateNextInput(List<dynamic> currentInputs, dynamic candidate) =>
       null;
+
+  /// Select an object directly (used when object is selected from menu/dropdown)
+  /// This allows selecting pre-existing points for union construction
+  void selectObject(GeometryObject object) {
+    if (object is! GeoPoint) {
+      notifyStateChanged('This tool requires point selection');
+      return;
+    }
+
+    _startTransactionIfNeeded();
+
+    final message = validateNextInput(_inputs, object);
+    if (message != null) {
+      notifyStateChanged(message);
+      return;
+    }
+
+    _inputs.add(object);
+    _evaluateInputs();
+  }
 
   @override
   void handleInput(PointerEvent event) {

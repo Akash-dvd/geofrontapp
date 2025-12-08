@@ -12,40 +12,54 @@ import '../simple/geo_circle.dart';
 import 'simple_list_utils.dart';
 import '../../core/dag/dag_manager.dart';
 import '../../core/label_manager.dart';
+import '../transforms/geo_trans.dart';
+import '../transforms/transformation_engine.dart';
 
 /// List of tangent lines constructed from point/circle inputs.
 class GeoTangentList extends GenSimpleGeometryObjectList<GeoLine> {
-  final List<GeoLine> _externalTangents;
-  final List<GeoLine> _internalTangents;
+  // Store counts for enumerator computation
+  final int _externalCount;
+  final int _internalCount;
   // Store preserved labels to maintain them even when tangents go to 0
   final List<String>? _preservedExternalLabels;
   final List<String>? _preservedInternalLabels;
 
   GeoTangentList({
-    required super.id,
-    required super.label,
-    required super.dependencies,
-    List<GeoLine> externalTangents = const [],
-    List<GeoLine> internalTangents = const [],
+    required String id,
+    required String label,
+    required List<String> dependencies,
+    List<GeoLine>? objects,
+    List<GeoLine>? externalTangents,
+    List<GeoLine>? internalTangents,
     List<String>? preservedExternalLabels,
     List<String>? preservedInternalLabels,
     Color color = Colors.pink,
-    super.visible,
+    bool? visible,
     CanvasStyle? style,
     Map<String, dynamic>? styleOverrides,
   }) : assert(
          dependencies.length == 2,
          'GeoTangentList requires exactly 2 object dependencies',
        ),
-       _externalTangents = List<GeoLine>.unmodifiable(externalTangents),
-       _internalTangents = List<GeoLine>.unmodifiable(internalTangents),
+       // If objects provided, compute counts from array indices
+       // objects[0,1] = externalTangents, objects[2,3] = internalTangents
+       _externalCount = objects != null
+           ? (objects.length >= 2 ? 2 : objects.length)
+           : (externalTangents?.length ?? 0),
+       _internalCount = objects != null
+           ? (objects.length > 2 ? (objects.length >= 4 ? 2 : objects.length - 2) : 0)
+           : (internalTangents?.length ?? 0),
        _preservedExternalLabels = preservedExternalLabels,
        _preservedInternalLabels = preservedInternalLabels,
        super(
-         objects: List<GeoLine>.unmodifiable([
-           ...externalTangents,
-           ...internalTangents,
+         id: id,
+         label: label,
+         dependencies: dependencies,
+         objects: objects ?? List<GeoLine>.unmodifiable([
+           ...(externalTangents ?? []),
+           ...(internalTangents ?? []),
          ]),
+         visible: visible,
          styleOverrides: styleOverridesForType(
            type: GeoTangentList,
            style: style,
@@ -97,12 +111,17 @@ class GeoTangentList extends GenSimpleGeometryObjectList<GeoLine> {
         ? computation.internalTangents.map((e) => e.id).toList()
         : null;
 
+    // Construct objects array: [externalTangents (0,1), internalTangents (2,3)]
+    final allObjects = [
+      ...computation.externalTangents,
+      ...computation.internalTangents,
+    ];
+    
     return GeoTangentList(
       id: id,
       label: label,
       dependencies: [first.id, second.id],
-      externalTangents: computation.externalTangents,
-      internalTangents: computation.internalTangents,
+      objects: allObjects,
       preservedExternalLabels: preservedExternalLabels,
       preservedInternalLabels: preservedInternalLabels,
       color: color,
@@ -112,11 +131,14 @@ class GeoTangentList extends GenSimpleGeometryObjectList<GeoLine> {
     );
   }
 
-  List<GeoLine> get externalTangents => _externalTangents;
+  // Enumerators: computed from objects array
+  // objects[0,1] = externalTangents
+  List<GeoLine> get externalTangents => objects.take(_externalCount).toList();
 
-  List<GeoLine> get internalTangents => _internalTangents;
+  // elements[2,3] = internalTangents
+  List<GeoLine> get internalTangents => elements.skip(_externalCount).take(_internalCount).toList();
 
-  bool get hasTangents => objects.isNotEmpty;
+  bool get hasTangents => elements.isNotEmpty;
 
   @override
   String get type => 'GeoTangentList';
@@ -125,8 +147,8 @@ class GeoTangentList extends GenSimpleGeometryObjectList<GeoLine> {
   Map<String, dynamic> toJson() {
     final json = super.toJson();
     json['properties'] = {
-      'externalCount': _externalTangents.length,
-      'internalCount': _internalTangents.length,
+      'externalCount': _externalCount,
+      'internalCount': _internalCount,
       if (_preservedExternalLabels != null)
         'preservedExternalLabels': _preservedExternalLabels,
       if (_preservedInternalLabels != null)
@@ -141,7 +163,8 @@ class GeoTangentList extends GenSimpleGeometryObjectList<GeoLine> {
         (json['properties'] as Map<String, dynamic>?) ?? const {};
     final externalCount = (properties['externalCount'] as num?)?.toInt() ?? 0;
     final internalCount = (properties['internalCount'] as num?)?.toInt() ?? 0;
-    final objectsJson = (json['objects'] as List?) ?? const [];
+    // Support both 'objects' (backward compatibility) and 'elements' (new format)
+    final objectsJson = (json['objects'] as List?) ?? (json['elements'] as List?) ?? const [];
     final lines = <GeoLine>[];
 
     for (final entry in objectsJson) {
@@ -155,11 +178,11 @@ class GeoTangentList extends GenSimpleGeometryObjectList<GeoLine> {
       }
     }
 
-    final externalTangents = lines.take(externalCount).toList(growable: false);
-    final internalTangents = lines
-        .skip(externalCount)
-        .take(internalCount)
-        .toList(growable: false);
+    // Construct objects array from decoded lines
+    final allObjects = [
+      ...lines.take(externalCount),
+      ...lines.skip(externalCount).take(internalCount),
+    ];
 
     final defaults = CanvasStyleDefaults.instance.resolveForType(GeoTangentList);
     final overrides = styleOverridesFromJson(json);
@@ -168,8 +191,7 @@ class GeoTangentList extends GenSimpleGeometryObjectList<GeoLine> {
       id: json['id'] as String,
       label: (json['label'] as String?) ?? '',
       dependencies: deps,
-      externalTangents: externalTangents,
-      internalTangents: internalTangents,
+      objects: allObjects,
       visible: json['visible'] as bool? ?? true,
       color: defaults.strokeColor,
       styleOverrides: overrides,
@@ -181,6 +203,8 @@ class GeoTangentList extends GenSimpleGeometryObjectList<GeoLine> {
     String? id,
     String? label,
     List<String>? dependencies,
+    List<GeoLine>? objects,
+    List<GeometryObject>? elementsAny,
     List<GeoLine>? externalTangents,
     List<GeoLine>? internalTangents,
     List<String>? preservedExternalLabels,
@@ -199,12 +223,24 @@ class GeoTangentList extends GenSimpleGeometryObjectList<GeoLine> {
             : null);
     final resolvedOverrides = candidateOverrides ?? this.styleOverrides;
 
+    // Support both objects (backward compatibility) and elementsAny (unified API)
+    // If objects provided, use it; otherwise use elementsAny; otherwise construct from separate lists or keep current
+    final updatedObjects = objects ?? 
+        (elementsAny?.cast<GeoLine>()) ??
+        (externalTangents != null || internalTangents != null
+            ? [
+                ...(externalTangents ?? this.externalTangents),
+                ...(internalTangents ?? this.internalTangents),
+              ]
+            : null);
+
     return GeoTangentList(
       id: id ?? this.id,
       label: label ?? this.label,
       dependencies: dependencies ?? this.dependencies,
-      externalTangents: externalTangents ?? _externalTangents,
-      internalTangents: internalTangents ?? _internalTangents,
+      objects: updatedObjects,
+      externalTangents: externalTangents,
+      internalTangents: internalTangents,
       preservedExternalLabels: preservedExternalLabels ?? _preservedExternalLabels,
       preservedInternalLabels: preservedInternalLabels ?? _preservedInternalLabels,
       visible: visible ?? this.visible,
@@ -231,6 +267,51 @@ class GeoTangentList extends GenSimpleGeometryObjectList<GeoLine> {
     
     final first = firstObj;
     final second = secondObj;
+    
+    // Check if this is a transformed tangent list (one dependency is a transform)
+    // Transformed tangent lists have dependencies [originalTangentList.id, transform.id]
+    GeoTrans? transform;
+    GeometryObject? originalTangentList;
+    
+    if (first is GeoTrans && second is GeoTangentList) {
+      transform = first;
+      originalTangentList = second;
+    } else if (second is GeoTrans && first is GeoTangentList) {
+      transform = second;
+      originalTangentList = first;
+    }
+    
+    // If this is a transformed tangent list, rebuild by transforming the original
+    if (transform != null && originalTangentList != null) {
+      // Get the current state of the original tangent list from the DAG
+      // (it may have been rebuilt already by propagateUpdates)
+      final originalNode = dagManager.getNode(originalTangentList.id);
+      if (originalNode != null) {
+        final currentOriginal = originalNode.object;
+        if (currentOriginal is GeometryObject) {
+          originalTangentList = currentOriginal;
+        }
+      }
+      
+      // Transform the original tangent list
+      final transformed = TransformationEngine.transform(
+        source: originalTangentList,
+        transform: transform,
+        id: id,
+        label: label,
+        dependencies: dependencies,
+        visible: visible,
+        styleOverrides: styleOverrides,
+      );
+      
+      if (transformed is GeoTangentList) {
+        return transformed;
+      }
+      
+      // If transformation failed, return null (will cause object to disappear)
+      debugPrint('[GeoTangentList] Failed to transform original tangent list');
+      return null;
+    }
 
     if (!_isValidTangentInput(first) || !_isValidTangentInput(second)) {
       return null;

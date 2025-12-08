@@ -8,7 +8,6 @@ import '../../core/dag/dag_manager.dart';
 import 'geo_line.dart';
 import 'geo_circle.dart';
 import '../complex/geo_shapes.dart';
-import '../complex/complex_geometry_object.dart';
 
 /// Abstract base class for all point types
 abstract class GeoPoint extends SimpleGeometryObject {
@@ -419,7 +418,8 @@ class GeoGliderPoint extends GeoPoint {
     final newInitialX = initialX ?? _initialX;
     final newInitialY = initialY ?? _initialY;
     
-    return GeoGliderPoint(
+    // If multivector is provided, use it; otherwise use the default from initialX/initialY
+    final point = GeoGliderPoint(
       id: id ?? this.id,
       label: label ?? this.label,
       objectId: newObjectId,
@@ -428,7 +428,46 @@ class GeoGliderPoint extends GeoPoint {
       visible: visible ?? this.visible,
       styleOverrides: overrides,
     );
+    
+    // If multivector was provided, we need to override it
+    // Since multivector is final, we need to create a new instance with it
+    if (multivector != null) {
+      return GeoGliderPoint._withMultivector(
+        id: point.id,
+        label: point.label,
+        objectId: point.objectId,
+        initialX: point._initialX,
+        initialY: point._initialY,
+        multivector: multivector,
+        visible: point.visible,
+        styleOverrides: point.styleOverrides,
+      );
+    }
+    
+    return point;
   }
+  
+  // Private constructor that allows setting multivector directly
+  GeoGliderPoint._withMultivector({
+    required String id,
+    required String label,
+    required String objectId,
+    required double initialX,
+    required double initialY,
+    required Multivector multivector,
+    bool visible = true,
+    Map<String, dynamic>? styleOverrides,
+  }) : objectId = objectId,
+       _initialX = initialX,
+       _initialY = initialY,
+       super(
+         id: id,
+         label: label,
+         dependencies: [objectId],
+         multivector: multivector,
+         visible: visible,
+         styleOverrides: styleOverrides,
+       );
 
   @override
   String get type => 'GeoGliderPoint';
@@ -485,7 +524,15 @@ class GeoGliderPoint extends GeoPoint {
     // Use dagManager.getObject() - handles both regular objects and objects in containers
     final objectObj = dagManager.getObject(objectId);
     if (objectObj is! GeometryObject) {
-      return null;
+      // Object doesn't exist - convert to free point at initial position
+      return GeoPointer(
+        id: id,
+        label: label,
+        x: _initialX,
+        y: _initialY,
+        visible: visible,
+        styleOverrides: styleOverrides,
+      );
     }
     final object = objectObj;
 
@@ -514,27 +561,54 @@ class GeoGliderPoint extends GeoPoint {
         counterClockwise,
       );
       if (proj == null) {
-        return null;
+        // Projection failed - convert to free point at initial position
+        return GeoPointer(
+          id: id,
+          label: label,
+          x: _initialX,
+          y: _initialY,
+          visible: visible,
+          styleOverrides: styleOverrides,
+        );
       }
       projectedPoint = proj;
     } else if (object is UnionGeometryObjectList) {
       // For union objects, find the nearest point across all elements
       projectedPoint = _projectPointToUnion(initialPoint, object);
       if (projectedPoint == null) {
-        return null;
+        // Projection failed - convert to free point at initial position
+        return GeoPointer(
+          id: id,
+          label: label,
+          x: _initialX,
+          y: _initialY,
+          visible: visible,
+          styleOverrides: styleOverrides,
+        );
       }
     }
 
     if (projectedPoint == null) {
-      return null;
+      // Projection failed for unknown object type - convert to free point at initial position
+      return GeoPointer(
+        id: id,
+        label: label,
+        x: _initialX,
+        y: _initialY,
+        visible: visible,
+        styleOverrides: styleOverrides,
+      );
     }
 
-    return GeoGliderPoint(
+    // Create GeoGliderPoint with projected position as multivector
+    // Use the private constructor that allows setting multivector directly
+    return GeoGliderPoint._withMultivector(
       id: id,
       label: label,
       objectId: objectId,
       initialX: _initialX,
       initialY: _initialY,
+      multivector: projectedPoint,
       visible: visible,
       styleOverrides: styleOverrides,
     );

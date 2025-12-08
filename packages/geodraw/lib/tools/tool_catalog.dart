@@ -53,24 +53,6 @@ enum ToolPaletteLevel { level1, level2, level3 }
 
 // Placeholder entries for non-implemented tools (those without ToolType)
 // Implemented tools are defined in ToolRegistry and queried dynamically
-const ToolCatalogEntry _eraserTool = ToolCatalogEntry(
-  id: 'eraser',
-  label: 'Eraser',
-  icon: Icons.auto_fix_off,
-  assetIcon: 'assets/tool_icons/delete.svg',
-  command: 'Delete[]',
-  implemented: false,
-);
-
-const ToolCatalogEntry _deleteTool = ToolCatalogEntry(
-  id: 'delete',
-  label: 'Delete',
-  icon: Icons.delete_outline,
-  assetIcon: 'assets/tool_icons/delete.svg',
-  command: 'Delete[]',
-  implemented: false,
-);
-
 const ToolCatalogEntry _copyTool = ToolCatalogEntry(
   id: 'copy',
   label: 'Copy',
@@ -291,8 +273,8 @@ const List<_ToolGroupDefinition> _level1GroupDefinitions = [
       ToolType.polygon,
       ToolType.polyArc,
       ToolType.circle,
+      ToolType.delete,
     ],
-    placeholders: [_eraserTool],
   ),
 ];
 
@@ -308,13 +290,13 @@ const List<_ToolGroupDefinition> _level2GroupDefinitions = [
       ToolType.polygon,
       ToolType.polyArc,
       ToolType.circle,
+      ToolType.delete,
     ],
-    placeholders: [_eraserTool],
   ),
   _ToolGroupDefinition(
     name: 'Edit Tools',
-    toolTypes: [ToolType.select],
-    placeholders: [_deleteTool, _copyTool, _redefineTool],
+    toolTypes: [ToolType.select, ToolType.delete],
+    placeholders: [_copyTool, _redefineTool],
   ),
   _ToolGroupDefinition(
     name: 'Construct Tools',
@@ -384,12 +366,13 @@ const List<_ToolGroupDefinition> _level3GroupDefinitions = [
       ToolType.line,
       ToolType.polygon,
       ToolType.circle,
+      ToolType.delete,
     ],
   ),
   _ToolGroupDefinition(
     name: 'Edit Tools',
-    toolTypes: [ToolType.select],
-    placeholders: [_deleteTool, _redefineTool, _copyTool],
+    toolTypes: [ToolType.select, ToolType.delete],
+    placeholders: [_redefineTool, _copyTool],
   ),
   _ToolGroupDefinition(
     name: 'Construct Tools',
@@ -492,6 +475,7 @@ const List<_ToolGroupDefinition> _level3GroupDefinitions = [
     name: 'Other / Advanced',
     toolTypes: [
       ToolType.alcbc,
+      ToolType.union,
     ],
     placeholders: [
       _locusTool,

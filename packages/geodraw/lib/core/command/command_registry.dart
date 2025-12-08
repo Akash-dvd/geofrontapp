@@ -14,7 +14,6 @@ import '../../models/geometry_object.dart';
 import '../../models/simple/geo_point.dart';
 import '../../models/simple/geo_line.dart';
 import '../../models/simple/geo_circle.dart';
-import '../../models/simple/geo_Inf.dart';
 import '../../models/simple/geo_flex.dart';
 import '../../models/transforms/geo_trans.dart';
 import '../../models/simple/geo_transformed_simple.dart';
@@ -66,7 +65,6 @@ class CommandRegistry {
                   GeoSegment,
                   GeoArc,
                   UnionGeometryObjectList,
-                  GenSimpleGeometryObjectList,
                 },
                 description: 'Object to glide on',
               ),
@@ -150,6 +148,7 @@ class CommandRegistry {
               );
             } else if (object is UnionGeometryObjectList) {
               // Use first element's position
+              // Note: GenSimpleGeometryObjectList extends UnionGeometryObjectList, so this covers both
               if (object.elements.isNotEmpty) {
                 final firstElement = object.elements.first;
                 if (firstElement is GeoPoint) {
@@ -161,20 +160,6 @@ class CommandRegistry {
                 }
               } else {
                 return ExecutionResult.error('Union object has no elements');
-              }
-            } else if (object is GenSimpleGeometryObjectList) {
-              // Use first element's position
-              if (object.objects.isNotEmpty) {
-                final firstElement = object.objects.first;
-                if (firstElement is GeoPoint) {
-                  initialPosition = firstElement.position;
-                } else {
-                  // Fallback to center of bounds
-                  final bounds = object.getBounds();
-                  initialPosition = bounds.center;
-                }
-              } else {
-                return ExecutionResult.error('List object has no elements');
               }
             } else {
               // Fallback to center of bounds
@@ -1518,7 +1503,7 @@ class CommandRegistry {
 
           context.dagManager.addObject(tangent, tangent.dependencies);
 
-          final count = tangent.objects.length;
+          final count = tangent.elements.length;
           final message = count == 0
               ? 'Created ${tangent.label} (no tangents yet)'
               : 'Created ${tangent.label} with $count tangent${count == 1 ? '' : 's'}';
@@ -1635,7 +1620,7 @@ class CommandRegistry {
 
               context.dagManager.addObject(bisectors, bisectors.dependencies);
 
-              final count = bisectors.objects.length;
+              final count = bisectors.elements.length;
               final message = count == 0
                   ? 'Created ${bisectors.label} (no bisectors yet)'
                   : 'Created ${bisectors.label} with $count bisector${count == 1 ? '' : 's'}';
@@ -2200,9 +2185,89 @@ class CommandRegistry {
           GeoIntersection intersection;
 
           try {
-            // Handle Union × Union case first
+            // Handle GenSimpleGeometryObjectList × GenSimpleGeometryObjectList case first
+            // (More specific than Union, so check before Union cases)
+            if (sortedFirst is GenSimpleGeometryObjectList && 
+                sortedSecond is GenSimpleGeometryObjectList) {
+              intersection = GeoIntersection.simpleListWithSimpleList(
+                id: containerLabel,
+                label: containerLabel,
+                simpleList1: sortedFirst,
+                simpleList2: sortedSecond,
+                dagManager: context.dagManager,
+              );
+            }
+            // Handle GenSimpleGeometryObjectList × Union cases
+            // Note: GenSimpleGeometryObjectList extends UnionGeometryObjectList, so we check for
+            // non-GenSimpleGeometryObjectList UnionGeometryObjectList (like GeoPolygon, GeoPolyLine)
+            else if (sortedFirst is GenSimpleGeometryObjectList && 
+                     sortedSecond is UnionGeometryObjectList &&
+                     !(sortedSecond is GenSimpleGeometryObjectList)) {
+              intersection = GeoIntersection.simpleListWithUnion(
+                id: containerLabel,
+                label: containerLabel,
+                simpleList: sortedFirst,
+                union: sortedSecond,
+                dagManager: context.dagManager,
+              );
+            } else if (sortedFirst is UnionGeometryObjectList &&
+                       !(sortedFirst is GenSimpleGeometryObjectList) &&
+                       sortedSecond is GenSimpleGeometryObjectList) {
+              intersection = GeoIntersection.simpleListWithUnion(
+                id: containerLabel,
+                label: containerLabel,
+                simpleList: sortedSecond,
+                union: sortedFirst,
+                dagManager: context.dagManager,
+              );
+            }
+            // Handle GenSimpleGeometryObjectList × Simple cases
+            // Check before Union × Object to ensure correct routing
+            else if (sortedFirst is GenSimpleGeometryObjectList && 
+                     (sortedSecond is GeoLine || sortedSecond is GeoCircle || sortedSecond is GeoPoint)) {
+              intersection = GeoIntersection.simpleListWithObject(
+                id: containerLabel,
+                label: containerLabel,
+                simpleList: sortedFirst,
+                other: sortedSecond,
+                dagManager: context.dagManager,
+              );
+            } else if (sortedSecond is GenSimpleGeometryObjectList && 
+                       (sortedFirst is GeoLine || sortedFirst is GeoCircle || sortedFirst is GeoPoint)) {
+              intersection = GeoIntersection.simpleListWithObject(
+                id: containerLabel,
+                label: containerLabel,
+                simpleList: sortedSecond,
+                other: sortedFirst,
+                dagManager: context.dagManager,
+              );
+            }
+            // Handle GenSimpleGeometryObjectList × Complex cases
+            // Check before Union × Object to ensure correct routing
+            else if (sortedFirst is GenSimpleGeometryObjectList && 
+                     (sortedSecond is GeoSegment || sortedSecond is GeoArc)) {
+              intersection = GeoIntersection.simpleListWithObject(
+                id: containerLabel,
+                label: containerLabel,
+                simpleList: sortedFirst,
+                other: sortedSecond,
+                dagManager: context.dagManager,
+              );
+            } else if (sortedSecond is GenSimpleGeometryObjectList && 
+                       (sortedFirst is GeoSegment || sortedFirst is GeoArc)) {
+              intersection = GeoIntersection.simpleListWithObject(
+                id: containerLabel,
+                label: containerLabel,
+                simpleList: sortedSecond,
+                other: sortedFirst,
+                dagManager: context.dagManager,
+              );
+            }
+            // Handle Union × Union case
             // Use sorted order for consistent element IDs
-            if (sortedFirst is UnionGeometryObjectList && sortedSecond is UnionGeometryObjectList) {
+            // Note: This catches UnionGeometryObjectList × UnionGeometryObjectList cases
+            // that weren't already handled by GenSimpleGeometryObjectList checks above
+            else if (sortedFirst is UnionGeometryObjectList && sortedSecond is UnionGeometryObjectList) {
               intersection = GeoIntersection.unionWithUnion(
                 id: containerLabel,
                 label: containerLabel,
@@ -2213,6 +2278,8 @@ class CommandRegistry {
             }
             // Handle Union × Object cases
             // Use sorted order for consistent element IDs
+            // Note: This catches UnionGeometryObjectList × Object cases that weren't
+            // already handled by GenSimpleGeometryObjectList checks above
             else if (sortedFirst is UnionGeometryObjectList) {
               intersection = GeoIntersection.unionWithObject(
                 id: containerLabel,
@@ -2381,7 +2448,7 @@ class CommandRegistry {
 
             context.dagManager.addObject(intersection, intersection.dependencies);
 
-            final count = intersection.objects.length;
+            final count = intersection.elements.length;
             final message = count == 0
                 ? 'Created ${intersection.label} (no intersections found)'
                 : 'Created ${intersection.label} with $count intersection${count == 1 ? '' : 's'}';
@@ -2571,7 +2638,7 @@ class CommandRegistry {
                   context.dagManager,
                   GeometryObjectType.line,
                 );
-          final line = GeoLineFlex.fromDependencies(
+          final line = GeoLine2Sim.fromDependencies(
             id: label, // In new system: ID = label
             label: label,
             objects: [obj1, obj2],
@@ -3038,11 +3105,11 @@ class CommandRegistry {
             );
 
             context.dagManager.addObject(tangentList, [obj1.id, obj2.id]);
-            debugPrint('[TangentsCommand] Created GeoTangentList ${tangentList.id} with ${tangentList.objects.length} tangent(s)');
+            debugPrint('[TangentsCommand] Created GeoTangentList ${tangentList.id} with ${tangentList.elements.length} tangent(s)');
 
             return ExecutionResult.successful(
               objectId: tangentList.id,
-              message: 'Created ${tangentList.objects.length} tangent line(s)',
+              message: 'Created ${tangentList.elements.length} tangent line(s)',
               object: tangentList,
             );
           } catch (e, stackTrace) {
@@ -3154,6 +3221,8 @@ class CommandRegistry {
               : '';
 
           try {
+            debugPrint('[alcbc Command] Starting execution with objects: ${obj1.id}, ${obj2.id}, ${obj3.id}');
+            
             // Use GeoALCbc.fromDependencies to determine result type automatically
             // Output type is not known beforehand - can be point, line, circle, or infinity
             final label = providedLabel.isNotEmpty
@@ -3163,24 +3232,34 @@ class CommandRegistry {
                     GeometryObjectType.line, // Default type, will be adjusted by GeoALCbc
                   );
 
+            debugPrint('[alcbc Command] Generated label: $label');
+            debugPrint('[alcbc Command] Calling GeoALCbc.fromDependencies...');
+            
             final result = GeoALCbc.fromDependencies(
               id: label,
               label: label,
               objects: [obj1, obj2, obj3],
             );
 
+            debugPrint('[alcbc Command] GeoALCbc.fromDependencies returned: ${result?.runtimeType} (${result?.id})');
+            
             if (result == null) {
+              debugPrint('[alcbc Command] ❌ Result is null - returning error');
               return ExecutionResult.error('aLCbc result is not a recognized geometry type');
             }
 
+            debugPrint('[alcbc Command] Adding result to DAG: ${result.id}');
             context.dagManager.addObject(result, [obj1.id, obj2.id, obj3.id]);
 
+            debugPrint('[alcbc Command] ✅ Successfully created ${result.label}');
             return ExecutionResult.successful(
               objectId: result.id,
               message: 'Created ${result.label}',
               object: result,
             );
-          } catch (e) {
+          } catch (e, stackTrace) {
+            debugPrint('[alcbc Command] ❌ Exception: $e');
+            debugPrint('[alcbc Command] Stack trace: $stackTrace');
             return ExecutionResult.error(e.toString());
           }
         },
@@ -3256,6 +3335,81 @@ class CommandRegistry {
         },
       ),
     );
+
+    // Union command
+    _register(
+      CommandDefinition(
+        name: 'union',
+        description: 'Create a union of simple or complex geometry objects',
+        schema: CommandSchema(
+          description: 'Union of objects',
+          patterns: _unionObjectPatterns(),
+          argumentHints: const [
+            'Select first object',
+            'Select additional objects',
+            'Enter label (optional)',
+          ],
+        ),
+        executor: (context, arguments) async {
+          final rawArguments = List<dynamic>.from(arguments);
+          String providedLabel = '';
+          if (rawArguments.isNotEmpty && rawArguments.last is String) {
+            providedLabel = (rawArguments.removeLast() as String).trim();
+          }
+
+          final objects = <GeometryObject>[];
+          for (final arg in rawArguments) {
+            if (arg is GeometryObject) {
+              // If it's a UnionGeometryObjectList, add its children
+              if (arg is UnionGeometryObjectList) {
+                objects.addAll(arg.elements);
+              } else {
+                objects.add(arg);
+              }
+            }
+          }
+
+          if (objects.isEmpty) {
+            return ExecutionResult.error(
+              'Union requires at least one object',
+            );
+          }
+
+          // Remove duplicates
+          final uniqueObjects = <GeometryObject>[];
+          final seenIds = <String>{};
+          for (final obj in objects) {
+            if (!seenIds.contains(obj.id)) {
+              uniqueObjects.add(obj);
+              seenIds.add(obj.id);
+            }
+          }
+
+          final label = providedLabel.isNotEmpty
+              ? providedLabel
+              : LabelManager.getNextAvailableLabel(
+                  context.dagManager,
+                  GeometryObjectType.union,
+                );
+
+          final dependencies = uniqueObjects.map((obj) => obj.id).toList();
+          final union = GeoUnion(
+            id: label,
+            label: label,
+            dependencies: dependencies,
+            elements: uniqueObjects,
+          );
+
+          context.dagManager.addObject(union, dependencies);
+
+          return ExecutionResult.successful(
+            objectId: union.id,
+            message: 'Created union ${union.label} with ${uniqueObjects.length} object(s)',
+            object: union,
+          );
+        },
+      ),
+    );
   }
 
   List<List<TypeConstraint>> _polyArcPointPatterns({int maxSegments = 8}) {
@@ -3312,6 +3466,24 @@ class CommandRegistry {
           TypeConstraint.geometry(
             allowedTypes: {GeoPoint},
             description: i == 0 ? 'Start point' : 'Point ${i + 1}',
+          ),
+        );
+      }
+      pattern.add(TypeConstraint.text(description: 'Label', optional: true));
+      patterns.add(List<TypeConstraint>.unmodifiable(pattern));
+    }
+    return List<List<TypeConstraint>>.unmodifiable(patterns);
+  }
+
+  List<List<TypeConstraint>> _unionObjectPatterns({int maxObjects = 20}) {
+    final patterns = <List<TypeConstraint>>[];
+    for (var objectCount = 1; objectCount <= maxObjects; objectCount++) {
+      final pattern = <TypeConstraint>[];
+      for (var i = 0; i < objectCount; i++) {
+        pattern.add(
+          TypeConstraint.geometry(
+            allowedTypes: {GeometryObject}, // Accept any geometry object
+            description: i == 0 ? 'First object' : 'Object ${i + 1}',
           ),
         );
       }
@@ -3553,279 +3725,82 @@ class CommandRegistry {
   }) {
     debugPrint('[Reflect Command] _createTransformedGeometry: subject=${subject.runtimeType} (${subject.id}), transform=${transform.runtimeType} (${transform.id})');
     
-    if (subject is GeoPoint) {
-      debugPrint('[Reflect Command] Subject is GeoPoint, transforming...');
-      final label = providedLabel.isNotEmpty
-          ? providedLabel
-          : LabelManager.getNextAvailableLabelForTransformation(
-              context.dagManager,
-              subject.label.isNotEmpty ? subject.label : subject.id,
-            );
-      final result = TransformationEngine.transformSimple(
-        source: subject,
-        transform: transform,
-        id: label, // In new system: ID = label (with apostrophe for transformed)
+    final label = providedLabel.isNotEmpty
+        ? providedLabel
+        : LabelManager.getNextAvailableLabelForTransformation(
+            context.dagManager,
+            subject.label.isNotEmpty ? subject.label : subject.id,
+          );
+
+    // Use the centralized transformation engine
+    final result = TransformationEngine.transform(
+      source: subject,
+      transform: transform,
+      id: label,
+      label: label,
+      dependencies: [subject.id, transform.id],
+      visible: subject.visible,
+      styleOverrides: subject.styleOverrides,
+    );
+
+    // Handle special cases where transformation changes type
+    // (e.g., GeoLine -> GeoTransCircle, GeoCircle -> GeoTransLine)
+    if (subject is GeoLine && result is GeoTransCircle) {
+      return GeoTransCircle(
+        id: label,
         label: label,
         dependencies: [subject.id, transform.id],
-        visible: subject.visible,
-        styleOverrides: subject.styleOverrides,
-      );
-
-      debugPrint('[Reflect Command] Transformation result: ${result?.runtimeType}');
-      if (result is GeoTransPoint) {
-        debugPrint('[Reflect Command] ✅ Successfully created GeoTransPoint');
-        return result;
-      }
-      if (result is GeoInf) {
-        debugPrint('[Reflect Command] ✅ Successfully created GeoInf (point at infinity)');
-        return result;
-      }
-      debugPrint('[Reflect Command] ❌ Point transformation did not produce GeoTransPoint or GeoInf, returning null');
-      return null;
-    }
-
-    if (subject is GeoLine) {
-      final label = providedLabel.isNotEmpty
-          ? providedLabel
-          : LabelManager.getNextAvailableLabelForTransformation(
-              context.dagManager,
-              subject.label.isNotEmpty ? subject.label : subject.id,
-            );
-      final result = TransformationEngine.transformSimple(
-        source: subject,
-        transform: transform,
-        id: label, // In new system: ID = label (with apostrophe for transformed)
-        label: label,
-        dependencies: [subject.id, transform.id],
-        visible: subject.visible,
-        styleOverrides: subject.styleOverrides,
-      );
-
-      if (result is GeoTransLine) {
-        return result;
-      }
-      if (result is GeoTransCircle) {
-        final circleLabel = providedLabel.isNotEmpty
-            ? providedLabel
-            : LabelManager.getNextAvailableLabelForTransformation(
-                context.dagManager,
-                subject.label.isNotEmpty ? subject.label : subject.id,
-              );
-        return GeoTransCircle(
-          id: circleLabel, // In new system: ID = label
-          label: circleLabel,
-          dependencies: [subject.id, transform.id],
-          multivector: result.multivector,
-          sourceObjectId: subject.id,
-          transformId: transform.id,
-          visible: subject.visible,
-          styleOverrides: subject.styleOverrides,
-        );
-      }
-      return null;
-    }
-
-    if (subject is GeoCircle) {
-      final label = providedLabel.isNotEmpty
-          ? providedLabel
-          : LabelManager.getNextAvailableLabelForTransformation(
-              context.dagManager,
-              subject.label.isNotEmpty ? subject.label : subject.id,
-            );
-      final result = TransformationEngine.transformSimple(
-        source: subject,
-        transform: transform,
-        id: label, // In new system: ID = label (with apostrophe for transformed)
-        label: label,
-        dependencies: [subject.id, transform.id],
-        visible: subject.visible,
-        styleOverrides: subject.styleOverrides,
-      );
-
-      if (result is GeoTransCircle) {
-        return result;
-      }
-      if (result is GeoTransLine) {
-        final lineLabel = providedLabel.isNotEmpty
-            ? providedLabel
-            : LabelManager.getNextAvailableLabelForTransformation(
-                context.dagManager,
-                subject.label.isNotEmpty ? subject.label : subject.id,
-              );
-        return GeoTransLine(
-          id: lineLabel, // In new system: ID = label
-          label: lineLabel,
-          dependencies: [subject.id, transform.id],
-          multivector: result.multivector,
-          sourceObjectId: subject.id,
-          transformId: transform.id,
-          visible: subject.visible,
-          styleOverrides: subject.styleOverrides,
-        );
-      }
-      return null;
-    }
-
-    if (subject is GeoSegment) {
-      final label = providedLabel.isNotEmpty
-          ? providedLabel
-          : LabelManager.getNextAvailableLabelForTransformation(
-              context.dagManager,
-              subject.label.isNotEmpty ? subject.label : subject.id,
-      );
-      final result = TransformationEngine.transformComplex(
-        source: subject,
-        transform: transform,
-        id: label, // In new system: ID = label (with apostrophe for transformed)
-        label: label,
-        dependencies: [subject.id, transform.id],
-        visible: subject.visible,
-        styleOverrides: subject.styleOverrides,
-      );
-
-      if (result is GeoTransSegment) {
-        return result;
-      }
-      if (result is GeoTransArc) {
-        final arcLabel = providedLabel.isNotEmpty
-            ? providedLabel
-            : LabelManager.getNextAvailableLabelForTransformation(
-                context.dagManager,
-                subject.label.isNotEmpty ? subject.label : subject.id,
-        );
-        return GeoTransArc(
-          id: arcLabel, // In new system: ID = label
-          label: arcLabel,
-          dependencies: [subject.id, transform.id],
-          boundary: result.boundary,
-          controlPoint: result.controlPoint,
-          sourceObjectId: subject.id,
-          transformId: transform.id,
-          visible: subject.visible,
-          styleOverrides: subject.styleOverrides,
-        );
-      }
-      return null;
-    }
-
-    if (subject is GeoArc) {
-      final label = providedLabel.isNotEmpty
-          ? providedLabel
-          : LabelManager.getNextAvailableLabelForTransformation(
-              context.dagManager,
-              subject.label.isNotEmpty ? subject.label : subject.id,
-      );
-      final result = TransformationEngine.transformComplex(
-        source: subject,
-        transform: transform,
-        id: label, // In new system: ID = label (with apostrophe for transformed)
-        label: label,
-        dependencies: [subject.id, transform.id],
-        visible: subject.visible,
-        styleOverrides: subject.styleOverrides,
-      );
-
-      if (result is GeoTransArc) {
-        return result;
-      }
-      if (result is GeoTransSegment) {
-        final segmentLabel = providedLabel.isNotEmpty
-            ? providedLabel
-            : LabelManager.getNextAvailableLabelForTransformation(
-                context.dagManager,
-                subject.label.isNotEmpty ? subject.label : subject.id,
-        );
-        return GeoTransSegment(
-          id: segmentLabel, // In new system: ID = label
-          label: segmentLabel,
-          dependencies: [subject.id, transform.id],
-          boundary: result.boundary,
-          sourceObjectId: subject.id,
-          transformId: transform.id,
-          visible: subject.visible,
-          styleOverrides: subject.styleOverrides,
-        );
-      }
-      return null;
-    }
-
-    if (subject is UnionGeometryObjectList) {
-      final label = providedLabel.isNotEmpty
-          ? providedLabel
-          : LabelManager.getNextAvailableLabelForTransformation(
-              context.dagManager,
-              subject.label.isNotEmpty ? subject.label : subject.id,
-            );
-      final elements = _transformUnionElements(subject, transform);
-      return GeoTransUnionGeometryObjectList(
-        id: label, // In new system: ID = label (with apostrophe for transformed)
-        label: label,
-        dependencies: [subject.id, transform.id],
-        elements: elements,
+        multivector: result.multivector,
         sourceObjectId: subject.id,
         transformId: transform.id,
-        vertexCountValue: subject.vertexCount,
-        areaValue: subject.area(),
-        perimeterValue: subject.perimeter(),
         visible: subject.visible,
         styleOverrides: subject.styleOverrides,
       );
     }
 
-    return null;
-  }
-
-  List<GeometryObject> _transformUnionElements(
-    UnionGeometryObjectList source,
-    GeoTrans transform,
-  ) {
-    final transformedElements = <GeometryObject>[];
-
-    for (final element in source.elements.cast<GeometryObject>()) {
-      if (element is SimpleGeometryObject) {
-        final simpleResult = TransformationEngine.transformSimple(
-          source: element,
-          transform: transform,
-          id: '${element.id}_${transform.id}_point',
-          label: element.label,
-          dependencies: element.dependencies,
-          visible: element.visible,
-          styleOverrides: element.styleOverrides,
-        );
-
-        if (simpleResult != null) {
-          transformedElements.add(simpleResult);
-        } else {
-          transformedElements.add(element);
-        }
-        continue;
-      }
-
-      if (element is GeoSegment || element is GeoArc) {
-        final transformedId = '${element.id}_${transform.id}_trans';
-        final complexResult = TransformationEngine.transformComplex(
-          source: element as ComplexGeometryObject,
-          transform: transform,
-          id: transformedId,
-          label: element.label,
-          dependencies: element.dependencies,
-          visible: element.visible,
-          styleOverrides: element.styleOverrides,
-        );
-
-        if (complexResult != null) {
-          transformedElements.add(complexResult);
-        } else {
-          transformedElements.add(element);
-        }
-        continue;
-      }
-
-      transformedElements.add(element);
+    if (subject is GeoCircle && result is GeoTransLine) {
+      return GeoTransLine(
+        id: label,
+        label: label,
+        dependencies: [subject.id, transform.id],
+        multivector: result.multivector,
+        sourceObjectId: subject.id,
+        transformId: transform.id,
+        visible: subject.visible,
+        styleOverrides: subject.styleOverrides,
+      );
     }
 
-    return transformedElements;
+    if (subject is GeoSegment && result is GeoTransArc) {
+      return GeoTransArc(
+        id: label,
+        label: label,
+        dependencies: [subject.id, transform.id],
+        boundary: result.boundary,
+        controlPoint: result.controlPoint,
+        sourceObjectId: subject.id,
+        transformId: transform.id,
+        visible: subject.visible,
+        styleOverrides: subject.styleOverrides,
+      );
+    }
+
+    if (subject is GeoArc && result is GeoTransSegment) {
+      return GeoTransSegment(
+        id: label,
+        label: label,
+        dependencies: [subject.id, transform.id],
+        boundary: result.boundary,
+        sourceObjectId: subject.id,
+        transformId: transform.id,
+        visible: subject.visible,
+        styleOverrides: subject.styleOverrides,
+      );
+    }
+
+    return result;
   }
+
 
   void _register(CommandDefinition definition) {
     final canonicalName = definition.name.toLowerCase();

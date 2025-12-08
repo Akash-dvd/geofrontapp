@@ -8,33 +8,47 @@ import '../simple/geo_line.dart';
 import 'simple_list_utils.dart';
 import '../../core/dag/dag_manager.dart';
 import '../../core/label_manager.dart';
+import '../transforms/geo_trans.dart';
+import '../transforms/transformation_engine.dart';
 
 /// List of angle bisector lines constructed from two lines (internal and external bisectors)
 class GeoAngleBisector2L extends GenSimpleGeometryObjectList<GeoLine> {
-  final List<GeoLine> _internalBisectors;
-  final List<GeoLine> _externalBisectors;
+  // Store counts for enumerator computation
+  final int _internalCount;
+  final int _externalCount;
 
   GeoAngleBisector2L({
-    required super.id,
-    required super.label,
-    required super.dependencies,
-    List<GeoLine> internalBisectors = const [],
-    List<GeoLine> externalBisectors = const [],
+    required String id,
+    required String label,
+    required List<String> dependencies,
+    List<GeoLine>? objects,
+    List<GeoLine>? internalBisectors,
+    List<GeoLine>? externalBisectors,
     Color color = Colors.purple,
-    super.visible,
+    bool? visible,
     CanvasStyle? style,
     Map<String, dynamic>? styleOverrides,
   }) : assert(
          dependencies.length == 2,
          'GeoAngleBisector2L requires exactly 2 line dependencies',
        ),
-       _internalBisectors = List<GeoLine>.unmodifiable(internalBisectors),
-       _externalBisectors = List<GeoLine>.unmodifiable(externalBisectors),
+       // If objects provided, compute counts from array indices
+       // objects[0,1] = internalBisectors, objects[2,3] = externalBisectors
+       _internalCount = objects != null 
+           ? (objects.length >= 2 ? 2 : objects.length)
+           : (internalBisectors?.length ?? 0),
+       _externalCount = objects != null
+           ? (objects.length > 2 ? (objects.length >= 4 ? 2 : objects.length - 2) : 0)
+           : (externalBisectors?.length ?? 0),
        super(
-         objects: List<GeoLine>.unmodifiable([
-           ...internalBisectors,
-           ...externalBisectors,
+         id: id,
+         label: label,
+         dependencies: dependencies,
+         objects: objects ?? List<GeoLine>.unmodifiable([
+           ...(internalBisectors ?? []),
+           ...(externalBisectors ?? []),
          ]),
+         visible: visible,
          styleOverrides: styleOverridesForType(
            type: GeoAngleBisector2L,
            style: style,
@@ -64,12 +78,17 @@ class GeoAngleBisector2L extends GenSimpleGeometryObjectList<GeoLine> {
       visible: visible,
     );
 
+    // Construct objects array: [internalBisectors (0,1), externalBisectors (2,3)]
+    final allObjects = [
+      ...computation.internalBisectors,
+      ...computation.externalBisectors,
+    ];
+    
     return GeoAngleBisector2L(
       id: id,
       label: label,
       dependencies: [line1.id, line2.id],
-      internalBisectors: computation.internalBisectors,
-      externalBisectors: computation.externalBisectors,
+      objects: allObjects,
       color: color,
       visible: visible,
       style: style,
@@ -77,11 +96,14 @@ class GeoAngleBisector2L extends GenSimpleGeometryObjectList<GeoLine> {
     );
   }
 
-  List<GeoLine> get internalBisectors => _internalBisectors;
+  // Enumerators: computed from objects array
+  // objects[0,1] = internalBisectors
+  List<GeoLine> get internalBisectors => objects.take(_internalCount).toList();
 
-  List<GeoLine> get externalBisectors => _externalBisectors;
+  // elements[2,3] = externalBisectors  
+  List<GeoLine> get externalBisectors => elements.skip(_internalCount).take(_externalCount).toList();
 
-  bool get hasBisectors => objects.isNotEmpty;
+  bool get hasBisectors => elements.isNotEmpty;
 
   @override
   String get type => 'GeoAngleBisector2L';
@@ -90,8 +112,8 @@ class GeoAngleBisector2L extends GenSimpleGeometryObjectList<GeoLine> {
   Map<String, dynamic> toJson() {
     final json = super.toJson();
     json['properties'] = {
-      'internalCount': _internalBisectors.length,
-      'externalCount': _externalBisectors.length,
+      'internalCount': _internalCount,
+      'externalCount': _externalCount,
     };
     return json;
   }
@@ -104,7 +126,8 @@ class GeoAngleBisector2L extends GenSimpleGeometryObjectList<GeoLine> {
         (properties['internalCount'] as num?)?.toInt() ?? 0;
     final externalCount =
         (properties['externalCount'] as num?)?.toInt() ?? 0;
-    final objectsJson = (json['objects'] as List?) ?? const [];
+    // Support both 'objects' (backward compatibility) and 'elements' (new format)
+    final objectsJson = (json['objects'] as List?) ?? (json['elements'] as List?) ?? const [];
     final lines = <GeoLine>[];
 
     for (final entry in objectsJson) {
@@ -129,12 +152,17 @@ class GeoAngleBisector2L extends GenSimpleGeometryObjectList<GeoLine> {
         CanvasStyleDefaults.instance.resolveForType(GeoAngleBisector2L);
     final overrides = styleOverridesFromJson(json);
 
+    // Construct objects array from decoded lines
+    final allObjects = [
+      ...internalBisectors,
+      ...externalBisectors,
+    ];
+    
     return GeoAngleBisector2L(
       id: json['id'] as String,
       label: (json['label'] as String?) ?? '',
       dependencies: deps,
-      internalBisectors: internalBisectors,
-      externalBisectors: externalBisectors,
+      objects: allObjects,
       visible: json['visible'] as bool? ?? true,
       color: defaults.strokeColor,
       styleOverrides: overrides,
@@ -146,6 +174,8 @@ class GeoAngleBisector2L extends GenSimpleGeometryObjectList<GeoLine> {
     String? id,
     String? label,
     List<String>? dependencies,
+    List<GeoLine>? objects,
+    List<GeometryObject>? elementsAny,
     List<GeoLine>? internalBisectors,
     List<GeoLine>? externalBisectors,
     Color? color,
@@ -168,12 +198,24 @@ class GeoAngleBisector2L extends GenSimpleGeometryObjectList<GeoLine> {
             : null);
     final resolvedOverrides = candidateOverrides ?? this.styleOverrides;
 
+    // Support both objects (backward compatibility) and elementsAny (unified API)
+    // If objects provided, use it; otherwise use elementsAny; otherwise construct from separate lists or keep current
+    final updatedObjects = objects ?? 
+        (elementsAny?.cast<GeoLine>()) ??
+        (internalBisectors != null || externalBisectors != null
+            ? [
+                ...(internalBisectors ?? this.internalBisectors),
+                ...(externalBisectors ?? this.externalBisectors),
+              ]
+            : null);
+    
     return GeoAngleBisector2L(
       id: id ?? this.id,
       label: label ?? this.label,
       dependencies: dependencies ?? this.dependencies,
-      internalBisectors: internalBisectors ?? _internalBisectors,
-      externalBisectors: externalBisectors ?? _externalBisectors,
+      objects: updatedObjects,
+      internalBisectors: internalBisectors,
+      externalBisectors: externalBisectors,
       visible: visible ?? this.visible,
       styleOverrides: resolvedOverrides,
     );
@@ -192,12 +234,64 @@ class GeoAngleBisector2L extends GenSimpleGeometryObjectList<GeoLine> {
     final line1Obj = dagManager.getObject(dependencies[0]);
     final line2Obj = dagManager.getObject(dependencies[1]);
     
-    if (line1Obj is! GeoLine || line2Obj is! GeoLine) {
+    if (line1Obj is! GeometryObject || line2Obj is! GeometryObject) {
       return null;
     }
     
-    final line1 = line1Obj;
-    final line2 = line2Obj;
+    final first = line1Obj;
+    final second = line2Obj;
+    
+    // Check if this is a transformed angle bisector list (one dependency is a transform)
+    // Transformed angle bisector lists have dependencies [originalAngleBisector.id, transform.id]
+    GeoTrans? transform;
+    GeometryObject? originalAngleBisector;
+    
+    if (first is GeoTrans && second is GeoAngleBisector2L) {
+      transform = first;
+      originalAngleBisector = second;
+    } else if (second is GeoTrans && first is GeoAngleBisector2L) {
+      transform = second;
+      originalAngleBisector = first;
+    }
+    
+    // If this is a transformed angle bisector list, rebuild by transforming the original
+    if (transform != null && originalAngleBisector != null) {
+      // Get the current state of the original angle bisector from the DAG
+      // (it may have been rebuilt already by propagateUpdates)
+      final originalNode = dagManager.getNode(originalAngleBisector.id);
+      if (originalNode != null) {
+        final currentOriginal = originalNode.object;
+        if (currentOriginal is GeometryObject) {
+          originalAngleBisector = currentOriginal;
+        }
+      }
+      
+      // Transform the original angle bisector
+      final transformed = TransformationEngine.transform(
+        source: originalAngleBisector,
+        transform: transform,
+        id: id,
+        label: label,
+        dependencies: dependencies,
+        visible: visible,
+        styleOverrides: styleOverrides,
+      );
+      
+      if (transformed is GeoAngleBisector2L) {
+        return transformed;
+      }
+      
+      // If transformation failed, return null (will cause object to disappear)
+      debugPrint('[GeoAngleBisector2L] Failed to transform original angle bisector');
+      return null;
+    }
+    
+    if (first is! GeoLine || second is! GeoLine) {
+      return null;
+    }
+    
+    final line1 = first as GeoLine;
+    final line2 = second as GeoLine;
 
     try {
       return GeoAngleBisector2L.constructFromLines(

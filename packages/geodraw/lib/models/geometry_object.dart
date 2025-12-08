@@ -4,6 +4,7 @@ import 'package:geocalc/Multivector.dart';
 
 import 'canvas_object.dart';
 import 'canvas_style.dart';
+import 'complex/complex_geometry_object.dart';
 
 /// Abstract base class for all geometric objects
 /// Extends CanvasObject and adds geometric properties
@@ -238,65 +239,236 @@ abstract class SimpleGeometryObject extends GeometryObject {
   }
 }
 
-/// Generates collections of simple geometry objects derived algebraically
-/// from other inputs (e.g. intersections, tangents).
-abstract class GenSimpleGeometryObjectList<T extends SimpleGeometryObject>
+/// Groups together simple or complex geometry elements into a single object.
+///
+/// The constituent elements must be either [SimpleGeometryObject] or
+/// [ComplexGeometryObject]; nested groupings are handled by
+/// [RecursiveUnionGeo].
+abstract class UnionGeometryObjectList<T extends GeometryObject>
     extends GeometryObject {
-  /// The objects in this list
-  final List<T> objects;
-
-  GenSimpleGeometryObjectList({
+  UnionGeometryObjectList({
     required super.id,
     required super.label,
     required super.dependencies,
-    required this.objects,
+    required List<T> elements,
     super.visible,
     super.styleOverrides,
-  });
+  })  : assert(
+          elements.every(
+            (element) =>
+                element is SimpleGeometryObject ||
+                element is ComplexGeometryObject,
+          ),
+          'UnionGeometryObjectList supports only simple or complex elements',
+        ),
+        elements = List.unmodifiable(elements);
 
-  /// Number of objects in this list
-  int get length => objects.length;
+  final List<T> elements;
 
-  /// Access object by index
-  T operator [](int index) => objects[index];
+  /// Number of vertices in this shape
+  int get vertexCount;
+
+  /// Calculate the area of this shape
+  double area();
+
+  /// Calculate the perimeter of this shape
+  double perimeter();
 
   @override
   void draw(Canvas canvas, Paint paint) {
-    for (final obj in objects) {
-      obj.draw(canvas, paint);
+    for (final element in elements) {
+      element.draw(canvas, paint);
     }
   }
 
   @override
   bool contains(Offset position) {
-    return objects.any((obj) => obj.contains(position));
+    return elements.any((element) => element.contains(position));
   }
 
   @override
   Rect getBounds() {
-    if (objects.isEmpty) return Rect.zero;
+    if (elements.isEmpty) return Rect.zero;
 
-    return objects
-        .map((obj) => obj.getBounds())
+    return elements
+        .map((element) => element.getBounds())
         .reduce((a, b) => a.expandToInclude(b));
   }
 
   @override
   double distanceTo(Offset point) {
-    if (objects.isEmpty) return double.infinity;
+    if (elements.isEmpty) return double.infinity;
 
-    return objects
-        .map((obj) => obj.distanceTo(point))
+    return elements
+        .map((element) => element.distanceTo(point))
         .reduce((a, b) => a < b ? a : b);
   }
 
   @override
-  List<Object?> get props => [...super.props, objects];
+  List<Object?> get props => [...super.props, elements];
 
   @override
   Map<String, dynamic> toJson() {
     final json = super.toJson();
-    json['objects'] = objects.map((obj) => obj.toJson()).toList();
+    json['elements'] = elements.map((element) => element.toJson()).toList();
+    return json;
+  }
+}
+
+/// Generates collections of simple geometry objects derived algebraically
+/// from other inputs (e.g. intersections, tangents).
+/// 
+/// This extends UnionGeometryObjectList to unify the architecture.
+/// Elements are algebraically calculated from parents and cannot be
+/// directly added/removed like in regular unions.
+abstract class GenSimpleGeometryObjectList<T extends SimpleGeometryObject>
+    extends UnionGeometryObjectList<T> {
+  GenSimpleGeometryObjectList({
+    required String id,
+    required String label,
+    required List<String> dependencies,
+    required List<T> objects,
+    bool? visible,
+    Map<String, dynamic>? styleOverrides,
+  }) : super(
+          id: id,
+          label: label,
+          dependencies: dependencies,
+          elements: List<T>.unmodifiable(objects),
+          visible: visible ?? true,
+          styleOverrides: styleOverrides,
+        );
+
+  /// Backward compatibility: access objects via 'objects' property
+  /// This maps to the parent's 'elements' field
+  List<T> get objects => elements.cast<T>();
+
+  /// Number of objects in this list
+  int get length => elements.length;
+
+  /// Access object by index
+  T operator [](int index) => elements[index];
+
+  @override
+  int get vertexCount => elements.length;
+
+  @override
+  double area() => 0.0; // Simple geometry objects don't have area
+
+  @override
+  double perimeter() => 0.0; // Simple geometry objects don't have perimeter
+
+  @override
+  Map<String, dynamic> toJson() {
+    final json = super.toJson();
+    // For backward compatibility, also include 'objects' key
+    // UnionGeometryObjectList already includes 'elements'
+    json['objects'] = elements.map((obj) => obj.toJson()).toList();
+    return json;
+  }
+}
+
+/// A union of simple or complex geometry objects
+/// This is a user-created union that can contain any combination of simple and complex objects
+class GeoUnion extends UnionGeometryObjectList<GeometryObject> {
+  GeoUnion({
+    required super.id,
+    required super.label,
+    required super.dependencies,
+    required super.elements,
+    super.visible,
+    super.styleOverrides,
+  });
+
+  @override
+  int get vertexCount {
+    return elements.fold<int>(
+      0,
+      (sum, element) => sum + (element is UnionGeometryObjectList
+          ? element.vertexCount
+          : 1),
+    );
+  }
+
+  @override
+  double area() {
+    return elements.fold<double>(
+      0.0,
+      (sum, element) {
+        // UnionGeometryObjectList has area() method
+        if (element is UnionGeometryObjectList) {
+          return sum + element.area();
+        }
+        // For other objects, try to call area() if it exists
+        // This handles types like GeoPolygon that extend UnionGeometryObjectList
+        // or have area() method
+        try {
+          // Use noSuchMethod to safely check and call
+          final dynamic obj = element;
+          final result = obj.area();
+          if (result is double) {
+            return sum + result;
+          }
+        } catch (_) {
+          // Object doesn't have area() method or it failed, skip it
+        }
+        return sum;
+      },
+    );
+  }
+
+  @override
+  double perimeter() {
+    return elements.fold<double>(
+      0.0,
+      (sum, element) {
+        // UnionGeometryObjectList has perimeter() method
+        if (element is UnionGeometryObjectList) {
+          return sum + element.perimeter();
+        }
+        // For other objects, try to call perimeter() if it exists
+        // This handles types like GeoPolygon that extend UnionGeometryObjectList
+        // or have perimeter() method
+        try {
+          // Use noSuchMethod to safely check and call
+          final dynamic obj = element;
+          final result = obj.perimeter();
+          if (result is double) {
+            return sum + result;
+          }
+        } catch (_) {
+          // Object doesn't have perimeter() method or it failed, skip it
+        }
+        return sum;
+      },
+    );
+  }
+
+  @override
+  GeometryObject copyWith({
+    String? id,
+    String? label,
+    List<String>? dependencies,
+    bool? visible,
+    CanvasStyle? style,
+  }) {
+    return GeoUnion(
+      id: id ?? this.id,
+      label: label ?? this.label,
+      dependencies: dependencies ?? this.dependencies,
+      elements: elements,
+      visible: visible ?? this.visible,
+      styleOverrides: style != null ? resolveStyleOverrides(style) : styleOverrides,
+    );
+  }
+
+  @override
+  String get type => 'GeoUnion';
+
+  @override
+  Map<String, dynamic> toJson() {
+    final json = super.toJson();
+    json['type'] = 'GeoUnion';
     return json;
   }
 }

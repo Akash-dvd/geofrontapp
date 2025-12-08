@@ -46,6 +46,10 @@ enum ToolType {
   alcbc,
   // Imaginary circle
   icircle,
+  // Delete tool
+  delete,
+  // Union tool
+  union,
 }
 
 /// Abstract base class for all construction tools

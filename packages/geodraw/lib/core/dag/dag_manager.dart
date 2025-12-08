@@ -55,13 +55,8 @@ class DAGManager {
       if (containerNode?.object is GeometryObject) {
         final container = containerNode!.object as GeometryObject;
         
-        if (container is GenSimpleGeometryObjectList) {
-          for (final element in container.objects) {
-            if (element.id == id) {
-              return element;
-            }
-          }
-        } else if (container is UnionGeometryObjectList) {
+        // Note: GenSimpleGeometryObjectList extends UnionGeometryObjectList, so this covers both
+        if (container is UnionGeometryObjectList) {
           // Union elements are DAG nodes, not elements, so check nodes
           for (final element in container.elements) {
             if (element.id == id) {
@@ -78,14 +73,7 @@ class DAGManager {
       final obj = node.object;
       if (obj is! GeometryObject) continue;
 
-      if (obj is GenSimpleGeometryObjectList) {
-        for (final element in obj.objects) {
-          if (element.id == id) {
-            return element;
-          }
-        }
-      }
-
+      // Note: GenSimpleGeometryObjectList extends UnionGeometryObjectList, so this covers both
       if (obj is UnionGeometryObjectList) {
         for (final element in obj.elements) {
           if (element.id == id) {
@@ -146,7 +134,7 @@ class DAGManager {
     }
 
     // Update the element in the container's objects list
-    final updatedObjects = container.objects.map((element) {
+    final updatedObjects = container.elements.map((element) {
       if (element.id == oldElementId) {
         return updatedElement;
       }
@@ -154,16 +142,10 @@ class DAGManager {
     }).toList();
 
     // Create updated container
-    // Note: copyWith signature depends on the specific container type
-    // For GeoIntersection, use objects parameter
-    GenSimpleGeometryObjectList updatedContainer;
-    if (container is GeoIntersection) {
-      updatedContainer = container.copyWith(objects: updatedObjects.cast<GeoPoint>());
-    } else {
-      // For other container types, we need to recreate with updated objects
-      // This is a fallback - specific types should handle their own copyWith
-      throw ArgumentError('updateElementId not fully implemented for ${container.runtimeType}');
-    }
+    // Note: All GenSimpleGeometryObjectList types now support elementsAny parameter
+    final updatedContainer = (container as dynamic).copyWith(
+      elementsAny: updatedObjects,
+    ) as GenSimpleGeometryObjectList;
 
     // Update elementToContainer map
     unregisterElement(oldElementId);
@@ -241,7 +223,7 @@ class DAGManager {
       for (final node in _nodes.values) {
         if (node.object is GenSimpleGeometryObjectList) {
           final container = node.object as GenSimpleGeometryObjectList;
-          if (container.objects.any((element) => element.id == depId)) {
+          if (container.elements.any((element) => element.id == depId)) {
             containerId = node.id;
             break;
           }
@@ -292,11 +274,8 @@ class DAGManager {
     }
 
     // Register elements in elementToContainer map if object is a container
-    if (object is GenSimpleGeometryObjectList) {
-      for (final element in object.objects) {
-        registerElement(element.id, object.id);
-      }
-    } else if (object is UnionGeometryObjectList) {
+    // Note: GenSimpleGeometryObjectList extends UnionGeometryObjectList, so this covers both
+    if (object is UnionGeometryObjectList) {
       // Register union elements for efficient lookup via getObject()
       // Note: Some union elements may be DAG nodes (when union groups existing objects),
       // but newly created elements (like segments/arcs in polygons) are not DAG nodes
@@ -319,23 +298,8 @@ class DAGManager {
 
     // Update elementToContainer map if container's elements changed
     final oldObject = node.object;
-    if (oldObject is GenSimpleGeometryObjectList && updatedObject is GenSimpleGeometryObjectList) {
-      // Compare old vs new elements
-      final oldElementIds = oldObject.objects.map((e) => e.id).toSet();
-      final newElementIds = updatedObject.objects.map((e) => e.id).toSet();
-      
-      // Unregister removed elements
-      for (final elementId in oldElementIds) {
-        if (!newElementIds.contains(elementId)) {
-          unregisterElement(elementId);
-        }
-      }
-      
-      // Register new elements
-      for (final element in updatedObject.objects) {
-        registerElement(element.id, id);
-      }
-    } else if (oldObject is UnionGeometryObjectList && updatedObject is UnionGeometryObjectList) {
+    // Note: GenSimpleGeometryObjectList extends UnionGeometryObjectList, so this covers both
+    if (oldObject is UnionGeometryObjectList && updatedObject is UnionGeometryObjectList) {
       // Compare old vs new elements
       final oldElementIds = oldObject.elements.map((e) => e.id).toSet();
       final newElementIds = updatedObject.elements.map((e) => e.id).toSet();
@@ -467,11 +431,8 @@ class DAGManager {
 
     // Unregister elements from elementToContainer if this is a container
     final obj = node.object;
-    if (obj is GenSimpleGeometryObjectList) {
-      for (final element in obj.objects) {
-        unregisterElement(element.id);
-      }
-    } else if (obj is UnionGeometryObjectList) {
+    // Note: GenSimpleGeometryObjectList extends UnionGeometryObjectList, so this covers both
+    if (obj is UnionGeometryObjectList) {
       for (final element in obj.elements) {
         unregisterElement(element.id);
       }
@@ -611,13 +572,8 @@ class DAGManager {
     required GeometryObject container,
     required String elementId,
   }) {
-    if (container is GenSimpleGeometryObjectList) {
-      for (final element in container.objects) {
-        if (element.id == elementId) {
-          return element;
-        }
-      }
-    } else if (container is UnionGeometryObjectList) {
+    // Note: GenSimpleGeometryObjectList extends UnionGeometryObjectList, so this covers both
+    if (container is UnionGeometryObjectList) {
       for (final element in container.elements) {
         if (element.id == elementId) {
           return element;
@@ -639,15 +595,8 @@ class DAGManager {
     
     // Check if container has elements that match our original dependencies
     // (but not ones we've already used)
-    if (container is GenSimpleGeometryObjectList) {
-      for (var i = 0; i < container.objects.length; i++) {
-        final element = container.objects[i];
-        final depIndex = originalDependencies.indexWhere((id) => id == element.id);
-        if (depIndex >= 0 && !used.contains(depIndex)) {
-          return element;
-        }
-      }
-    } else if (container is UnionGeometryObjectList) {
+    // Note: GenSimpleGeometryObjectList extends UnionGeometryObjectList, so this covers both
+    if (container is UnionGeometryObjectList) {
       for (var i = 0; i < container.elements.length; i++) {
         final element = container.elements[i];
         final depIndex = originalDependencies.indexWhere((id) => id == element.id);
@@ -696,19 +645,8 @@ class DAGManager {
       if (!obj.visible) continue;
 
       // For list-type objects, search within elements
-      if (obj is GenSimpleGeometryObjectList) {
-        for (final element in obj.objects) {
-          if (!element.visible) continue;
-          final distance = element.distanceTo(position);
-          if (distance < threshold) {
-            if (element is GeoPoint) {
-              pointCandidates.add((element, distance));
-            } else {
-              otherCandidates.add((element, distance));
-            }
-          }
-        }
-      } else if (obj is UnionGeometryObjectList) {
+      // Note: GenSimpleGeometryObjectList extends UnionGeometryObjectList, so this covers both
+      if (obj is UnionGeometryObjectList) {
         for (final element in obj.elements) {
           if (!element.visible) continue;
           final distance = element.distanceTo(position);
@@ -759,16 +697,10 @@ class DAGManager {
       final obj = node.object;
       if (obj is! GeometryObject) continue;
 
-      // Check GenSimpleGeometryObjectList
-      if (obj is GenSimpleGeometryObjectList) {
-        if (obj.objects.contains(element)) {
-          containers.add(obj);
-        }
-      }
-
-      // Check UnionGeometryObjectList
+      // Note: GenSimpleGeometryObjectList extends UnionGeometryObjectList, so this covers both
       if (obj is UnionGeometryObjectList) {
-        if (obj.elements.contains(element)) {
+        // Compare by ID instead of object identity, as the element might be a different instance
+        if (obj.elements.any((child) => child.id == element.id)) {
           containers.add(obj);
         }
       }
@@ -788,12 +720,9 @@ class DAGManager {
       }
       
       // If same depth, prefer smaller containers (more specific)
-      final aSize = a is GenSimpleGeometryObjectList 
-          ? a.objects.length 
-          : (a is UnionGeometryObjectList ? a.elements.length : 0);
-      final bSize = b is GenSimpleGeometryObjectList 
-          ? b.objects.length 
-          : (b is UnionGeometryObjectList ? b.elements.length : 0);
+      // Note: GenSimpleGeometryObjectList extends UnionGeometryObjectList, so this covers both
+      final aSize = a is UnionGeometryObjectList ? a.elements.length : 0;
+      final bSize = b is UnionGeometryObjectList ? b.elements.length : 0;
       
       return aSize.compareTo(bSize); // Smaller first (more specific)
     });

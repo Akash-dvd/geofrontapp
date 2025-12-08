@@ -512,53 +512,71 @@ class GeoTransUnionGeometryObjectList
       return null;
     }
 
-    final transformedElements = <GeometryObject>[];
-
-    for (final element in sourceObj.elements.cast<GeometryObject>()) {
-      if (element is SimpleGeometryObject) {
-        final simpleResult = TransformationEngine.transformSimple(
-          source: element,
-          transform: transformObj,
-          id: '${element.id}_${transformObj.id}_point',
-          label: element.label,
-          dependencies: element.dependencies,
-          visible: element.visible,
-          styleOverrides: element.styleOverrides,
-        );
-        if (simpleResult != null) {
-          transformedElements.add(simpleResult);
-        } else {
-          transformedElements.add(element);
-        }
-        continue;
-      }
-
-      if (element is GeoSegment || element is GeoArc) {
-        final complexResult = TransformationEngine.transformComplex(
-          source: element as ComplexGeometryObject,
-          transform: transformObj,
-          id: '${element.id}_${transformObj.id}_trans',
-          label: element.label,
-          dependencies: element.dependencies,
-          visible: element.visible,
-          styleOverrides: element.styleOverrides,
-        );
-        if (complexResult != null) {
-          transformedElements.add(complexResult);
-        } else {
-          transformedElements.add(element);
-        }
-        continue;
-      }
-
-      transformedElements.add(element);
+    // Use TransformationEngine.transform to handle all types correctly
+    // This will properly handle GenSimpleGeometryObjectList, UnionGeometryObjectList, etc.
+    final transformed = TransformationEngine.transform(
+      source: sourceObj,
+      transform: transformObj,
+      id: id,
+      label: label,
+      dependencies: dependencies,
+      visible: visible,
+      styleOverrides: styleOverrides,
+    );
+    
+    if (transformed == null) {
+      return null;
     }
-
-    return copyWith(
-      elements: transformedElements,
-      vertexCountValue: sourceObj.vertexCount,
-      areaValue: sourceObj.area(),
-      perimeterValue: sourceObj.perimeter(),
+    
+    // Ensure dependencies include both source and transform IDs
+    final normalizedDeps = _normalizedDependencies(
+      dependencies,
+      sourceObjectId,
+      transformId,
+    );
+    
+    // If the result is a GeoTransUnionGeometryObjectList, update it with correct IDs
+    if (transformed is GeoTransUnionGeometryObjectList) {
+      return transformed.copyWith(
+        id: id,
+        label: label,
+        dependencies: normalizedDeps,
+        sourceObjectId: sourceObjectId,
+        transformId: transformId,
+      );
+    }
+    
+    // If the result is a UnionGeometryObjectList but not GeoTransUnionGeometryObjectList,
+    // wrap it in a GeoTransUnionGeometryObjectList
+    if (transformed is UnionGeometryObjectList) {
+      return GeoTransUnionGeometryObjectList(
+        id: id,
+        label: label,
+        dependencies: normalizedDeps,
+        elements: transformed.elements,
+        sourceObjectId: sourceObjectId,
+        transformId: transformId,
+        vertexCountValue: transformed.vertexCount,
+        areaValue: transformed.area(),
+        perimeterValue: transformed.perimeter(),
+        visible: visible ?? transformed.visible,
+        styleOverrides: styleOverrides ?? transformed.styleOverrides,
+      );
+    }
+    
+    // For other types, wrap in a union
+    return GeoTransUnionGeometryObjectList(
+      id: id,
+      label: label,
+      dependencies: normalizedDeps,
+      elements: [transformed],
+      sourceObjectId: sourceObjectId,
+      transformId: transformId,
+      vertexCountValue: 1,
+      areaValue: 0.0,
+      perimeterValue: 0.0,
+      visible: visible ?? transformed.visible,
+      styleOverrides: styleOverrides ?? transformed.styleOverrides,
     );
   }
 

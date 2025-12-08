@@ -3,10 +3,6 @@ import 'package:flutter/material.dart';
 import '../core/dag/dag_manager.dart';
 import '../models/geometry_object.dart';
 import '../models/complex/complex_geometry_object.dart';
-import '../models/simple_lists/geo_intersection.dart';
-import '../models/simple_lists/geo_angle_bisector.dart';
-import '../models/simple/geo_point.dart';
-import '../models/simple/geo_line.dart';
 import 'object_settings_panel.dart';
 
 /// Browser widget for viewing and managing geometric objects
@@ -94,7 +90,8 @@ class _ObjectBrowserState extends State<ObjectBrowser> {
 
     void handleVisibilityToggle(GeometryObject object) {
       // Check if this is a container type
-      if (object is GenSimpleGeometryObjectList) {
+      // Note: GenSimpleGeometryObjectList extends UnionGeometryObjectList, so this covers both
+      if (object is UnionGeometryObjectList) {
         final oldVisibility = object.visible;
         final newVisibility = !oldVisibility;
         
@@ -103,7 +100,7 @@ class _ObjectBrowserState extends State<ObjectBrowser> {
         
         // Update all children whose visibility matches the old container visibility
         // (they were following the container)
-        final updatedObjects = object.objects.map((child) {
+        final updatedObjects = object.elements.map((child) {
           // If child visibility matches old container visibility, update it
           if (child.visible == oldVisibility) {
             return child.copyWith(visible: newVisibility);
@@ -113,49 +110,10 @@ class _ObjectBrowserState extends State<ObjectBrowser> {
         }).toList();
         
         // Update container with new children list
-        if (object is GeoIntersection) {
-          updated = object.copyWith(
-            visible: newVisibility,
-            objects: updatedObjects.cast<GeoPoint>(),
-          );
-        } else {
-          // For other GenSimpleGeometryObjectList types, try to use copyWith with objects
-          // This may need to be extended for other types
-          updated = object.copyWith(visible: newVisibility);
-        }
-        
-        widget.dagManager.updateObject(object.id, updated);
-      } else if (object is UnionGeometryObjectList) {
-        final oldVisibility = object.visible;
-        final newVisibility = !oldVisibility;
-        
-        // Update container visibility
-        var updated = object.copyWith(visible: newVisibility);
-        
-        // Update all children whose visibility matches the old container visibility
-        // Map elements - they're already the correct type, just need to update visibility
-        final mappedElements = object.elements.map((child) {
-          // If child visibility matches old container visibility, update it
-          if (child.visible == oldVisibility) {
-            return child.copyWith(visible: newVisibility);
-          }
-          // Otherwise, child has been individually overridden, keep it as is
-          return child;
-        });
-        
-        // Create a list matching the original list's element type
-        // Use List.castFrom with the original list type to preserve type information
-        final updatedElements = List.castFrom<GeometryObject, GeometryObject>(
-          List<GeometryObject>.from(mappedElements),
-        );
-        
-        // Update container with new elements list
-        // All UnionGeometryObjectList types now support element updates via copyWith
-        // when element IDs match (only properties like visibility changed)
-        // Use elementsAny parameter to pass List<GeometryObject> which will be cast internally
+        // All UnionGeometryObjectList types (including GenSimpleGeometryObjectList) now support elementsAny parameter in copyWith
         updated = (object as dynamic).copyWith(
           visible: newVisibility,
-          elementsAny: updatedElements,
+          elementsAny: updatedObjects,
         ) as GeometryObject;
         
         widget.dagManager.updateObject(object.id, updated);
@@ -306,9 +264,7 @@ class _ObjectBrowserState extends State<ObjectBrowser> {
 
 
   bool _hasExpandableChildren(GeometryObject object) {
-    if (object is GenSimpleGeometryObjectList) {
-      return object.objects.isNotEmpty;
-    }
+    // Note: GenSimpleGeometryObjectList extends UnionGeometryObjectList, so this covers both
     if (object is UnionGeometryObjectList) {
       return object.elements.isNotEmpty;
     }
@@ -328,85 +284,8 @@ class _ObjectBrowserState extends State<ObjectBrowser> {
       return children; // Parent not found or wrong type
     }
     
-    if (currentParent is GenSimpleGeometryObjectList) {
-      for (int i = 0; i < currentParent.objects.length; i++) {
-        final element = currentParent.objects[i];
-        final elementId = element.id;
-        children.add(
-          Container(
-            margin: const EdgeInsets.only(left: 32),
-            child: _ObjectListTile(
-              node: _ElementNode(elementId, element),
-              object: element,
-              isSelected: widget.selectedIds.contains(elementId),
-              isExpanded: false,
-              hasChildren: false,
-              onToggleExpansion: null,
-              onToggleVisibility: () {
-                // Get fresh parent reference from DAG manager
-                final freshParent = widget.dagManager.getObject(parentId);
-                if (freshParent is! GenSimpleGeometryObjectList) return;
-                
-                // Toggle individual child visibility
-                final updatedObjects = freshParent.objects.map((child) {
-                  if (child.id == elementId) {
-                    return child.copyWith(visible: !child.visible);
-                  }
-                  return child;
-                }).toList();
-                
-                // Update container with updated child
-                if (freshParent is GeoIntersection) {
-                  final updated = freshParent.copyWith(
-                    objects: updatedObjects.cast<GeoPoint>(),
-                  );
-                  widget.dagManager.updateObject(parentId, updated);
-                } else if (freshParent is GeoAngleBisector2L) {
-                  // GeoAngleBisector2L uses internalBisectors and externalBisectors
-                  final bisector = freshParent;
-                  final updatedInternal = bisector.internalBisectors.map((child) {
-                    if (child.id == elementId) {
-                      final updated = child.copyWith(visible: !child.visible);
-                      // copyWith returns GeometryObject, but we know it's GeoLine
-                      return updated as GeoLine;
-                    }
-                    return child;
-                  }).toList();
-                  final updatedExternal = bisector.externalBisectors.map((child) {
-                    if (child.id == elementId) {
-                      final updated = child.copyWith(visible: !child.visible);
-                      // copyWith returns GeometryObject, but we know it's GeoLine
-                      return updated as GeoLine;
-                    }
-                    return child;
-                  }).toList();
-                  final updated = bisector.copyWith(
-                    internalBisectors: updatedInternal,
-                    externalBisectors: updatedExternal,
-                  );
-                  widget.dagManager.updateObject(parentId, updated);
-                } else {
-                  // For other GenSimpleGeometryObjectList types, try to use copyWith
-                  // This may need to be extended for other types
-                  widget.dagManager.updateObject(parentId, freshParent);
-                }
-                setState(() {});
-              },
-              onTap: () {
-                widget.onSelectionChanged?.call({elementId});
-              },
-              onDelete: () {
-                // Cannot delete individual elements
-              },
-              onEdit: () {
-                // Edit parent instead
-                handleEdit(currentParent);
-              },
-            ),
-          ),
-        );
-      }
-    } else if (currentParent is UnionGeometryObjectList) {
+    // Note: GenSimpleGeometryObjectList extends UnionGeometryObjectList, so this covers both
+    if (currentParent is UnionGeometryObjectList) {
       for (int i = 0; i < currentParent.elements.length; i++) {
         final element = currentParent.elements[i];
         final elementId = element.id;
@@ -426,24 +305,15 @@ class _ObjectBrowserState extends State<ObjectBrowser> {
                 if (freshParent is! UnionGeometryObjectList) return;
                 
                 // Toggle individual child visibility
-                // Map elements - they're already the correct type, just need to update visibility
-                final mappedElements = freshParent.elements.map((child) {
+                final updatedElements = freshParent.elements.map((child) {
                   if (child.id == elementId) {
                     return child.copyWith(visible: !child.visible);
                   }
                   return child;
-                });
-                
-                // Create a list matching the original list's element type
-                // Use List.castFrom with the original list type to preserve type information
-                final updatedElements = List.castFrom<GeometryObject, GeometryObject>(
-                  List<GeometryObject>.from(mappedElements),
-                );
+                }).toList();
                 
                 // Update container with updated child
-                // All UnionGeometryObjectList types now support element updates via copyWith
-                // when element IDs match (only properties like visibility changed)
-                // Use elementsAny parameter to pass List<GeometryObject> which will be cast internally
+                // All UnionGeometryObjectList types (including GenSimpleGeometryObjectList) now support elementsAny parameter
                 final updated = (freshParent as dynamic).copyWith(
                   elementsAny: updatedElements,
                 ) as GeometryObject;

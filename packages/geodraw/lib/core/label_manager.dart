@@ -233,24 +233,8 @@ class LabelManager {
         continue;
       }
       
-      if (obj is GenSimpleGeometryObjectList) {
-        for (final element in obj.objects) {
-          // Element ID is the label in new system
-          // Skip reserved labels that haven't been used yet
-          if (reservedLabels == null || 
-              !reservedLabels.contains(element.id) ||
-              (usedReservedLabels != null && usedReservedLabels.contains(element.id))) {
-            usedLabels.add(element.id);
-          }
-          if (element.label.isNotEmpty) {
-            if (reservedLabels == null || 
-                !reservedLabels.contains(element.label) ||
-                (usedReservedLabels != null && usedReservedLabels.contains(element.label))) {
-              usedLabels.add(element.label);
-            }
-          }
-        }
-      } else if (obj is UnionGeometryObjectList) {
+      // Note: GenSimpleGeometryObjectList extends UnionGeometryObjectList, so this covers both
+      if (obj is UnionGeometryObjectList) {
         // Union elements are DAG nodes, not elements, so already collected above
         // But check their labels anyway
         for (final element in obj.elements) {
