@@ -153,9 +153,10 @@ class ToolManager with ToolCallbacksMixin {
 
   /// Select an object directly (used when object is selected from menu/dropdown)
   /// This bypasses proximity search and directly adds the object as an argument
-  void selectObject(GeometryObject object) {
+  /// [clickPosition] is optional and used for tools that need the click position (e.g., glider points)
+  void selectObject(GeometryObject object, {Offset? clickPosition}) {
     if (_activeTool is UnifiedTool) {
-      (_activeTool as UnifiedTool).selectObject(object);
+      (_activeTool as UnifiedTool).selectObject(object, clickPosition: clickPosition);
     } else if (_activeTool is StagedSelectionTool) {
       (_activeTool as StagedSelectionTool).selectObject(object);
     } else if (_activeTool is _PolygonTool) {
@@ -1151,13 +1152,17 @@ class _PointTool extends UnifiedTool {
       final nearby = dagManager.proximitySearch(event.position, threshold: 15.0);
       
       // Check if any nearby object matches the glider point pattern (Pattern 1)
-      // Pattern 1 accepts: GeoLine, GeoCircle, GeoSegment, GeoArc, UnionGeometryObjectList
+      // Pattern 1 accepts: GeoLine, GeoCircle, GeoSegment, GeoArc (but NOT UnionGeometryObjectList)
       final nextConstraint = verifier.schema.nextConstraint(verifier.arguments);
       if (nextConstraint != null) {
         for (final obj in nearby) {
+          // Skip union objects - they need special handling via dropdown
+          if (obj is UnionGeometryObjectList) {
+            continue;
+          }
           if (nextConstraint.accepts(obj)) {
             // Found a valid object for glider point - use selectObject instead
-            selectObject(obj);
+            selectObject(obj, clickPosition: event.position);
             return;
           }
         }
@@ -1169,13 +1174,20 @@ class _PointTool extends UnifiedTool {
   }
 
   @override
-  void selectObject(GeometryObject object) {
+  void selectObject(GeometryObject object, {Offset? clickPosition}) {
+    // Glider points are not supported on union objects
+    if (object is UnionGeometryObjectList) {
+      notifyStateChanged('Error: Glider points are not supported on union objects. Please select a child element (line, segment, arc, etc.)');
+      return;
+    }
+    
     // Check if this is for a glider point (Pattern 1)
     final nextConstraint = verifier.schema.nextConstraint(verifier.arguments);
     if (nextConstraint != null && nextConstraint.accepts(object)) {
-      // This is a glider point creation - use the stored click position
-      if (_lastClickPosition != null) {
-        _createGliderPointAtPosition(object, _lastClickPosition!);
+      // This is a glider point creation - use the provided click position or stored one
+      final positionToUse = clickPosition ?? _lastClickPosition;
+      if (positionToUse != null) {
+        _createGliderPointAtPosition(object, positionToUse);
         _lastClickPosition = null; // Clear after use
         return;
       }
@@ -1184,48 +1196,48 @@ class _PointTool extends UnifiedTool {
     // Use base class implementation which will validate against schema
     // The point command has Pattern 1 that accepts GeoLine, GeoCircle, GeoSegment, GeoArc, etc.
     // This will automatically route to the glider point pattern
-    super.selectObject(object);
+    super.selectObject(object, clickPosition: clickPosition);
   }
   
   Future<void> _createGliderPointAtPosition(GeometryObject object, Offset clickPosition) async {
     try {
+      // Glider points are not supported on union objects
+      if (object is UnionGeometryObjectList) {
+        notifyStateChanged('Error: Glider points are not supported on union objects. Please select a child element.');
+        return;
+      }
+      
       // Project the click position onto the object to get the initial position
       final clickPoint = constructFreePoint(clickPosition.dx, clickPosition.dy);
+      Multivector? projectedMultivector;
       Offset initialPosition;
       
       if (object is GeoLine) {
-        final projected = projectPointToLine(clickPoint, object.multivector);
-        initialPosition = Offset(projected.e1, projected.e2);
+        projectedMultivector = projectPointToLine(clickPoint, object.multivector);
+        initialPosition = Offset(projectedMultivector.e1, projectedMultivector.e2);
       } else if (object is GeoCircle) {
-        final projected = projectPointToCircle(clickPoint, object.multivector);
-        initialPosition = Offset(projected.e1, projected.e2);
+        projectedMultivector = projectPointToCircle(clickPoint, object.multivector);
+        initialPosition = Offset(projectedMultivector.e1, projectedMultivector.e2);
       } else if (object is GeoSegment) {
-        final projected = projectPointToSegment(clickPoint, object.boundary.boundary);
-        initialPosition = Offset(projected.e1, projected.e2);
+        projectedMultivector = projectPointToSegment(clickPoint, object.boundary.boundary);
+        initialPosition = Offset(projectedMultivector.e1, projectedMultivector.e2);
       } else if (object is GeoArc) {
         final counterClockwise = object.boundary.multivector.o >= 0;
-        final projected = projectPointToArc(
+        projectedMultivector = projectPointToArc(
           clickPoint,
           object.boundary.multivector,
           object.startPoint.multivector,
           object.endPoint.multivector,
           counterClockwise,
         );
-        if (projected == null) {
+        if (projectedMultivector == null) {
           notifyStateChanged('Error: Could not project point onto arc');
           return;
         }
-        initialPosition = Offset(projected.e1, projected.e2);
-      } else if (object is UnionGeometryObjectList) {
-        // For union objects, find the nearest point across all elements
-        final projected = _projectPointToUnion(clickPoint, object);
-        if (projected == null) {
-          notifyStateChanged('Error: Could not project point onto union object');
-          return;
-        }
-        initialPosition = Offset(projected.e1, projected.e2);
+        initialPosition = Offset(projectedMultivector.e1, projectedMultivector.e2);
       } else {
         // Fallback to click position
+        projectedMultivector = clickPoint;
         initialPosition = clickPosition;
       }
       
@@ -1234,12 +1246,14 @@ class _PointTool extends UnifiedTool {
         GeometryObjectType.point,
       );
       
-      final gliderPoint = GeoGliderPoint(
+      // Use withMultivector constructor to set the correct projected multivector
+      final gliderPoint = GeoGliderPoint.withMultivector(
         id: label,
         label: label,
         objectId: object.id,
         initialX: initialPosition.dx,
         initialY: initialPosition.dy,
+        multivector: projectedMultivector,
       );
       
       dagManager.addObject(gliderPoint, [object.id]);

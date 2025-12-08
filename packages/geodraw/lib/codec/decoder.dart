@@ -37,6 +37,7 @@ class GeoDrawDecoder {
     'GeoConstructedPoint': (json, _) => GeoConstructedPoint.fromJson(json),
     'GeoInvPoint': (json, _) => GeoTransPoint.fromJson(json),
     'GeoInf': (json, _) => GeoInf.fromJson(json),
+    'GeoGliderPoint': (json, _) => GeoGliderPoint.fromJson(json),
 
     // Lines
     'GeoLine2P': (json, _) => GeoLine2P.fromJson(json),

@@ -114,49 +114,107 @@ class CommandRegistry {
                 : '';
             
             // Get the object's position for initial placement
+            Multivector? projectedMultivector;
             Offset initialPosition;
             if (object is GeoPoint) {
               // Shouldn't happen (filtered out), but handle gracefully
+              projectedMultivector = object.multivector;
               initialPosition = object.position;
             } else if (object is GeoLine) {
               // For lines, use a point on the line (e.g., closest to origin)
               final lineMv = object.multivector;
               // Project origin onto line
               final origin = constructFreePoint(0, 0);
-              final projected = projectPointToLine(origin, lineMv);
-              initialPosition = Offset(projected.e1, projected.e2);
+              projectedMultivector = projectPointToLine(origin, lineMv);
+              initialPosition = Offset(projectedMultivector.e1, projectedMultivector.e2);
             } else if (object is GeoCircle) {
               // For circles, use a point on the circle (e.g., rightmost point)
               final center = getCircleCenter(object.multivector);
+              final centerInf = infForm(center);
               final radius = measureCircleRadius(object.multivector);
-              initialPosition = Offset(center.e1 + radius, center.e2);
+              // Project a point to the right of center onto the circle
+              final rightPoint = constructFreePoint(centerInf.e1 + radius, centerInf.e2);
+              projectedMultivector = projectPointToCircle(rightPoint, object.multivector);
+              initialPosition = Offset(projectedMultivector.e1, projectedMultivector.e2);
             } else if (object is GeoSegment) {
               // Use midpoint of segment
               final start = object.startPoint.position;
               final end = object.endPoint.position;
-              initialPosition = Offset(
+              final midpoint = constructFreePoint(
                 (start.dx + end.dx) / 2,
                 (start.dy + end.dy) / 2,
               );
+              projectedMultivector = projectPointToSegment(midpoint, object.boundary.boundary);
+              initialPosition = Offset(projectedMultivector.e1, projectedMultivector.e2);
             } else if (object is GeoArc) {
               // Use midpoint of arc (approximate)
               final start = object.startPoint.position;
               final end = object.endPoint.position;
-              initialPosition = Offset(
+              final midpoint = constructFreePoint(
                 (start.dx + end.dx) / 2,
                 (start.dy + end.dy) / 2,
               );
-            } else if (object is UnionGeometryObjectList) {
+              final counterClockwise = object.boundary.multivector.o >= 0;
+              projectedMultivector = projectPointToArc(
+                midpoint,
+                object.boundary.multivector,
+                object.startPoint.multivector,
+                object.endPoint.multivector,
+                counterClockwise,
+              );
+              if (projectedMultivector == null) {
+                // Fallback to start point if projection fails
+                projectedMultivector = object.startPoint.multivector;
+                initialPosition = start;
+              } else {
+                initialPosition = Offset(projectedMultivector.e1, projectedMultivector.e2);
+              }
+              } else if (object is UnionGeometryObjectList) {
               // Use first element's position
               // Note: GenSimpleGeometryObjectList extends UnionGeometryObjectList, so this covers both
               if (object.elements.isNotEmpty) {
                 final firstElement = object.elements.first;
                 if (firstElement is GeoPoint) {
+                  projectedMultivector = firstElement.multivector;
                   initialPosition = firstElement.position;
                 } else {
-                  // Fallback to center of bounds
+                  // Fallback to center of bounds, then project onto union
                   final bounds = object.getBounds();
-                  initialPosition = bounds.center;
+                  final centerPoint = constructFreePoint(bounds.center.dx, bounds.center.dy);
+                  // Project onto the nearest element in the union
+                  Multivector? bestProjection;
+                  double bestDistance = double.infinity;
+                  
+                  for (final element in object.elements) {
+                    Multivector? projection;
+                    if (element is GeoLine) {
+                      projection = projectPointToLine(centerPoint, element.multivector);
+                    } else if (element is GeoCircle) {
+                      projection = projectPointToCircle(centerPoint, element.multivector);
+                    } else if (element is GeoSegment) {
+                      projection = projectPointToSegment(centerPoint, element.boundary.boundary);
+                    } else if (element is GeoArc) {
+                      final counterClockwise = element.boundary.multivector.o >= 0;
+                      projection = projectPointToArc(
+                        centerPoint,
+                        element.boundary.multivector,
+                        element.startPoint.multivector,
+                        element.endPoint.multivector,
+                        counterClockwise,
+                      );
+                    }
+                    
+                    if (projection != null) {
+                      final dist = distancePointToPoint(centerPoint, projection);
+                      if (dist < bestDistance) {
+                        bestDistance = dist;
+                        bestProjection = projection;
+                      }
+                    }
+                  }
+                  
+                  projectedMultivector = bestProjection ?? centerPoint;
+                  initialPosition = Offset(projectedMultivector.e1, projectedMultivector.e2);
                 }
               } else {
                 return ExecutionResult.error('Union object has no elements');
@@ -164,6 +222,7 @@ class CommandRegistry {
             } else {
               // Fallback to center of bounds
               final bounds = object.getBounds();
+              projectedMultivector = constructFreePoint(bounds.center.dx, bounds.center.dy);
               initialPosition = bounds.center;
             }
             
@@ -173,12 +232,14 @@ class CommandRegistry {
                     context.dagManager,
                     GeometryObjectType.point,
                   );
-            final gliderPoint = GeoGliderPoint(
+            // Use withMultivector constructor to set the correct projected multivector
+            final gliderPoint = GeoGliderPoint.withMultivector(
               id: label, // In new system: ID = label
               label: label,
               objectId: object.id,
               initialX: initialPosition.dx,
               initialY: initialPosition.dy,
+              multivector: projectedMultivector,
             );
 
             context.dagManager.addObject(gliderPoint, [object.id]);

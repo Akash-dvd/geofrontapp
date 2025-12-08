@@ -339,14 +339,20 @@ class _GeoDrawCanvasState extends State<GeoDrawCanvas> {
       }
       
       // Direct selection for non-container objects
-      widget.toolManager.selectObject(selectedObject);
+      // Pass world position for tools that need it (e.g., glider points)
+      widget.toolManager.selectObject(selectedObject, clickPosition: worldPos);
       setState(() {});
       return;
     }
 
     if (isContainer) {
       // Left click on container: show dropdown with container and its children
-      _showContainerMenu(details.globalPosition, selectedObject);
+      // For point tool, pass worldPos to handle glider point creation
+      if (widget.toolManager.activeToolType == ToolType.point) {
+        _showContainerMenu(details.globalPosition, selectedObject, worldPos: worldPos);
+      } else {
+        _showContainerMenu(details.globalPosition, selectedObject);
+      }
       return;
     }
 
@@ -364,11 +370,17 @@ class _GeoDrawCanvasState extends State<GeoDrawCanvas> {
       if (isPartOfContainer) {
         // Left click on container child: show dropdown to choose child or parent
         // This allows the user to qualify whether they want the child or the container
-        _showChildParentMenu(details.globalPosition, selectedObject, containers);
+        // For point tool, pass worldPos to handle glider point creation
+        if (widget.toolManager.activeToolType == ToolType.point) {
+          _showChildParentMenu(details.globalPosition, selectedObject, containers, worldPos: worldPos);
+        } else {
+          _showChildParentMenu(details.globalPosition, selectedObject, containers);
+        }
       } else {
         // Element is not part of container: select it directly
+        // Pass world position for tools that need it (e.g., glider points)
         try {
-          widget.toolManager.selectObject(selectedObject);
+          widget.toolManager.selectObject(selectedObject, clickPosition: worldPos);
           setState(() {});
         } catch (e) {
           // Error selecting object - silently handle
@@ -419,7 +431,7 @@ class _GeoDrawCanvasState extends State<GeoDrawCanvas> {
     });
   }
 
-  void _showContainerMenu(Offset position, GeometryObject container) {
+  void _showContainerMenu(Offset position, GeometryObject container, {Offset? worldPos}) {
     // Build menu with container first, then its children
     final menuItems = <GeometryObject>[container];
     
@@ -428,6 +440,8 @@ class _GeoDrawCanvasState extends State<GeoDrawCanvas> {
     if (container is UnionGeometryObjectList) {
       menuItems.addAll(container.elements);
     }
+
+    final isPointTool = widget.toolManager.activeToolType == ToolType.point;
 
     showMenu(
       context: context,
@@ -447,26 +461,42 @@ class _GeoDrawCanvasState extends State<GeoDrawCanvas> {
         if (genericIndex > 0) {
           typeName = typeName.substring(0, genericIndex);
         }
-        final isContainer = obj == container;
+        final isContainerItem = obj == container;
+        final isUnionItem = obj is UnionGeometryObjectList;
+        // For point tool, disable union selection
+        final isDisabled = isPointTool && isUnionItem;
+        
         return PopupMenuItem<GeometryObject>(
           value: obj,
+          enabled: !isDisabled,
           child: Row(
             children: [
-              if (isContainer) const Icon(Icons.folder, size: 16),
-              if (!isContainer) const Icon(Icons.circle, size: 8),
+              if (isContainerItem && !isDisabled) const Icon(Icons.folder, size: 16),
+              if (isContainerItem && isDisabled) const Icon(Icons.error_outline, size: 16, color: Colors.red),
+              if (!isContainerItem) const Icon(Icons.circle, size: 8),
               const SizedBox(width: 8),
-              Text('$typeName: $label'),
+              Text(
+                isDisabled ? '$typeName: $label (Not supported)' : '$typeName: $label',
+                style: isDisabled ? const TextStyle(color: Colors.grey) : null,
+              ),
             ],
           ),
         );
       }).toList(),
     ).then((selected) {
       if (selected != null) {
+        // For point tool, check if union was selected
+        if (isPointTool && selected is UnionGeometryObjectList) {
+          _showErrorSnackBar('Glider points are not supported on union objects. Please select a child element.');
+          return;
+        }
+        
         if (widget.toolManager.activeToolType == ToolType.select) {
           widget.onSelectionChanged?.call({selected.id});
         } else {
           // For tools: pass the selected object directly to the tool
-          widget.toolManager.selectObject(selected);
+          // Pass world position for point tool (needed for glider points)
+          widget.toolManager.selectObject(selected, clickPosition: worldPos);
         }
         setState(() {});
       }
@@ -666,10 +696,17 @@ class _GeoDrawCanvasState extends State<GeoDrawCanvas> {
     });
   }
 
-  void _showChildParentMenu(Offset position, GeometryObject child, List<GeometryObject> containers) {
+  void _showChildParentMenu(
+    Offset position,
+    GeometryObject child,
+    List<GeometryObject> containers, {
+    Offset? worldPos,
+  }) {
     // Build menu with child first, then its container(s)
     // This allows user to choose between the child or the parent container
     final menuItems = <GeometryObject>[child, ...containers];
+
+    final isPointTool = widget.toolManager.activeToolType == ToolType.point;
 
     showMenu(
       context: context,
@@ -690,26 +727,55 @@ class _GeoDrawCanvasState extends State<GeoDrawCanvas> {
           typeName = typeName.substring(0, genericIndex);
         }
         final isChild = obj == child;
+        final isUnion = obj is UnionGeometryObjectList;
+        // For point tool, disable union selection
+        final isDisabled = isPointTool && isUnion;
+        
         return PopupMenuItem<GeometryObject>(
           value: obj,
+          enabled: !isDisabled,
           child: Row(
             children: [
               if (isChild) const Icon(Icons.circle, size: 8),
-              if (!isChild) const Icon(Icons.folder, size: 16),
+              if (!isChild && !isDisabled) const Icon(Icons.folder, size: 16),
+              if (!isChild && isDisabled) const Icon(Icons.error_outline, size: 16, color: Colors.red),
               const SizedBox(width: 8),
-              Text('$typeName: $label'),
+              Text(
+                isDisabled ? '$typeName: $label (Not supported)' : '$typeName: $label',
+                style: isDisabled ? const TextStyle(color: Colors.grey) : null,
+              ),
             ],
           ),
         );
       }).toList(),
     ).then((selected) {
       if (selected != null) {
+        // For point tool, check if union was selected
+        if (isPointTool && selected is UnionGeometryObjectList) {
+          _showErrorSnackBar('Glider points are not supported on union objects. Please select a child element.');
+          return;
+        }
+        
         // For tools: pass the selected object directly to the tool
         // User can choose either the child or the parent container
-        widget.toolManager.selectObject(selected);
+        // Pass world position for point tool (needed for glider points)
+        widget.toolManager.selectObject(selected, clickPosition: worldPos);
         setState(() {});
       }
     });
+  }
+
+  /// Show an error message as a snackbar
+  void _showErrorSnackBar(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.red,
+        duration: const Duration(seconds: 3),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
   }
 
   void _handlePanStart(DragStartDetails details) {

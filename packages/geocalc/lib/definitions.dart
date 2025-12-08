@@ -1304,20 +1304,31 @@ Multivector projectPointToCircle(Multivector point, Multivector circle) {
     return center;
   }
   
-  // Vector from center to point
-  final toPoint = p - centerInf;
-  final distToCenter = math.sqrt((toPoint | toPoint).s * (-2));
+  // Extract coordinates
+  final px = p.e1;
+  final py = p.e2;
+  final cx = centerInf.e1;
+  final cy = centerInf.e2;
+  
+  // Vector from center to point (as coordinates)
+  final dx = px - cx;
+  final dy = py - cy;
+  final distToCenter = math.sqrt(dx * dx + dy * dy);
   
   if (distToCenter < 1e-10) {
-    // Point is at center, project to arbitrary direction
-    return infForm(centerInf + Multivector(e1: radius, e2: 0));
+    // Point is at center, project to arbitrary direction (e.g., along x-axis)
+    return constructFreePoint(cx + radius, cy);
   }
   
-  // Normalize and scale by radius
-  final direction = toPoint.scalarDivide(distToCenter);
-  final projected = centerInf + direction.scalarMultiply(radius);
+  // Normalize direction vector and scale by radius
+  final normalizedDx = dx / distToCenter;
+  final normalizedDy = dy / distToCenter;
   
-  return infForm(projected);
+  // Projected point coordinates
+  final projX = cx + normalizedDx * radius;
+  final projY = cy + normalizedDy * radius;
+  
+  return constructFreePoint(projX, projY);
 }
 
 

@@ -44,7 +44,8 @@ abstract class UnifiedTool with ToolCallbacksMixin implements Tool {
 
   /// Select an object directly (used when object is selected from menu/dropdown)
   /// This bypasses proximity search and directly adds the object as an argument
-  void selectObject(GeometryObject object) {
+  /// [clickPosition] is optional and used for tools that need the click position (e.g., glider points)
+  void selectObject(GeometryObject object, {Offset? clickPosition}) {
     debugPrint('[UnifiedTool] selectObject: Called with ${object.runtimeType} (${object.id}, label: ${object.label})');
     debugPrint('[UnifiedTool] selectObject: Current arguments: ${verifier.arguments.length}');
     for (var i = 0; i < verifier.arguments.length; i++) {

@@ -432,7 +432,7 @@ class GeoGliderPoint extends GeoPoint {
     // If multivector was provided, we need to override it
     // Since multivector is final, we need to create a new instance with it
     if (multivector != null) {
-      return GeoGliderPoint._withMultivector(
+      return GeoGliderPoint.withMultivector(
         id: point.id,
         label: point.label,
         objectId: point.objectId,
@@ -447,8 +447,8 @@ class GeoGliderPoint extends GeoPoint {
     return point;
   }
   
-  // Private constructor that allows setting multivector directly
-  GeoGliderPoint._withMultivector({
+  // Constructor that allows setting multivector directly
+  GeoGliderPoint.withMultivector({
     required String id,
     required String label,
     required String objectId,
@@ -464,6 +464,28 @@ class GeoGliderPoint extends GeoPoint {
          id: id,
          label: label,
          dependencies: [objectId],
+         multivector: multivector,
+         visible: visible,
+         styleOverrides: styleOverrides,
+       );
+  
+  // Private constructor that allows setting multivector directly (kept for backward compatibility)
+  @Deprecated('Use withMultivector instead')
+  GeoGliderPoint._withMultivector({
+    required String id,
+    required String label,
+    required String objectId,
+    required double initialX,
+    required double initialY,
+    required Multivector multivector,
+    bool visible = true,
+    Map<String, dynamic>? styleOverrides,
+  }) : this.withMultivector(
+         id: id,
+         label: label,
+         objectId: objectId,
+         initialX: initialX,
+         initialY: initialY,
          multivector: multivector,
          visible: visible,
          styleOverrides: styleOverrides,
@@ -504,12 +526,14 @@ class GeoGliderPoint extends GeoPoint {
     final initialX = (props['initialX'] as num?)?.toDouble() ?? mv.e1;
     final initialY = (props['initialY'] as num?)?.toDouble() ?? mv.e2;
 
-    return GeoGliderPoint(
+    // Use withMultivector to preserve the stored multivector (which is the projected point)
+    return GeoGliderPoint.withMultivector(
       id: json['id'] as String,
       label: json['label'] as String,
       objectId: objectId,
       initialX: initialX,
       initialY: initialY,
+      multivector: mv, // Use the stored multivector, not create a new one
       visible: json['visible'] as bool? ?? true,
       styleOverrides: styleOverrides,
     );
@@ -535,6 +559,44 @@ class GeoGliderPoint extends GeoPoint {
       );
     }
     final object = objectObj;
+
+    // Check if the current multivector is already correctly projected
+    // This prevents unnecessary rebuilds when the multivector is already correct
+    final currentPoint = constructFreePoint(multivector.e1, multivector.e2);
+    final tolerance = 1e-8;
+    bool isAlreadyCorrect = false;
+    
+    if (object is GeoLine) {
+      final testProjection = projectPointToLine(currentPoint, object.multivector);
+      isAlreadyCorrect = (testProjection.e1 - multivector.e1).abs() < tolerance &&
+                         (testProjection.e2 - multivector.e2).abs() < tolerance;
+    } else if (object is GeoCircle) {
+      final testProjection = projectPointToCircle(currentPoint, object.multivector);
+      isAlreadyCorrect = (testProjection.e1 - multivector.e1).abs() < tolerance &&
+                         (testProjection.e2 - multivector.e2).abs() < tolerance;
+    } else if (object is GeoSegment) {
+      final testProjection = projectPointToSegment(currentPoint, object.boundary.boundary);
+      isAlreadyCorrect = (testProjection.e1 - multivector.e1).abs() < tolerance &&
+                         (testProjection.e2 - multivector.e2).abs() < tolerance;
+    } else if (object is GeoArc) {
+      final counterClockwise = object.boundary.multivector.o >= 0;
+      final testProjection = projectPointToArc(
+        currentPoint,
+        object.boundary.multivector,
+        object.startPoint.multivector,
+        object.endPoint.multivector,
+        counterClockwise,
+      );
+      if (testProjection != null) {
+        isAlreadyCorrect = (testProjection.e1 - multivector.e1).abs() < tolerance &&
+                           (testProjection.e2 - multivector.e2).abs() < tolerance;
+      }
+    }
+    
+    // If already correct, return null to indicate no rebuild needed
+    if (isAlreadyCorrect) {
+      return null;
+    }
 
     // Create a point multivector from the initial position
     final initialPoint = constructFreePoint(_initialX, _initialY);
@@ -601,8 +663,8 @@ class GeoGliderPoint extends GeoPoint {
     }
 
     // Create GeoGliderPoint with projected position as multivector
-    // Use the private constructor that allows setting multivector directly
-    return GeoGliderPoint._withMultivector(
+    // Use the constructor that allows setting multivector directly
+    return GeoGliderPoint.withMultivector(
       id: id,
       label: label,
       objectId: objectId,
