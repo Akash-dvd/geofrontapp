@@ -73,7 +73,10 @@ class SupabaseAuthProvider implements AuthProvider {
   @override
   Future<void> sendPasswordResetEmail(String email) async {
     try {
-      await _client.auth.resetPasswordForEmail(email);
+      await _client.auth.resetPasswordForEmail(
+        email,
+        redirectTo: _resolveRedirectUri(),
+      );
     } on AuthException catch (e) {
       throw _mapAuthException(e);
     }
@@ -181,9 +184,9 @@ class SupabaseAuthProvider implements AuthProvider {
     if (kIsWeb) {
       final base = Uri.base;
       if (base.scheme.startsWith('http')) {
-        final origin = base.origin;
-        final path = base.path == '/' ? '' : base.path;
-        return '$origin$path';
+        // Always return to the app origin (not a nested path) so OAuth /
+        // magic-link callbacks land on a host that owns the Flutter shell.
+        return base.origin;
       }
     }
     final uri = EnvConfig.supabaseOauthRedirectUri;

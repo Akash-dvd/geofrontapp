@@ -25,6 +25,21 @@ flutter run --dart-define=SUPABASE_URL=... --dart-define=SUPABASE_ANON_KEY=... \
   --dart-define=GITHUB_CLIENT_ID=... --dart-define=GITHUB_CLIENT_SECRET=...
 ```
 
+## Auth redirect hosts (required after domain split)
+
+Product UI is on **`https://app.aksharaintelligence.com`**. Apex is marketing HTML.
+
+In **Supabase → Authentication → URL Configuration**:
+
+| Setting | Value |
+|---|---|
+| Site URL | `https://app.aksharaintelligence.com` |
+| Additional Redirect URLs | `https://app.aksharaintelligence.com/**` |
+| (optional preview) | `https://aksharaintelligence.pages.dev/**` |
+
+Also add `https://app.aksharaintelligence.com` as an authorized JavaScript origin in Google Cloud OAuth client settings if Google sign-in is used.
+
+Apex paths like `/login` are redirected to the app via Cloudflare Pages `_redirects` in `akshara-site`.
 ## Strapi
 
 ```bash
