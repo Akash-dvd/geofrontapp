@@ -5,8 +5,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 // Import from packages
 import 'package:geoapp/geoapp.dart';
-import 'package:frontpage/frontpage.dart';
-
+// Frontpage marketing lives on aksharaintelligence.com (static HTML).
+// The Flutter host (app.) opens the product workspace directly.
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
@@ -78,8 +78,7 @@ class GeoFrontApp extends StatelessWidget {
           theme: AppTheme.lightTheme,
           darkTheme: AppTheme.darkTheme,
           themeMode: ThemeMode.system, // Automatically follows system theme
-          home:
-              const FrontPage(), // Start with FrontPage instead of ProblemManagementScreen
+          home: const ProblemManagementScreen(),
         ),
       ),
     );
