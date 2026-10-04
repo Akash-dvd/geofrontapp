@@ -2,6 +2,12 @@
 
 A new Flutter project.
 
+## Supplying keys
+
+See [docs/KEYS.md](docs/KEYS.md) for Cloudflare Worker (`wrangler secret put`),
+Flutter (`--dart-define`), and Strapi (`.env`) setup. Optional JSON under
+`cloud/secrets/` is gitignored and **not** read by runtime.
+
 ## Getting Started
 
 This project is a starting point for a Flutter application.

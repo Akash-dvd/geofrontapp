@@ -329,4 +329,4 @@ Configure Worker secrets (SUPABASE_JWT_SECRET, SUPABASE_SERVICE_ROLE, OPENAI_API
 
 ####################################################
 
-REDACTED
+OPENAI_API_KEY

@@ -8,10 +8,11 @@ class EnvConfig {
   EnvConfig._();
 
   // ==================== Supabase Auth / Database ====================
+  // Defaults are placeholders / empty. Pass real values via --dart-define
+  // (see docs/KEYS.md). Do not commit real secrets here.
 
   static const String _supabaseUrl = 'https://YOUR_PROJECT.supabase.co';
-  static const String _supabaseAnonKey =
-    'REDACTED'; // replace before production
+  static const String _supabaseAnonKey = '';
   static const String? _supabaseServiceRoleKey = null;
   static const String? _supabaseJwtSecret = null;
   static const String _supabaseOauthRedirectUri =
@@ -19,13 +20,10 @@ class EnvConfig {
   static const String _supabaseGoogleScopes = 'email profile';
   static const String _supabaseGithubScopes = 'read:user user:email';
   static const String _supabaseAuthCallbackHostname = 'login-callback';
-  static const String _googleClientId =
-    'REDACTED';
-  static const String _googleClientSecret =
-    'REDACTED';
-  static const String _githubClientId = 'REDACTED';
-  static const String _githubClientSecret =
-    'REDACTED';
+  static const String _googleClientId = '';
+  static const String _googleClientSecret = '';
+  static const String _githubClientId = '';
+  static const String _githubClientSecret = '';
 
   // ==================== Edge Gateway / Cloudflare Worker ====================
 

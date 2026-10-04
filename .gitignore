@@ -52,3 +52,14 @@ fb-admin.json
 
 # Generated env file (copied by switch script)
 .env
+
+# Local secret stashes (not loaded by runtime; optional)
+cloud/secrets/**
+!cloud/secrets/*.example
+!cloud/secrets/setup.ps1
+!cloud/secrets/README.md
+
+.env.strapi
+strapi/.env
+**/.env
+!**/.env.example
