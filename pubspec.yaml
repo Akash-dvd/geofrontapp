@@ -45,17 +45,27 @@ dependencies:
   # Supabase Auth + Database client
   supabase_flutter: ^2.5.10
   
-  # Local packages
+  # Local app packages
   geoapp:
     path: packages/geoapp
   frontpage:
     path: packages/frontpage
+  # Core packages from Akash-dvd/geodraw-core (override locally via pubspec_overrides.yaml)
   geocalc:
-    path: packages/geocalc
+    git:
+      url: https://github.com/Akash-dvd/geodraw-core.git
+      path: packages/geocalc
+      ref: main
   geodraw:
-    path: packages/geodraw
+    git:
+      url: https://github.com/Akash-dvd/geodraw-core.git
+      path: packages/geodraw
+      ref: main
   designsystem:
-    path: packages/designsystem
+    git:
+      url: https://github.com/Akash-dvd/geodraw-core.git
+      path: packages/designsystem
+      ref: main
 
 dev_dependencies:
   flutter_test:
@@ -84,6 +94,7 @@ flutter:
   # the material Icons class.
   uses-material-design: true
 
+  # Package assets from geodraw (packages/<name>/… form; also declared in geodraw pubspec)
   assets:
     - packages/geodraw/assets/tool_icons/
 

@@ -63,3 +63,8 @@ See [DEPLOYMENT.md](DEPLOYMENT.md) for complete deployment guide.
 
 - Email: test@example.com
 - Password: password123
+## Core packages (geodraw-core)
+
+Reusable packages `designsystem`, `geocalc`, and `geodraw` are consumed from
+[Akash-dvd/geodraw-core](https://github.com/Akash-dvd/geodraw-core) via pub `git:` deps.
+For local sibling checkouts, see [docs/DEPS.md](docs/DEPS.md).

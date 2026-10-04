@@ -63,3 +63,6 @@ cloud/secrets/**
 strapi/.env
 **/.env
 !**/.env.example
+
+# Local sibling path overrides (see pubspec_overrides.yaml.example)
+pubspec_overrides.yaml

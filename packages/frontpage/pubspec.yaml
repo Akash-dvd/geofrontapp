@@ -12,7 +12,10 @@ dependencies:
   geoapp:
     path: ../geoapp
   designsystem:
-    path: ../designsystem
+    git:
+      url: https://github.com/Akash-dvd/geodraw-core.git
+      path: packages/designsystem
+      ref: main
   google_fonts: ^5.1.0
   flutter_math_fork: ^0.7.2
 

@@ -1,0 +1,14 @@
+# Local sibling overrides for monorepo layout.
+# Copy to pubspec_overrides.yaml (gitignored) next to this file:
+#   cp pubspec_overrides.yaml.example pubspec_overrides.yaml
+#
+# Requires ../geodraw-core checkout. CI/cloud should omit pubspec_overrides.yaml
+# so pub resolves git: deps from pubspec.yaml instead.
+
+dependency_overrides:
+  designsystem:
+    path: ../geodraw-core/packages/designsystem
+  geocalc:
+    path: ../geodraw-core/packages/geocalc
+  geodraw:
+    path: ../geodraw-core/packages/geodraw

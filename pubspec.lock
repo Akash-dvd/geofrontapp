@@ -276,7 +276,7 @@ packages:
   designsystem:
     dependency: "direct main"
     description:
-      path: "packages/designsystem"
+      path: "../geodraw-core/packages/designsystem"
       relative: true
     source: path
     version: "1.0.0"
@@ -416,14 +416,14 @@ packages:
   geocalc:
     dependency: "direct main"
     description:
-      path: "packages/geocalc"
+      path: "../geodraw-core/packages/geocalc"
       relative: true
     source: path
     version: "1.0.0"
   geodraw:
     dependency: "direct main"
     description:
-      path: "packages/geodraw"
+      path: "../geodraw-core/packages/geodraw"
       relative: true
     source: path
     version: "1.0.0"
@@ -1252,10 +1252,10 @@ packages:
     dependency: transitive
     description:
       name: web
-      sha256: "868d88a33d8a87b18ffc05f9f030ba328ffefba92d6c127917a2ba740f9cfe4a"
+      sha256: "97da13628db363c635202ad97068d47c5b8aa555808e7a9411963c533b449b27"
       url: "https://pub.dev"
     source: hosted
-    version: "1.1.1"
+    version: "0.5.1"
   web_socket:
     dependency: transitive
     description:

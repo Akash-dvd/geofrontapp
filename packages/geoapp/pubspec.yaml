@@ -16,9 +16,15 @@ dependencies:
   shared_preferences: ^2.3.2
   http: ^1.1.0
   designsystem:
-    path: ../designsystem
+    git:
+      url: https://github.com/Akash-dvd/geodraw-core.git
+      path: packages/designsystem
+      ref: main
   geodraw:
-    path: ../geodraw
+    git:
+      url: https://github.com/Akash-dvd/geodraw-core.git
+      path: packages/geodraw
+      ref: main
 
 dev_dependencies:
   flutter_test:
